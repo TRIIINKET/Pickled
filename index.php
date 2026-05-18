@@ -379,3 +379,5 @@ $rules = [
 
 <script src="assets/js/rules-flashcards.js"></script>
 <?php include '_footer.php'; ?>
+
+<!-- testing github -->
