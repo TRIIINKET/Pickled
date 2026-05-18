@@ -136,9 +136,26 @@ body.promo-hidden .nav {
   font-weight: 900;
 }
 
+..nav--white-actions {
+  background: rgba(0,0,0,.42);
+  border-bottom-color: rgba(255,255,255,.12);
+}
+
+.nav--white-actions .nav-link,
 .nav--white-actions .nav-user,
-.nav--white-actions .nav-cart {
+.nav--white-actions .nav-cart,
+.nav--white-actions .btn,
+.nav--white-actions .nav-sep {
   color: #fff;
+}
+
+.nav--white-actions .nav-link:hover {
+  background: rgba(255,255,255,.14);
+}
+
+.nav--white-actions .nav-link.active {
+  background: #fff;
+  color: var(--green);
 }
 
 .nav--white-actions .nav-cart:hover {

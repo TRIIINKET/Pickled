@@ -1,8 +1,9 @@
 <?php
+$basePath = '';
 $pageTitle  = 'Pickled - Indoor Pickleball Courts in Manila';
 $activePage = 'index.php';
-include '_header.php';
-$courtBookingHref = !empty($_SESSION['user']) ? 'courts.php#court-detail' : 'login.php?notice=booking&redirect=courts.php%23court-detail';
+include 'includes/_header.php';
+$courtBookingHref = !empty($_SESSION['user']) ? 'pages/courts.php#court-detail' : 'login.php?notice=booking&redirect=pages/courts.php%23court-detail';
 
 $events = [
   ['day' => 'Tue', 'date' => 'May 7',  'title' => 'Beginner Open Play',  'time' => '7:00 PM', 'spots' => '8 spots'],
@@ -42,12 +43,12 @@ $rules = [
   <section class="home-hero" aria-label="Pickled indoor pickleball">
     <div class="home-hero__shade"></div>
     <div class="home-hero__content">
-      <!-- <img src="Images/WM-DGreen.png" alt="Pickled" class="home-hero__mark" /> -->
+      <!-- <img src="assets/Images/WM-DGreen.png" alt="Pickled" class="home-hero__mark" /> -->
       <p class="home-hero__eyebrow">Manila indoor pickleball</p>
       <h1>Premier Indoor<br>Pickleball Courts<br class="home-mobile-break"></h1>
       <div class="home-hero__actions">
-        <a href="courts.php#court-detail" class="btn btn-lime btn-md">Book a court</a>
-        <a href="private.php" class="btn btn-hero-outline btn-md">View lessons</a>
+        <a href="pages/courts.php#court-detail" class="btn btn-lime btn-md">Book a court</a>
+        <a href="pages/private.php" class="btn btn-hero-outline btn-md">View lessons</a>
       </div>
     </div>
   </section>
@@ -107,12 +108,12 @@ $rules = [
               <span><?= htmlspecialchars($event['time']) ?></span>
               <span><?= htmlspecialchars($event['spots']) ?></span>
             </div>
-            <a href="social-play.php#social-booking">Join now</a>
+            <a href="pages/social-play.php#social-booking">Join now</a>
           </article>
         <?php endforeach; ?>
       </div>
       <div class="home-center-action">
-        <a href="social-play.php" class="btn btn-ghost-dark btn-sm">More sessions</a>
+        <a href="pages/social-play.php" class="btn btn-ghost-dark btn-sm">More sessions</a>
       </div>
     </div>
   </section> -->
@@ -128,7 +129,7 @@ $rules = [
           <div>
             <h3>Academy</h3>
             <p>Build your skills through structured programs designed for beginners to intermediate players.</p>
-            <a href="private.php" class="btn btn-lime btn-sm">Know more</a>
+            <a href="pages/private.php" class="btn btn-lime btn-sm">Know more</a>
           </div>
           <p class="home-lesson__ticker"><span>Internationally certified coach | 4-8 players with internationally certified coach | 4-8 players with internationally certified coach | </span></p>
         </article>
@@ -138,7 +139,7 @@ $rules = [
             <div>
               <h3>Private Lesson</h3>
               <p>Get one-on-one coaching tailored to your level and progress faster with personalized guidance.</p>
-              <a href="private.php" class="btn btn-lime btn-sm">Know more</a>
+              <a href="pages/private.php" class="btn btn-lime btn-sm">Know more</a>
             </div>
             <p class="home-lesson__ticker"><span>Certified coach | 1 on 1 with an internationally certified coach | Certified coach | 1 on 1 with an internationally certified coach | </span></p>
           </article>
@@ -147,7 +148,7 @@ $rules = [
             <div>
               <h3>Friends Private</h3>
               <p>Train together with friends in a private group session while improving teamwork and gameplay.</p>
-              <a href="private.php" class="btn btn-lime btn-sm">Know more</a>
+              <a href="pages/private.php" class="btn btn-lime btn-sm">Know more</a>
             </div>
             <p class="home-lesson__ticker"><span>Internationally certified coach | Up to 6 on 1 with internationally certified coach | Internationally certified coach | Up to 6 on 1 with internationally certified coach | </span></p>
           </article>
@@ -193,7 +194,7 @@ $rules = [
         </ul>
         <a href="<?= htmlspecialchars($courtBookingHref) ?>" class="btn btn-court-book btn-md" data-court-book data-court="green">Book now</a>
         <p class="home-court__badge">Main standard court</p>
-        <a href="courts.php" class="home-court__details">View full details</a>
+        <a href="pages/courts.php" class="home-court__details">View full details</a>
       </div>
     </div>
   </section>
@@ -226,7 +227,7 @@ $rules = [
         </ul>
         <a href="<?= htmlspecialchars($courtBookingHref) ?>" class="btn btn-court-book btn-md" data-court-book data-court="pink">Book now</a>
         <p class="home-court__badge">Slightly smaller but a lot happier</p>
-        <a href="courts.php" class="home-court__details">View full details</a>
+        <a href="pages/courts.php" class="home-court__details">View full details</a>
       </div>
     </div>
   </section>
@@ -277,15 +278,20 @@ $rules = [
         <div class="home-score-card">
           <img src="https://pickleand.club/cdn/shop/files/Screenshot_2025-03-07_at_3.36.29_PM.png?v=1741332999&width=535" alt="Pickleball live score system" />
         </div>
-        <a href="contact.php" class="btn btn-lime btn-sm">Interactive Tutorial</a>
+        <a href="#pickleball-101" class="btn btn-lime btn-sm" data-tutorial-start>Interactive Tutorial</a>
       </div>
       <div class="home-rules__list">
         <?php foreach ($rules as $index => $rule): ?>
-          <article class="home-rule <?= $index % 2 ? 'home-rule--green' : 'home-rule--pink' ?>">
+          <article class="home-rule <?= $index === 0 ? 'is-active' : '' ?> <?= $index % 2 ? 'home-rule--green' : 'home-rule--pink' ?>">
             <h3><?= $index + 1 ?>. <?= htmlspecialchars($rule[0]) ?></h3>
             <p><?= htmlspecialchars($rule[1]) ?></p>
           </article>
         <?php endforeach; ?>
+        <div class="home-rules__controls" aria-label="Pickleball tutorial controls">
+          <button type="button" data-rule-prev aria-label="Previous tutorial card">‹</button>
+          <span><b data-rule-current>1</b> / <?= count($rules) ?></span>
+          <button type="button" data-rule-next aria-label="Next tutorial card">›</button>
+        </div>
       </div>
     </div>
   </section>
@@ -294,8 +300,8 @@ $rules = [
     <div class="section-inner">
       <h2>More games.<br>Less coordination.<br><span>Better play.</span></h2>
       <div class="home-cta__actions">
-        <a href="courts.php#court-detail" class="btn btn-pink btn-md">Book a court</a>
-        <a href="social-play.php" class="btn btn-cta-outline btn-md">Join social play</a>
+        <a href="pages/courts.php#court-detail" class="btn btn-pink btn-md">Book a court</a>
+        <a href="pages/social-play.php" class="btn btn-cta-outline btn-md">Join social play</a>
       </div>
     </div>
   </section>
@@ -377,7 +383,5 @@ $rules = [
 })();
 </script>
 
-<script src="assets/js/rules-flashcards.js"></script>
-<?php include '_footer.php'; ?>
-
-<!-- testing github -->
+<script src="js/rules-flashcards.js"></script>
+<?php include 'includes/_footer.php'; ?>

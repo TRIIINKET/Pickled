@@ -7,6 +7,10 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!section || !list) return;
   var activeIndex = 0;
   var wheelLocked = false;
+  var currentLabel = document.querySelector('[data-rule-current]');
+  var prevButton = document.querySelector('[data-rule-prev]');
+  var nextButton = document.querySelector('[data-rule-next]');
+  var startButton = document.querySelector('[data-tutorial-start]');
 
   function updateActiveRule() {
     rules.forEach(function (rule, index) {
@@ -14,6 +18,13 @@ document.addEventListener('DOMContentLoaded', function () {
       rule.classList.toggle('is-prev', index < activeIndex);
       rule.classList.toggle('is-next', index > activeIndex);
     });
+    if (currentLabel) currentLabel.textContent = String(activeIndex + 1);
+  }
+
+  function moveRule(direction) {
+    activeIndex += direction;
+    activeIndex = Math.max(0, Math.min(rules.length - 1, activeIndex));
+    updateActiveRule();
   }
 
   function sectionCanTakeWheel(deltaY) {
@@ -33,15 +44,22 @@ document.addEventListener('DOMContentLoaded', function () {
     event.preventDefault();
     if (wheelLocked) return;
 
-    activeIndex += event.deltaY > 0 ? 1 : -1;
-    activeIndex = Math.max(0, Math.min(rules.length - 1, activeIndex));
-    updateActiveRule();
+    moveRule(event.deltaY > 0 ? 1 : -1);
 
     wheelLocked = true;
     window.setTimeout(function () {
       wheelLocked = false;
     }, 420);
   }, { passive: false });
+
+  if (prevButton) prevButton.addEventListener('click', function () { moveRule(-1); });
+  if (nextButton) nextButton.addEventListener('click', function () { moveRule(1); });
+  if (startButton) {
+    startButton.addEventListener('click', function () {
+      activeIndex = 0;
+      updateActiveRule();
+    });
+  }
 
   updateActiveRule();
   window.addEventListener('resize', updateActiveRule);

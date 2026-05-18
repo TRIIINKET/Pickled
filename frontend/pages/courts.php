@@ -1,8 +1,9 @@
 <?php
 $pageTitle  = 'Courts - Pickled';
 $activePage = 'courts.php';
-$extraHead  = '<link rel="stylesheet" href="assets/css/courts.css?v=20260430d"/>';
-include '_header.php';
+$basePath   = '../';
+$extraHead  = '<link rel="stylesheet" href="../css/courts.css?v=20260430d"/>';
+include '../includes/_header.php';
 
 $courtImages = [
   'green' => [
@@ -12,7 +13,7 @@ $courtImages = [
     'thumbs' => [
       'https://pickleand.club/cdn/shop/files/250411_-_Pickle__058.jpg?v=1744700811&width=400',
       'https://pickleand.club/cdn/shop/files/250411_-_Pickle__061.jpg?v=1744700811&width=400',
-      'Images/Hero.jpg',
+      '../assets/Images/Hero.jpg',
       'https://pickleand.club/cdn/shop/files/250411_-_Pickle__055.jpg?v=1744709434&width=400',
     ],
   ],
@@ -23,7 +24,7 @@ $courtImages = [
     'thumbs' => [
       'https://pickleand.club/cdn/shop/files/250411_-_Pickle__055.jpg?v=1744709434&width=400',
       'https://pickleand.club/cdn/shop/files/250411_-_Pickle__058.jpg?v=1744700811&width=400',
-      'Images/Hero.jpg',
+      '../assets/Images/Hero.jpg',
       'https://pickleand.club/cdn/shop/files/250411_-_Pickle__061.jpg?v=1744700811&width=400',
     ],
   ],
@@ -136,7 +137,7 @@ $coaches = [
       <div class="classes-carousel" data-classes-carousel>
         <div class="classes-track">
           <article class="class-slide is-active" data-class-slide>
-            <img src="Images/Hero.jpg" alt="Private and semi-private pickleball lesson" />
+            <img src="../assets/Images/Hero.jpg" alt="Private and semi-private pickleball lesson" />
             <div>
               <p>Pickled Classes</p>
               <h3>PRIVATE AND SEMI-PRIVATE LESSON</h3>
@@ -304,7 +305,7 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
       </aside>
       <form class="booking-form booking-details-form">
         <h2>Your details</h2>
-        <div class="booking-alert">Booking will only be confirmed after payment. Your name and email are collected here, then payment is on the next page.</div>
+        <div class="booking-alert">This will add your selected schedule to cart. Payment happens during checkout.</div>
         <label>Name *<input type="text" placeholder="Enter your name" required /></label>
         <label>Email *<input type="email" placeholder="Enter your email" required /></label>
         <fieldset>
@@ -314,7 +315,7 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
           <label><input type="radio" name="level" /> DUPR 2.5-3.0</label>
           <label><input type="radio" name="level" /> DUPR 3-3.5</label>
         </fieldset>
-        <button type="submit">Continue to payment</button>
+        <button type="submit">Add to cart</button>
       </form>
     </div>
 
@@ -388,7 +389,7 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
 <script>
 (function(){
   const isLoggedIn = <?= !empty($_SESSION['user']) ? 'true' : 'false' ?>;
-  const loginUrl = 'login.php?notice=booking&redirect=courts.php%23court-detail';
+  const loginUrl = '../login.php?notice=booking&redirect=pages/courts.php%23court-detail';
   const state = {
     label: 'COURT RENTALS',
     note: 'Reserve Court Green for casual or private play.',
@@ -695,6 +696,29 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
       courtCartForm.elements.quantity.value = state.qty;
     });
   }
+  function submitBookingToCart() {
+    const form = document.createElement('form');
+    const selectedTimes = state.selectedTimes.length ? state.selectedTimes.join(', ') : state.time;
+    const totalPrice = state.price * Math.max(1, state.selectedTimes.length || 1) * state.qty;
+    const fields = {
+      action: 'add_custom',
+      name: state.label,
+      price: String(totalPrice),
+      description: [state.court, state.duration, state.date, selectedTimes, 'Participants: ' + state.qty].filter(Boolean).join(' · '),
+      quantity: '1'
+    };
+    form.method = 'post';
+    form.action = 'cart.php';
+    Object.keys(fields).forEach(name => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = fields[name];
+      form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+  }
   document.querySelectorAll('[data-share-url]').forEach(button => button.addEventListener('click', () => sharePage(button)));
   document.querySelector('.booking-close').addEventListener('click', closeModal);
   modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
@@ -784,11 +808,8 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
     const form = event.currentTarget;
     state.name = form.querySelector('input[type="text"]').value.trim();
     state.email = form.querySelector('input[type="email"]').value.trim();
-    document.getElementById('confirmedName').textContent = state.name;
-    document.getElementById('confirmedEmail').textContent = state.email;
     updateTotals();
-    detailsStep.classList.remove('is-active');
-    paymentStep.classList.add('is-active');
+    submitBookingToCart();
   });
 
   document.querySelector('.booking-payment-form').addEventListener('submit', event => {
@@ -861,4 +882,4 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
 })();
 </script>
 
-<?php include '_footer.php'; ?>
+<?php include __DIR__ . '/../includes/_footer.php'; ?>

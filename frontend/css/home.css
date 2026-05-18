@@ -2,7 +2,7 @@
 
 .hero {
   min-height: calc(100vh - var(--nav-h)); position: relative; overflow: hidden;
-  background: linear-gradient(180deg, rgba(20,30,16,.44) 0%, rgba(5,10,6,.7) 100%), url('../Images/Hero.jpg') center center/cover no-repeat;
+  background: linear-gradient(180deg, rgba(20,30,16,.44) 0%, rgba(5,10,6,.7) 100%), url('../assets/Images/Hero.jpg') center center/cover no-repeat;
   display: flex; align-items: center;
 }
 .hero-overlay { position: absolute; inset: 0; background: rgba(9,20,10,.28); }

@@ -1,5 +1,6 @@
 <?php
 // _navbar.php - shared site navigation
+$basePath = $basePath ?? '';
 $activePage = $activePage ?? '';
 $links = [
   'index.php'       => 'Home',
@@ -8,26 +9,31 @@ $links = [
   'private.php'     => 'Private',
   'contact.php'     => 'Contact',
 ];
+$rootPrefix = $basePath === '../' ? '../' : '';
+$pagePrefix = $basePath === '../' ? '' : 'pages/';
 $lightLogoPages = ['courts.php', 'social-play.php', 'login.php'];
 $whiteNavTextPages = ['courts.php', 'social-play.php'];
-$logoImage = in_array($activePage, $lightLogoPages, true) ? 'Images/WM-LPink.png' : 'Images/WM-DGreen.png';
+$logoFile = in_array($activePage, $lightLogoPages, true) ? 'WM-LPink.png' : 'WM-DGreen.png';
+$logoImage = $basePath . 'assets/Images/' . $logoFile;
 $navClasses = 'nav' . (in_array($activePage, $whiteNavTextPages, true) ? ' nav--white-actions' : '');
 $loggedIn = !empty($_SESSION['user']);
 $cartCount = !empty($_SESSION['cart']) ? array_sum(array_column($_SESSION['cart'], 'quantity')) : 0;
-$bookNowHref = $loggedIn ? 'booking.php' : 'login.php?notice=booking&redirect=booking.php';
+$bookNowRedirect = 'pages/courts.php#court-detail';
+$bookNowHref = $loggedIn ? $pagePrefix . 'courts.php#court-detail' : $rootPrefix . 'login.php?notice=booking&redirect=' . rawurlencode($bookNowRedirect);
 ?>
 
 <div class="promo-bar">Promotion - ₱250 Trial Class</div>
 
 <nav class="<?= htmlspecialchars($navClasses) ?>" id="mainNav">
   <div class="nav-inner">
-    <a href="index.php" class="logo">
+    <a href="<?= htmlspecialchars($rootPrefix) ?>index.php" class="logo">
       <img src="<?= htmlspecialchars($logoImage) ?>" alt="Pickled" class="logo-image" />
     </a>
 
     <div class="nav-links">
       <?php foreach ($links as $href => $label): ?>
-        <a href="<?= htmlspecialchars($href) ?>" class="nav-link <?= $activePage === $href ? 'active' : '' ?>">
+        <?php $navHref = $href === 'index.php' ? $rootPrefix . $href : $pagePrefix . $href; ?>
+        <a href="<?= htmlspecialchars($navHref) ?>" class="nav-link <?= $activePage === $href ? 'active' : '' ?>">
           <?= htmlspecialchars($label) ?>
         </a>
       <?php endforeach; ?>
@@ -36,7 +42,7 @@ $bookNowHref = $loggedIn ? 'booking.php' : 'login.php?notice=booking&redirect=bo
     <div class="nav-right">
       <div class="nav-sep"></div>
       <a href="<?= htmlspecialchars($bookNowHref) ?>" class="btn btn-green btn-sm">Book Now</a>
-      <a href="cart.php" class="nav-cart<?= $activePage === 'cart.php' ? ' active' : '' ?>" aria-label="Cart<?= $cartCount ? ' with ' . $cartCount . ' items' : '' ?>">
+      <a href="<?= htmlspecialchars($pagePrefix) ?>cart.php" class="nav-cart<?= $activePage === 'cart.php' ? ' active' : '' ?>" aria-label="Cart<?= $cartCount ? ' with ' . $cartCount . ' items' : '' ?>">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="9" cy="20" r="1.8"></circle>
           <circle cx="18" cy="20" r="1.8"></circle>
@@ -48,9 +54,9 @@ $bookNowHref = $loggedIn ? 'booking.php' : 'login.php?notice=booking&redirect=bo
       </a>
       <?php if ($loggedIn): ?>
         <span class="nav-user">Welcome, <?= htmlspecialchars($_SESSION['user']['name'] ?? $_SESSION['user']['email'] ?? 'Member') ?></span>
-        <a href="logout.php" class="btn btn-ghost btn-sm">Logout</a>
+        <a href="<?= htmlspecialchars($rootPrefix) ?>logout.php" class="btn btn-ghost btn-sm">Logout</a>
       <?php else: ?>
-        <a href="login.php" class="btn btn-ghost btn-sm">Sign In</a>
+        <a href="<?= htmlspecialchars($rootPrefix) ?>login.php" class="btn btn-ghost btn-sm">Sign In</a>
       <?php endif; ?>
     </div>
   </div>

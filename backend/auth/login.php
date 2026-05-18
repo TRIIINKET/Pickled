@@ -1,8 +1,11 @@
 <?php
 session_start();
+$appConfig = require __DIR__ . '/../config/app.php';
 $pageTitle = 'Login - Pickled';
 $activePage = 'login.php';
-$extraHead = '<link rel="stylesheet" href="assets/css/login.css"/>';
+$frontendPath = __DIR__ . '/../../frontend';
+$loginAssetPrefix = defined('PICKLED_FRONTEND_ENTRY') ? '' : 'frontend/';
+$extraHead = '<link rel="stylesheet" href="' . $loginAssetPrefix . 'css/login.css"/>';
 
 class User {
     private string $email;
@@ -86,7 +89,7 @@ if (!empty($_SESSION['user'])) {
 $mode = $_GET['mode'] ?? 'login';
 $mode = $mode === 'signup' ? 'signup' : 'login';
 $redirect = $_POST['redirect'] ?? ($_GET['redirect'] ?? 'index.php');
-if (!preg_match('/^[A-Za-z0-9_-]+\.php(?:#[A-Za-z0-9_-]+)?$/', $redirect)) {
+if (!preg_match('/^(?:pages\/)?[A-Za-z0-9_-]+\.php(?:#[A-Za-z0-9_-]+)?$/', $redirect)) {
     $redirect = 'index.php';
 }
 $bookingNotice = ($_GET['notice'] ?? '') === 'booking' ? 'Please sign up or sign in before booking.' : '';
@@ -132,7 +135,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'name'  => $users[$email]['name'],
             ];
 
-            setcookie('login_cookie', '1', time() + 30, '/'); // expires in 1 minute for the whole site
+            // Login is intentionally short for the school project demo: the cookie expires after 1 minute.
+            setcookie($appConfig['login_cookie']['name'], '1', time() + (int) $appConfig['login_cookie']['ttl_seconds'], '/');
 
             header('Location: ' . $redirect);
             exit;
@@ -141,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $loginError = 'Invalid email or password.';
     }
 }
-include '_header.php';
+include $frontendPath . '/includes/_header.php';
 ?>
 
 <main class="login-page">
@@ -217,9 +221,9 @@ include '_header.php';
 
     <div class="login-help">
       <h2>Need help accessing your subscriptions?</h2>
-      <a href="contact.php">Click here</a>
+      <a href="pages/contact.php">Click here</a>
     </div>
   </section>
 </main>
 
-<?php include '_footer.php'; ?>
+<?php include $frontendPath . '/includes/_footer.php'; ?>

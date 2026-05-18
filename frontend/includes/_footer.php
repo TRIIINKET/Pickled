@@ -1,4 +1,7 @@
-<?php // _footer.php - shared footer ?>
+<?php
+// _footer.php - shared footer
+$footerPagePrefix = ($basePath ?? '') === '../' ? '' : 'pages/';
+?>
 <footer class="footer">
   <div class="footer-inner">
     <div class="footer-main">
@@ -30,7 +33,7 @@
 
     <div class="footer-bottom">
       <span class="footer-copy"><?= date('Y') ?> Pickled. All rights reserved</span>
-      <a href="social-play.php" class="footer-shop">Join social play</a>
+      <a href="<?= htmlspecialchars($footerPagePrefix) ?>social-play.php" class="footer-shop">Join social play</a>
       <div class="footer-legal">
         <a href="#privacyModal" class="footer-legal__link" id="privacyPolicyBtn" data-modal-target="privacyModal">Privacy policy</a>
         <a href="#termsModal" class="footer-legal__link" id="termsPolicyBtn" data-modal-target="termsModal">Terms of service</a>
@@ -237,6 +240,4 @@
   </div>
 </div>
 
-<script src="assets/js/privacy-modal.js"></script>
-</body>
-</html>
+<script src="<?= htmlspecialchars($basePath ?? '') ?>js/privacy-modal.js"></script>

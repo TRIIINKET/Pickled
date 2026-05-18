@@ -1,8 +1,9 @@
 <?php
 $pageTitle  = 'Contact - Pickled';
 $activePage = 'contact.php';
-$extraHead  = '<link rel="stylesheet" href="assets/css/contact.css"/>';
-include '_header.php';
+$basePath   = '../';
+$extraHead  = '<link rel="stylesheet" href="../css/contact.css"/>';
+include '../includes/_header.php';
 ?>
 
 <main class="contact-page">
@@ -64,4 +65,4 @@ include '_header.php';
 })();
 </script>
 
-<?php include '_footer.php'; ?>
+<?php include __DIR__ . '/../includes/_footer.php'; ?>

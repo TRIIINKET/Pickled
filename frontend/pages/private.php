@@ -1,8 +1,9 @@
 <?php
 $pageTitle  = 'Private Events - Pickled';
 $activePage = 'private.php';
-$extraHead  = '<link rel="stylesheet" href="assets/css/private.css"/>';
-include '_header.php';
+$basePath   = '../';
+$extraHead  = '<link rel="stylesheet" href="../css/private.css"/>';
+include '../includes/_header.php';
 ?>
 
 <main class="private-page">
@@ -40,4 +41,4 @@ include '_header.php';
   </section>
 </main>
 
-<?php include '_footer.php'; ?>
+<?php include '../includes/_footer.php'; ?>

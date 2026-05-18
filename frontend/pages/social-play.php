@@ -1,14 +1,15 @@
 <?php
 $pageTitle  = 'Social Play - Pickled';
 $activePage = 'social-play.php';
-$extraHead  = '<link rel="stylesheet" href="assets/css/social-play.css"/>';
-include '_header.php';
+$basePath   = '../';
+$extraHead  = '<link rel="stylesheet" href="../css/social-play.css"/>';
+include '../includes/_header.php';
 
 $galleryImages = [
   'https://pickleand.club/cdn/shop/files/250411_-_Pickle__058.jpg?v=1744700811&width=1200',
   'https://pickleand.club/cdn/shop/files/250411_-_Pickle__061.jpg?v=1744700811&width=600',
   'https://pickleand.club/cdn/shop/files/250411_-_Pickle__055.jpg?v=1744709434&width=600',
-  'Images/Hero.jpg',
+  '../assets/Images/Hero.jpg',
 ];
 
 $faqs = [
@@ -220,7 +221,7 @@ $faqs = [
       </aside>
       <form class="social-form" id="socialDetailsForm">
         <h2>Your Information</h2>
-        <div class="social-alert">Booking will only be confirmed after payment. Your details are collected here, then payment is on the next step.</div>
+        <div class="social-alert">This will add your selected social play session to cart. Payment happens during checkout.</div>
         <label>Name *<input type="text" required placeholder="Enter your name" id="socialName" /></label>
         <label>Email *<input type="email" required placeholder="Enter your email" id="socialEmail" /></label>
         <fieldset>
@@ -230,7 +231,7 @@ $faqs = [
           <label><input type="radio" name="social_level" /> DUPR 2.5-3.0</label>
           <label><input type="radio" name="social_level" /> DUPR 3-3.5</label>
         </fieldset>
-        <button type="submit" class="social-continue-form">Proceed to Payment</button>
+        <button type="submit" class="social-continue-form">Add to cart</button>
       </form>
     </div>
     <div class="social-book-step social-book-step--payment">
@@ -308,7 +309,7 @@ $faqs = [
 <script>
 (function(){
   const isLoggedIn = <?= !empty($_SESSION['user']) ? 'true' : 'false' ?>;
-  const loginUrl = 'login.php?notice=booking&redirect=social-play.php%23social-booking';
+  const loginUrl = '../login.php?notice=booking&redirect=pages/social-play.php%23social-booking';
   const modal = document.getElementById('socialModal');
   const dateStep = modal.querySelector('.social-book-step--date');
   const formStep = modal.querySelector('.social-book-step--form');
@@ -597,8 +598,25 @@ $faqs = [
     state.name = document.getElementById('socialName').value.trim();
     state.email = document.getElementById('socialEmail').value.trim();
     updateSummary();
-    formStep.classList.remove('is-active');
-    paymentStep.classList.add('is-active');
+    const form = document.createElement('form');
+    const fields = {
+      action: 'add_custom',
+      name: state.label,
+      price: String(state.price * state.qty),
+      description: ['COURT GREEN', state.duration, state.date, state.time, 'Participants: ' + state.qty].filter(Boolean).join(' · '),
+      quantity: '1'
+    };
+    form.method = 'post';
+    form.action = 'cart.php';
+    Object.keys(fields).forEach(name => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = fields[name];
+      form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
   });
 
   document.querySelector('.social-back-payment').addEventListener('click', () => {
@@ -644,4 +662,4 @@ $faqs = [
 })();
 </script>
 
-<?php include '_footer.php'; ?>
+<?php include __DIR__ . '/../includes/_footer.php'; ?>
