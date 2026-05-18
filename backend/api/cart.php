@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
 
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+pickled_start_secure_session();
 require_once __DIR__ . '/../includes/booking_system.php';
 
 header('Content-Type: application/json');

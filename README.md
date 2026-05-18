@@ -17,6 +17,7 @@ The project focuses on creating a modern, responsive, and user-friendly experien
 ## Technologies Used
 
 - PHP
+- MySQL / PDO
 - HTML
 - CSS
 - JavaScript
@@ -26,6 +27,18 @@ The project focuses on creating a modern, responsive, and user-friendly experien
 ## Project Status
 
 This project is currently under development for academic and collaborative learning purposes.
+
+## Local database setup
+
+Import `backend/database/schema.sql` into MySQL before running the app.
+
+Default local connection:
+
+- DSN: `mysql:host=127.0.0.1;port=3306;dbname=pickled;charset=utf8mb4`
+- User: `root`
+- Password: empty
+
+You can override those with `PICKLED_DB_DSN`, `PICKLED_DB_USER`, and `PICKLED_DB_PASS`.
 
 ## Developers
 

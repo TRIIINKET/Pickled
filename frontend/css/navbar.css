@@ -68,6 +68,14 @@ body.promo-hidden .nav {
   gap: 10px;
 }
 
+.nav-logout-form {
+  display: inline;
+}
+
+.nav-logout-form button {
+  font: inherit;
+}
+
 .nav-user {
   color: var(--green, #245f49);
   font-weight: 700;
@@ -136,7 +144,7 @@ body.promo-hidden .nav {
   font-weight: 900;
 }
 
-..nav--white-actions {
+.nav--white-actions {
   background: rgba(0,0,0,.42);
   border-bottom-color: rgba(255,255,255,.12);
 }
