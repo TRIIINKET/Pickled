@@ -1,7 +1,7 @@
--- PICKLED scalable database proposal.
--- Current school-project build uses PHP sessions for cart/checkout demos.
+CREATE DATABASE IF NOT EXISTS pickled CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE pickled;
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(120) NOT NULL,
   email VARCHAR(160) NOT NULL UNIQUE,
@@ -10,50 +10,71 @@ CREATE TABLE users (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE courts (
+CREATE TABLE IF NOT EXISTS password_resets (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(80) NOT NULL,
-  slug VARCHAR(80) NOT NULL UNIQUE,
-  positioning VARCHAR(160) NOT NULL,
-  description TEXT,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  user_id INT NOT NULL,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE booking_variants (
+CREATE TABLE IF NOT EXISTS carts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL UNIQUE,
+  started_at DATETIME NULL,
+  expires_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS courts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(80) NOT NULL,
+  slug VARCHAR(80) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS booking_variants (
   id INT AUTO_INCREMENT PRIMARY KEY,
   court_id INT NOT NULL,
-  name VARCHAR(120) NOT NULL,
-  category VARCHAR(80) NOT NULL,
+  slug VARCHAR(120) NOT NULL UNIQUE,
+  name VARCHAR(160) NOT NULL,
+  category VARCHAR(120) NOT NULL,
   duration_label VARCHAR(80) NOT NULL,
   price DECIMAL(10,2) NOT NULL,
-  capacity INT NOT NULL,
+  participants_limit INT NOT NULL DEFAULT 1,
+  capacity INT NOT NULL DEFAULT 1,
+  image VARCHAR(255) NULL,
   active TINYINT(1) NOT NULL DEFAULT 1,
   FOREIGN KEY (court_id) REFERENCES courts(id)
 );
 
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
   id INT AUTO_INCREMENT PRIMARY KEY,
   variant_id INT NOT NULL,
-  starts_at DATETIME NOT NULL,
-  ends_at DATETIME NOT NULL,
+  session_date VARCHAR(80) NOT NULL,
+  session_time VARCHAR(80) NOT NULL,
   capacity INT NOT NULL,
   booked_count INT NOT NULL DEFAULT 0,
-  status VARCHAR(40) NOT NULL DEFAULT 'open',
+  UNIQUE KEY unique_variant_slot (variant_id, session_date, session_time),
   FOREIGN KEY (variant_id) REFERENCES booking_variants(id)
 );
 
-CREATE TABLE cart (
+CREATE TABLE IF NOT EXISTS cart_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
+  cart_id INT NOT NULL,
   session_id INT NOT NULL,
   quantity INT NOT NULL DEFAULT 1,
-  expires_at DATETIME NOT NULL,
+  unit_price DECIMAL(10,2) NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id),
+  UNIQUE KEY unique_cart_session (cart_id, session_id),
+  FOREIGN KEY (cart_id) REFERENCES carts(id) ON DELETE CASCADE,
   FOREIGN KEY (session_id) REFERENCES sessions(id)
 );
 
-CREATE TABLE bookings (
+CREATE TABLE IF NOT EXISTS bookings (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
   reference VARCHAR(40) NOT NULL UNIQUE,
@@ -61,61 +82,52 @@ CREATE TABLE bookings (
   subtotal DECIMAL(10,2) NOT NULL,
   payment_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
   total DECIMAL(10,2) NOT NULL,
-  cancellation_requested_at DATETIME NULL,
-  refund_eligibility VARCHAR(80) NULL,
+  payment_method VARCHAR(80) NOT NULL,
+  payment_status VARCHAR(80) NOT NULL,
+  notes TEXT NULL,
+  cancellation_label VARCHAR(120) NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
-CREATE TABLE booking_items (
+CREATE TABLE IF NOT EXISTS booking_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   booking_id INT NOT NULL,
   session_id INT NOT NULL,
+  variant_id VARCHAR(120) NOT NULL,
+  name VARCHAR(160) NOT NULL,
+  court VARCHAR(120) NOT NULL,
+  category VARCHAR(120) NOT NULL,
+  duration_label VARCHAR(80) NOT NULL,
+  booking_date VARCHAR(80) NOT NULL,
+  booking_time VARCHAR(80) NOT NULL,
   quantity INT NOT NULL DEFAULT 1,
   unit_price DECIMAL(10,2) NOT NULL,
-  FOREIGN KEY (booking_id) REFERENCES bookings(id),
+  image VARCHAR(255) NULL,
+  FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
   FOREIGN KEY (session_id) REFERENCES sessions(id)
 );
 
-CREATE TABLE payments (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  booking_id INT NOT NULL,
-  method VARCHAR(80) NOT NULL,
-  amount DECIMAL(10,2) NOT NULL,
-  status VARCHAR(40) NOT NULL DEFAULT 'pending',
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (booking_id) REFERENCES bookings(id)
-);
+INSERT INTO users (name, email, password_hash, role)
+VALUES
+  ('Player', 'player@example.com', '$2y$12$KNh/CplDSuT71nQMLS7/iOKrsTDtlWIYdMM2XzKcZmojpCznjiUg.', 'player'),
+  ('Coach', 'coach@example.com', '$2y$12$OtmXd8ca7eatk3JguuO4HuuyBabiXEVcJPZ8/xZ95AfxZPI7wwvZS', 'coach')
+ON DUPLICATE KEY UPDATE email = VALUES(email);
 
-CREATE TABLE waitlist (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  session_id INT NOT NULL,
-  queue_position INT NOT NULL,
-  claim_expires_at DATETIME NULL,
-  status VARCHAR(40) NOT NULL DEFAULT 'waiting',
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id),
-  FOREIGN KEY (session_id) REFERENCES sessions(id)
-);
+INSERT INTO courts (name, slug)
+VALUES ('Court Green', 'green'), ('Court Pink', 'pink')
+ON DUPLICATE KEY UPDATE name = VALUES(name);
 
-CREATE TABLE tournaments (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(140) NOT NULL,
-  court_id INT NOT NULL,
-  starts_at DATETIME NOT NULL,
-  capacity INT NOT NULL,
-  status VARCHAR(40) NOT NULL DEFAULT 'open',
-  FOREIGN KEY (court_id) REFERENCES courts(id)
-);
-
-CREATE TABLE coaching_programs (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  court_id INT NOT NULL,
-  name VARCHAR(140) NOT NULL,
-  age_group VARCHAR(80),
-  level VARCHAR(80),
-  price DECIMAL(10,2) NOT NULL,
-  active TINYINT(1) NOT NULL DEFAULT 1,
-  FOREIGN KEY (court_id) REFERENCES courts(id)
-);
+INSERT INTO booking_variants (court_id, slug, name, category, duration_label, price, participants_limit, capacity, image)
+SELECT c.id, seed.slug, seed.name, seed.category, seed.duration_label, seed.price, seed.participants_limit, seed.capacity, '../assets/Images/Hero.jpg'
+FROM courts c
+JOIN (
+  SELECT 'green' court_slug, 'green-court-rentals' slug, 'Court Rentals' name, 'Court Reservation' category, '1 hour' duration_label, 600.00 price, 6 participants_limit, 12 capacity
+  UNION ALL SELECT 'green', 'green-lessons', 'Lessons', 'Coaching', '1 hour', 500.00, 6, 12
+  UNION ALL SELECT 'green', 'green-private-coaching', 'Private Coaching', 'Coaching', '1 hour', 1200.00, 1, 4
+  UNION ALL SELECT 'green', 'green-training', 'Training', 'Training', '1 hour', 800.00, 6, 12
+  UNION ALL SELECT 'green', 'green-open-match-play', 'Open Match-Play', 'Social Play', '2 hours', 350.00, 8, 16
+  UNION ALL SELECT 'green', 'green-weekly-tournament', 'Weekly Tournament', 'Social Play', 'This week', 900.00, 1, 16
+  UNION ALL SELECT 'pink', 'pink-base-rate', 'Court Pink Base Rate', 'Court Reservation', '1 hour', 400.00, 6, 10
+) seed ON seed.court_slug = c.slug
+ON DUPLICATE KEY UPDATE name = VALUES(name), price = VALUES(price), capacity = VALUES(capacity);

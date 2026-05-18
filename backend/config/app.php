@@ -4,10 +4,6 @@ declare(strict_types=1);
 return [
     'app_name' => 'PICKLED',
     'timezone' => 'Asia/Manila',
-    'login_cookie' => [
-        'name' => 'login_cookie',
-        'ttl_seconds' => 60,
-    ],
     'cart' => [
         'hold_seconds' => 300,
         'item_limit' => 3,
