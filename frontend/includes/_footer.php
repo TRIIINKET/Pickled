@@ -1,6 +1,6 @@
 <?php
 // _footer.php - shared footer
-$footerPagePrefix = ($basePath ?? '') === '../' ? '' : 'pages/';
+require_once __DIR__ . '/paths.php';
 ?>
 <footer class="footer">
   <div class="footer-inner">
@@ -33,7 +33,7 @@ $footerPagePrefix = ($basePath ?? '') === '../' ? '' : 'pages/';
 
     <div class="footer-bottom">
       <span class="footer-copy"><?= date('Y') ?> Pickled. All rights reserved</span>
-      <a href="<?= htmlspecialchars($footerPagePrefix) ?>social-play.php" class="footer-shop">Join social play</a>
+      <a href="<?= htmlspecialchars(pickled_frontend_url('pages/social-play.php')) ?>" class="footer-shop">Join social play</a>
       <div class="footer-legal">
         <a href="#privacyModal" class="footer-legal__link" id="privacyPolicyBtn" data-modal-target="privacyModal">Privacy policy</a>
         <a href="#termsModal" class="footer-legal__link" id="termsPolicyBtn" data-modal-target="termsModal">Terms of service</a>
@@ -240,4 +240,4 @@ $footerPagePrefix = ($basePath ?? '') === '../' ? '' : 'pages/';
   </div>
 </div>
 
-<script src="<?= htmlspecialchars($basePath ?? '') ?>js/privacy-modal.js"></script>
+<script src="<?= htmlspecialchars(pickled_asset_url('js/privacy-modal.js')) ?>"></script>

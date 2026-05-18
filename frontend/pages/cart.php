@@ -1,9 +1,15 @@
 <?php
-session_start();
 require_once __DIR__ . '/../../backend/includes/booking_system.php';
+require_once __DIR__ . '/../../backend/includes/security.php';
 require_once __DIR__ . '/../../backend/controllers/CheckoutController.php';
+require_once __DIR__ . '/../../backend/services/CheckoutService.php';
+
+pickled_start_secure_session();
+pickled_init_csrf();
+$csrfToken = pickled_csrf_token();
 
 pickled_require_login('pages/cart.php');
+pickled_restore_cart_for_user();
 
 if (pickled_expire_cart_if_needed()) {
   header('Location: cart.php?expired=1');
@@ -34,77 +40,53 @@ if (isset($_GET['limit'])) {
   $message = 'Cart limit reached. Please complete checkout before adding more reservations.';
   $messageType = 'warning';
 }
+if (isset($_GET['full'])) {
+  $message = 'That session is already full. Please choose another schedule.';
+  $messageType = 'warning';
+}
 if (isset($_GET['booked']) && !empty($_SESSION['last_booking'])) {
   $message = 'Booking confirmed. Reference: ' . $_SESSION['last_booking']['reference'];
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $action = $_POST['action'] ?? '';
+  $csrfToken = $_POST['csrf_token'] ?? null;
+  if (!pickled_validate_csrf_token($csrfToken)) {
+    $message = 'Invalid request. Please refresh and try again.';
+    $messageType = 'error';
+  } else {
+    $action = $_POST['action'] ?? '';
 
-  if ($action === 'remove') {
-    $cartId = (string) ($_POST['cart_id'] ?? '');
-    unset($_SESSION['cart'][$cartId]);
-    if (empty($_SESSION['cart'])) {
-      pickled_clear_cart_timer();
-    }
-    header('Location: cart.php');
-    exit;
-  }
-
-  if ($action === 'clear') {
-    $_SESSION['cart'] = [];
-    pickled_clear_cart_timer();
-    header('Location: cart.php');
-    exit;
-  }
-
-  if ($action === 'add_custom') {
-    $name = trim($_POST['name'] ?? '');
-    $price = max(0, (float) ($_POST['price'] ?? 0));
-    $description = trim($_POST['description'] ?? '');
-    $quantity = max(1, min(1, (int) ($_POST['quantity'] ?? 1)));
-    $cartId = 'custom-' . substr(sha1($name . '|' . $price . '|' . $description), 0, 14);
-
-    if ($name === '' || $price <= 0) {
+    if ($action === 'remove') {
+      $cartId = (int) ($_POST['cart_id'] ?? 0);
+      (new CartService())->removeForUser((int) $_SESSION['user']['id'], $cartId);
+      unset($_SESSION['cart'][(string) $cartId]);
+      if (empty($_SESSION['cart'])) {
+        pickled_clear_cart_timer();
+      }
+      pickled_persist_cart_for_user();
       header('Location: cart.php');
       exit;
     }
 
-    if (isset($_SESSION['cart'][$cartId])) {
-      header('Location: cart.php?duplicate=1');
+    if ($action === 'clear') {
+      $_SESSION['cart'] = [];
+      (new CartService())->clearForUser((int) $_SESSION['user']['id']);
+      pickled_clear_cart_timer();
+      pickled_persist_cart_for_user();
+      header('Location: cart.php');
       exit;
     }
 
-    if (pickled_cart_count() + $quantity > PICKLED_CART_LIMIT) {
-      header('Location: cart.php?limit=1');
+    if ($action === 'add_booking') {
+      $variantId = trim((string) ($_POST['variant_id'] ?? ''));
+      $quantity = max(1, (int) ($_POST['quantity'] ?? 1));
+      $date = trim((string) ($_POST['date'] ?? (new DateTimeImmutable('+3 days'))->format('F j, Y')));
+      $time = trim((string) ($_POST['time'] ?? 'Selected schedule'));
+      $result = pickled_add_to_cart($variantId, $quantity, $date, $time);
+      header('Location: cart.php?' . ($result['ok'] ? 'added=1' : $result['code'] . '=1'));
       exit;
     }
 
-    pickled_start_cart_timer();
-    $_SESSION['cart'][$cartId] = [
-      'id' => $cartId,
-      'variant_id' => 'custom',
-      'name' => $name,
-      'court' => str_contains(strtoupper($description), 'PINK') ? 'Court Pink' : 'Court Green',
-      'category' => str_contains(strtoupper($name . ' ' . $description), 'SOCIAL') || str_contains(strtoupper($name), 'MATCH') ? 'Social Play' : 'Court booking',
-      'price' => pickled_member_discount($price),
-      'base_price' => $price,
-      'member_discount' => pickled_is_member(),
-      'quantity' => $quantity,
-      'duration' => $description ?: 'Selected session',
-      'date' => (new DateTimeImmutable('+3 days'))->format('F j, Y'),
-      'time' => 'Selected schedule',
-      'participants' => $quantity,
-      'availability' => 'Temporarily reserved',
-      'description' => $description,
-      'image' => '../assets/Images/Hero.jpg',
-      'status' => 'Reserved in cart',
-      'created_at' => date('Y-m-d H:i:s'),
-    ];
-
-    header('Location: cart.php?added=1');
-    exit;
-  }
 
   if ($action === 'checkout') {
     if (empty($_SESSION['cart'])) {
@@ -117,34 +99,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $message = 'Please agree to the booking terms before checkout.';
       $messageType = 'warning';
     } else {
-      $items = $_SESSION['cart'];
-      $subtotal = pickled_cart_total();
-      $paymentFee = CheckoutController::feeFor($selectedPayment, $subtotal);
-      $total = $subtotal + $paymentFee;
-      $firstBookingDate = new DateTimeImmutable('+3 days');
-      $policy = pickled_cancellation_policy($firstBookingDate->getTimestamp());
+      try {
+        $_SESSION['last_booking'] = (new CheckoutService())->createBooking(
+          (int) $_SESSION['user']['id'],
+          $_SESSION['cart'],
+          $_SESSION['user']['name'] ?? 'Guest',
+          $selectedPayment,
+          trim($_POST['notes'] ?? '')
+        );
+      } catch (RuntimeException $e) {
+        $message = $e->getMessage();
+        $messageType = 'warning';
+      }
 
-      $_SESSION['last_booking'] = [
-        'reference' => 'PKL-' . strtoupper(substr(sha1(uniqid('', true)), 0, 8)),
-        'items' => $items,
-        'customer_name' => $_SESSION['user']['name'] ?? 'Guest',
-        'subtotal' => $subtotal,
-        'payment_fee' => $paymentFee,
-        'total' => $total,
-        'status' => $selectedPayment === 'cash' ? 'Pending Payment' : 'Confirmed',
-        'payment_method' => CheckoutController::methodLabel($selectedPayment),
-        'payment_status' => $selectedPayment === 'cash' ? 'pay on site' : 'paid demo checkout',
-        'cancellation_policy' => $policy,
-        'notes' => trim($_POST['notes'] ?? ''),
-        'created_at' => date('Y-m-d H:i:s'),
-      ];
-
-      $_SESSION['cart'] = [];
-      pickled_clear_cart_timer();
-      header('Location: cart.php?booked=1');
-      exit;
+      if ($messageType !== 'warning') {
+        $_SESSION['cart'] = [];
+        (new CartService())->clearForUser((int) $_SESSION['user']['id']);
+        pickled_clear_cart_timer();
+        pickled_persist_cart_for_user();
+        header('Location: cart.php?booked=1');
+        exit;
+      }
     }
   }
+}
 }
 
 $cartItems = $_SESSION['cart'] ?? [];
@@ -157,60 +135,9 @@ $cartSecondsRemaining = !empty($_SESSION['cart_expires_at']) ? max(0, (int) $_SE
 $member = pickled_is_member();
 $waitlist = $_SESSION['waitlist'] ?? [];
 
-$extraHead = '<style>
-  .cart-page{background:#f6efe1;min-height:100vh;color:#204f3b;padding:calc(var(--nav-h) + 36px) clamp(16px,4vw,56px) 80px}
-  .cart-shell{max-width:1380px;margin:0 auto}
-  .cart-top{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:36px}
-  .cart-top h1{font-size:clamp(48px,8vw,96px);line-height:.86;text-transform:uppercase;color:#204f3b}
-  .cart-top a{border:1px solid rgba(36,95,73,.2);border-radius:8px;background:#fff;padding:16px 26px;font-weight:900}
-  .cart-layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(360px,.62fr);gap:28px;align-items:start}
-  .cart-list{display:grid;gap:16px}
-  .cart-item{display:grid;grid-template-columns:170px minmax(0,1fr) auto;gap:22px;align-items:center;background:#fff;border:1px solid rgba(36,95,73,.16);border-radius:8px;padding:18px}
-  .cart-item img{width:170px;height:130px;object-fit:cover;border-radius:8px}
-  .cart-item h2{font-size:24px;text-transform:uppercase;margin-bottom:8px}
-  .cart-item p{font-weight:800;line-height:1.45;color:#35634f}
-  .cart-tags{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
-  .cart-tags span{border:1px solid rgba(36,95,73,.22);border-radius:999px;padding:6px 9px;font-size:11px;font-weight:900;text-transform:uppercase}
-  .cart-expire{color:#e60023!important;font-weight:900!important}
-  .cart-price{text-align:right;font-weight:900;font-size:28px;color:#204f3b}
-  .cart-remove{margin-top:16px;background:none;color:#e60023;text-decoration:underline;font-weight:900}
-  .cart-panel{position:sticky;top:calc(var(--nav-h) + 24px);display:grid;gap:18px}
-  .cart-total{background:#204f3b;color:#f5bad9;border-radius:8px;padding:28px;display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
-  .cart-total h2{font-size:clamp(32px,4vw,54px);text-transform:uppercase;line-height:1}
-  .cart-total strong{font-size:clamp(32px,4vw,54px);line-height:1;color:#f5bad9}
-  .checkout-card{background:#fff;border:1px solid rgba(36,95,73,.16);border-radius:8px;padding:24px}
-  .checkout-card h2{font-size:28px;text-transform:uppercase;margin-bottom:16px}
-  .checkout-card textarea{width:100%;min-height:150px;border:1px solid rgba(36,95,73,.2);border-radius:8px;padding:14px;resize:vertical;font:inherit;color:#204f3b}
-  .payment-methods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0 18px}
-  .payment-option{display:grid;gap:4px;border:1px solid rgba(36,95,73,.18);border-radius:8px;padding:13px;background:#f8f4ea;cursor:pointer}
-  .payment-option input{position:absolute;opacity:0;pointer-events:none}
-  .payment-option span{font-weight:900;color:#204f3b}
-  .payment-option small{font-weight:800;color:#5d745f}
-  .payment-option:has(input:checked),.payment-option.is-selected{border-color:#204f3b;background:#e8ffe1;box-shadow:0 0 0 3px rgba(36,95,73,.08)}
-  .checkout-summary{display:grid;gap:8px;margin:16px 0;padding:14px;border-radius:8px;background:#f8f4ea;font-weight:900}
-  .checkout-summary span{display:flex;justify-content:space-between;gap:12px}
-  .policy{font-weight:700;line-height:1.55;margin:18px 0;color:#35634f}
-  .terms{display:flex;gap:10px;align-items:center;font-weight:900;margin-bottom:18px}
-  .terms input{width:22px;height:22px}
-  .checkout-btn{width:100%;background:#70e956;color:#10240e;border-radius:8px;padding:16px;font-size:18px;font-weight:900}
-  .review-card{background:#fff;border:1px solid rgba(36,95,73,.16);border-radius:8px;padding:24px;display:grid;gap:14px}
-  .review-card h2{font-size:28px;text-transform:uppercase}
-  .review-card p{font-weight:800;color:#35634f;line-height:1.5}
-  .review-card a{display:block;text-align:center;background:#70e956;color:#10240e;border-radius:8px;padding:16px;font-size:18px;font-weight:900}
-  .review-card a.is-disabled{opacity:.45;pointer-events:none}
-  .cart-message{margin-bottom:22px;padding:16px 18px;border-radius:8px;background:#e8ffe1;color:#245f49;font-weight:900}
-  .cart-message--warning{background:#fff6cf;color:#6d4b00}.cart-message--error{background:#ffe4ef;color:#8f1d4f}
-  .empty-cart{background:#fff;border:1px solid rgba(36,95,73,.16);border-radius:8px;padding:34px}
-  .empty-cart p{font-size:18px;font-weight:800;margin-bottom:18px}
-  .confirmation{background:#fff;border:1px solid rgba(36,95,73,.16);border-radius:8px;padding:24px;margin-top:18px}
-  .confirmation h2{font-size:28px;text-transform:uppercase}.confirmation p{font-weight:800;margin-top:8px}
-  .waitlist-card{background:#fff6fb;border:1px solid rgba(248,86,150,.25);border-radius:8px;padding:18px}
-  .waitlist-card h3{text-transform:uppercase;margin-bottom:8px}.waitlist-card p{font-weight:800;line-height:1.45}
-  @media(max-width:980px){.cart-layout{grid-template-columns:1fr}.cart-panel{position:static}.cart-item{grid-template-columns:130px 1fr}.cart-price{grid-column:1/-1;text-align:left}}
-  @media(max-width:620px){.cart-top{display:grid}.cart-item{grid-template-columns:1fr}.cart-item img{width:100%;height:220px}.cart-total{display:grid}.payment-methods{grid-template-columns:1fr}}
-</style>';
+$extraHead = '<link rel="stylesheet" href="../css/cart.css?v=20260430d"/>';
 
-include '../includes/_header.php';
+include __DIR__ . '/../includes/_header.php';
 ?>
 
 <main class="cart-page">
@@ -251,6 +178,7 @@ include '../includes/_header.php';
                   <?php endif; ?>
                   <form method="post">
                     <input type="hidden" name="action" value="remove" />
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
                     <input type="hidden" name="cart_id" value="<?= htmlspecialchars($item['id']) ?>" />
                     <button class="cart-remove" type="submit">Remove</button>
                   </form>
@@ -294,9 +222,10 @@ include '../includes/_header.php';
         </div>
         <?php else: ?>
         <form method="post" class="checkout-card">
+          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
           <h2>Order Special Instructions</h2>
           <textarea name="notes" placeholder="Notes for the PICKLED team"></textarea>
-          <h2 style="margin-top:20px;">Payment Method</h2>
+          <h2 class="checkout-card__payment-title">Payment Method</h2>
           <?php include __DIR__ . '/../components/payment-methods.php'; ?>
           <div class="checkout-summary">
             <span><small>Subtotal</small><strong data-subtotal="<?= htmlspecialchars((string) $cartTotal) ?>">₱<?= number_format($cartTotal, 2) ?></strong></span>
@@ -370,4 +299,4 @@ include '../includes/_header.php';
 })();
 </script>
 
-<?php include '../includes/_footer.php'; ?>
+<?php include __DIR__ . '/../includes/_footer.php'; ?>

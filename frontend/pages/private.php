@@ -3,7 +3,7 @@ $pageTitle  = 'Private Events - Pickled';
 $activePage = 'private.php';
 $basePath   = '../';
 $extraHead  = '<link rel="stylesheet" href="../css/private.css"/>';
-include '../includes/_header.php';
+include __DIR__ . '/../includes/_header.php';
 ?>
 
 <main class="private-page">
@@ -41,4 +41,4 @@ include '../includes/_header.php';
   </section>
 </main>
 
-<?php include '../includes/_footer.php'; ?>
+<?php include __DIR__ . '/../includes/_footer.php'; ?>

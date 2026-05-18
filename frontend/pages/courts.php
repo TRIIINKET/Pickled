@@ -1,9 +1,11 @@
 <?php
+require_once __DIR__ . '/../../backend/includes/security.php';
+pickled_init_csrf();
 $pageTitle  = 'Courts - Pickled';
 $activePage = 'courts.php';
 $basePath   = '../';
 $extraHead  = '<link rel="stylesheet" href="../css/courts.css?v=20260430d"/>';
-include '../includes/_header.php';
+include __DIR__ . '/../includes/_header.php';
 
 $courtImages = [
   'green' => [
@@ -90,19 +92,19 @@ $coaches = [
         <p class="court-price"><span id="selectedCourtPrice">₱600.00</span> <small>/ session</small></p>
 
         <div class="rate-list" aria-label="Court rates">
-          <button class="rate-option is-selected" type="button" data-label="COURT RENTALS" data-price="600" data-duration="1 hour" data-court="COURT GREEN">
+          <button class="rate-option is-selected" type="button" data-variant="green-court-rentals" data-label="COURT RENTALS" data-price="600" data-duration="1 hour" data-court="COURT GREEN">
             <strong>COURT RENTALS ₱600</strong>
             <span>Reserve Court Green for casual or private play</span>
           </button>
-          <button class="rate-option" type="button" data-label="LESSONS" data-price="500" data-duration="1 hour" data-court="COURT GREEN">
+          <button class="rate-option" type="button" data-variant="green-lessons" data-label="LESSONS" data-price="500" data-duration="1 hour" data-court="COURT GREEN">
             <strong>LESSONS ₱500</strong>
             <span>Beginner-friendly drills and guided class sessions</span>
           </button>
-          <button class="rate-option" type="button" data-label="PRIVATE COACHING" data-price="1200" data-duration="1 hour" data-court="COURT GREEN" data-date-mode="coach">
+          <button class="rate-option" type="button" data-variant="green-private-coaching" data-label="PRIVATE COACHING" data-price="1200" data-duration="1 hour" data-court="COURT GREEN" data-date-mode="coach">
             <strong>PRIVATE COACHING ₱1,200</strong>
             <span>1-on-1 session with a certified coach</span>
           </button>
-          <button class="rate-option" type="button" data-label="TRAINING" data-price="800" data-duration="1 hour" data-court="COURT GREEN">
+          <button class="rate-option" type="button" data-variant="green-training" data-label="TRAINING" data-price="800" data-duration="1 hour" data-court="COURT GREEN">
             <strong>TRAINING ₱800</strong>
             <span>Focused skills training for stronger gameplay</span>
           </button>
@@ -111,10 +113,11 @@ $coaches = [
         <div class="court-booking-actions">
           <button class="book-trigger" type="button" data-tooltip="Order now">Book now</button>
           <form method="post" action="cart.php" class="court-cart-form" id="courtCartForm">
-            <input type="hidden" name="action" value="add_custom" />
-            <input type="hidden" name="name" value="COURT RENTALS" />
-            <input type="hidden" name="price" value="600" />
-            <input type="hidden" name="description" value="COURT GREEN · 1 hour" />
+            <input type="hidden" name="action" value="add_booking" />
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
+            <input type="hidden" name="variant_id" value="green-court-rentals" />
+            <input type="hidden" name="date" value="Thursday, May 7, 2026" />
+            <input type="hidden" name="time" value="Selected schedule" />
             <input type="hidden" name="quantity" value="1" />
             <button class="court-cart-button" type="submit">Add to cart</button>
           </form>
@@ -389,8 +392,12 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
 <script>
 (function(){
   const isLoggedIn = <?= !empty($_SESSION['user']) ? 'true' : 'false' ?>;
+  const csrfToken = '<?= htmlspecialchars(pickled_csrf_token()) ?>';
+  const availabilityEndpoint = '../../backend/api/availability.php';
+  let availability = { dates: {} };
   const loginUrl = '../login.php?notice=booking&redirect=pages/courts.php%23court-detail';
   const state = {
+    variant: 'green-court-rentals',
     label: 'COURT RENTALS',
     note: 'Reserve Court Green for casual or private play.',
     price: 600,
@@ -478,8 +485,19 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
     return state.note;
   }
 
-  function dateBooked(date){
-    return [8, 15, 22].includes(date.getDate());
+  function selectedDayAvailability(){
+    return availability.dates[state.date] || null;
+  }
+
+  async function loadAvailability(){
+    const year = visibleMonth.getFullYear();
+    const month = visibleMonth.getMonth() + 1;
+    const response = await fetch(availabilityEndpoint + '?variant=' + encodeURIComponent(state.variant) + '&year=' + year + '&month=' + month);
+    availability = await response.json();
+    renderCalendar();
+    updateTimeSlots();
+    renderTimeLabels();
+    updateTotals();
   }
 
   function to24Hour(time){
@@ -519,8 +537,9 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
       const label = formatDate(year, month, day);
-      const allowed = dateAllowed(date);
-      const booked = dateBooked(date);
+      const availableDate = availability.dates[label];
+      const allowed = dateAllowed(date) && !!availableDate;
+      const booked = allowed && !availableDate.available;
       const active = allowed && !booked && label === state.date ? ' is-date-selected' : '';
       const status = booked ? ' is-booked' : allowed ? ' is-available' : ' is-unavailable';
       const disabled = allowed && !booked ? '' : ' disabled title="' + (booked ? 'Booked' : 'Not available for this booking type') + '"';
@@ -576,8 +595,7 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
     coachRow.hidden = !needsCoach();
     coachSelect.value = state.coach;
     coachSchedule.textContent = state.coachSchedule;
-    renderCalendar();
-    updateTimeSlots();
+    loadAvailability();
     renderTimeLabels();
     updateTotals();
   }
@@ -586,7 +604,9 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
     const allowedSlots = needsCoach() ? state.coachSlots.split('|') : [];
     const selected = [];
     modal.querySelectorAll('.time-slot').forEach(button => {
-      const isBooked = button.dataset.booked === 'true';
+      const dayAvailability = selectedDayAvailability();
+      const slot = dayAvailability && dayAvailability.slots ? dayAvailability.slots[button.dataset.time] : null;
+      const isBooked = !slot || slot.full;
       const inCoachSchedule = !needsCoach() || allowedSlots.includes(button.dataset.time);
       button.hidden = !inCoachSchedule;
       button.disabled = isBooked || !inCoachSchedule;
@@ -606,6 +626,7 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
   function applyBookingDataset(button){
     if (!button.dataset.bookingLabel) return;
     state.label = button.dataset.bookingLabel;
+    state.variant = button.dataset.bookingVariant || 'green-private-coaching';
     state.note = button.dataset.bookingNote || 'Private coaching with your preferred certified coach.';
     state.price = Number(button.dataset.bookingPrice);
     state.duration = button.dataset.bookingDuration;
@@ -635,6 +656,7 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
         state.duration = '1 hour';
         state.court = 'COURT PINK';
         state.dateMode = 'daily';
+        state.variant = 'pink-base-rate';
       } else {
         document.getElementById('selectedCourtTitle').textContent = 'COURT GREEN';
         document.getElementById('selectedCourtPrice').textContent = '₱600.00';
@@ -645,6 +667,7 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
         state.duration = '1 hour';
         state.court = 'COURT GREEN';
         state.dateMode = 'daily';
+        state.variant = 'green-court-rentals';
       }
       updateBookingCopy();
     });
@@ -655,6 +678,7 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
       document.querySelectorAll('.rate-option').forEach(item => item.classList.remove('is-selected'));
       if (button.classList.contains('rate-option')) button.classList.add('is-selected');
       state.label = button.dataset.label;
+      state.variant = button.dataset.variant || state.variant;
       state.note = button.dataset.note || button.querySelector('span').textContent;
       state.price = Number(button.dataset.price);
       state.duration = button.dataset.duration;
@@ -690,22 +714,22 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
   const courtCartForm = document.getElementById('courtCartForm');
   if (courtCartForm) {
     courtCartForm.addEventListener('submit', () => {
-      courtCartForm.elements.name.value = state.label;
-      courtCartForm.elements.price.value = state.price;
-      courtCartForm.elements.description.value = [state.court, state.duration, state.note].filter(Boolean).join(' · ');
+      courtCartForm.elements.variant_id.value = state.variant;
+      courtCartForm.elements.date.value = state.date;
+      courtCartForm.elements.time.value = state.selectedTimes[0] || 'Selected schedule';
       courtCartForm.elements.quantity.value = state.qty;
     });
   }
   function submitBookingToCart() {
     const form = document.createElement('form');
     const selectedTimes = state.selectedTimes.length ? state.selectedTimes.join(', ') : state.time;
-    const totalPrice = state.price * Math.max(1, state.selectedTimes.length || 1) * state.qty;
     const fields = {
-      action: 'add_custom',
-      name: state.label,
-      price: String(totalPrice),
-      description: [state.court, state.duration, state.date, selectedTimes, 'Participants: ' + state.qty].filter(Boolean).join(' · '),
-      quantity: '1'
+      action: 'add_booking',
+      csrf_token: csrfToken,
+      variant_id: state.variant,
+      date: state.date,
+      time: selectedTimes,
+      quantity: String(state.qty)
     };
     form.method = 'post';
     form.action = 'cart.php';
@@ -757,12 +781,12 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
 
   calendarNavButtons[0].addEventListener('click', () => {
     visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1);
-    renderCalendar();
+    loadAvailability();
   });
 
   calendarNavButtons[1].addEventListener('click', () => {
     visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1);
-    renderCalendar();
+    loadAvailability();
   });
 
   calendarGrid.addEventListener('click', event => {
@@ -774,7 +798,7 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
     updateBookingCopy();
   });
 
-  renderCalendar();
+  loadAvailability();
 
   modal.querySelectorAll('.time-slot:not(:disabled)').forEach(button => {
     button.addEventListener('click', () => {

@@ -1,6 +1,6 @@
 <?php
 // _navbar.php - shared site navigation
-$basePath = $basePath ?? '';
+require_once __DIR__ . '/paths.php';
 $activePage = $activePage ?? '';
 $links = [
   'index.php'       => 'Home',
@@ -9,30 +9,32 @@ $links = [
   'private.php'     => 'Private',
   'contact.php'     => 'Contact',
 ];
-$rootPrefix = $basePath === '../' ? '../' : '';
-$pagePrefix = $basePath === '../' ? '' : 'pages/';
 $lightLogoPages = ['courts.php', 'social-play.php', 'login.php'];
 $whiteNavTextPages = ['courts.php', 'social-play.php'];
 $logoFile = in_array($activePage, $lightLogoPages, true) ? 'WM-LPink.png' : 'WM-DGreen.png';
-$logoImage = $basePath . 'assets/Images/' . $logoFile;
+$logoImage = pickled_asset_url('assets/Images/' . $logoFile);
 $navClasses = 'nav' . (in_array($activePage, $whiteNavTextPages, true) ? ' nav--white-actions' : '');
 $loggedIn = !empty($_SESSION['user']);
 $cartCount = !empty($_SESSION['cart']) ? array_sum(array_column($_SESSION['cart'], 'quantity')) : 0;
 $bookNowRedirect = 'pages/courts.php#court-detail';
-$bookNowHref = $loggedIn ? $pagePrefix . 'courts.php#court-detail' : $rootPrefix . 'login.php?notice=booking&redirect=' . rawurlencode($bookNowRedirect);
+$bookNowHref = $loggedIn ? pickled_frontend_url('pages/courts.php#court-detail') : pickled_frontend_url('login.php?notice=booking&redirect=' . rawurlencode($bookNowRedirect));
+if ($loggedIn && empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$logoutCsrf = htmlspecialchars($_SESSION['csrf_token'] ?? '');
 ?>
 
 <div class="promo-bar">Promotion - ₱250 Trial Class</div>
 
 <nav class="<?= htmlspecialchars($navClasses) ?>" id="mainNav">
   <div class="nav-inner">
-    <a href="<?= htmlspecialchars($rootPrefix) ?>index.php" class="logo">
+    <a href="<?= htmlspecialchars(pickled_frontend_url('index.php')) ?>" class="logo">
       <img src="<?= htmlspecialchars($logoImage) ?>" alt="Pickled" class="logo-image" />
     </a>
 
     <div class="nav-links">
       <?php foreach ($links as $href => $label): ?>
-        <?php $navHref = $href === 'index.php' ? $rootPrefix . $href : $pagePrefix . $href; ?>
+        <?php $navHref = $href === 'index.php' ? pickled_frontend_url($href) : pickled_frontend_url('pages/' . $href); ?>
         <a href="<?= htmlspecialchars($navHref) ?>" class="nav-link <?= $activePage === $href ? 'active' : '' ?>">
           <?= htmlspecialchars($label) ?>
         </a>
@@ -42,7 +44,7 @@ $bookNowHref = $loggedIn ? $pagePrefix . 'courts.php#court-detail' : $rootPrefix
     <div class="nav-right">
       <div class="nav-sep"></div>
       <a href="<?= htmlspecialchars($bookNowHref) ?>" class="btn btn-green btn-sm">Book Now</a>
-      <a href="<?= htmlspecialchars($pagePrefix) ?>cart.php" class="nav-cart<?= $activePage === 'cart.php' ? ' active' : '' ?>" aria-label="Cart<?= $cartCount ? ' with ' . $cartCount . ' items' : '' ?>">
+      <a href="<?= htmlspecialchars(pickled_frontend_url('pages/cart.php')) ?>" class="nav-cart<?= $activePage === 'cart.php' ? ' active' : '' ?>" aria-label="Cart<?= $cartCount ? ' with ' . $cartCount . ' items' : '' ?>">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="9" cy="20" r="1.8"></circle>
           <circle cx="18" cy="20" r="1.8"></circle>
@@ -54,9 +56,12 @@ $bookNowHref = $loggedIn ? $pagePrefix . 'courts.php#court-detail' : $rootPrefix
       </a>
       <?php if ($loggedIn): ?>
         <span class="nav-user">Welcome, <?= htmlspecialchars($_SESSION['user']['name'] ?? $_SESSION['user']['email'] ?? 'Member') ?></span>
-        <a href="<?= htmlspecialchars($rootPrefix) ?>logout.php" class="btn btn-ghost btn-sm">Logout</a>
+        <form method="post" action="<?= htmlspecialchars(pickled_frontend_url('logout.php')) ?>" class="nav-logout-form">
+          <input type="hidden" name="csrf_token" value="<?= $logoutCsrf ?>" />
+          <button type="submit" class="btn btn-ghost btn-sm">Logout</button>
+        </form>
       <?php else: ?>
-        <a href="<?= htmlspecialchars($rootPrefix) ?>login.php" class="btn btn-ghost btn-sm">Sign In</a>
+        <a href="<?= htmlspecialchars(pickled_frontend_url('login.php')) ?>" class="btn btn-ghost btn-sm">Sign In</a>
       <?php endif; ?>
     </div>
   </div>

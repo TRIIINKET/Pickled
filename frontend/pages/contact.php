@@ -3,7 +3,7 @@ $pageTitle  = 'Contact - Pickled';
 $activePage = 'contact.php';
 $basePath   = '../';
 $extraHead  = '<link rel="stylesheet" href="../css/contact.css"/>';
-include '../includes/_header.php';
+include __DIR__ . '/../includes/_header.php';
 ?>
 
 <main class="contact-page">

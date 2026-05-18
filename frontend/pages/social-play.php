@@ -1,9 +1,11 @@
 <?php
+require_once __DIR__ . '/../../backend/includes/security.php';
+pickled_init_csrf();
 $pageTitle  = 'Social Play - Pickled';
 $activePage = 'social-play.php';
 $basePath   = '../';
 $extraHead  = '<link rel="stylesheet" href="../css/social-play.css"/>';
-include '../includes/_header.php';
+include __DIR__ . '/../includes/_header.php';
 
 $galleryImages = [
   'https://pickleand.club/cdn/shop/files/250411_-_Pickle__058.jpg?v=1744700811&width=1200',
@@ -94,21 +96,22 @@ $faqs = [
         <h2><a class="social-court-link" href="courts.php#court-detail">COURT GREEN</a></h2>
         <div class="social-note">Connect, compete, and enjoy 2 hours of high-energy pickleball action</div>
         <div class="social-price">₱350.00 <span>/ session</span></div>
-        <button class="social-option is-selected" type="button" data-social-option data-label="OPEN MATCH-PLAY" data-price="350" data-duration="2 hours" data-mode="open-play" data-note="Open match-play dates are available on Tuesdays, Thursdays, and Saturdays.">
+        <button class="social-option is-selected" type="button" data-social-option data-variant="green-open-match-play" data-label="OPEN MATCH-PLAY" data-price="350" data-duration="2 hours" data-mode="open-play" data-note="Open match-play dates are available on Tuesdays, Thursdays, and Saturdays.">
           <strong>OPEN MATCH-PLAY ₱350</strong>
           <small>Meet new partners, rotate games, and level up with peers.</small>
         </button>
-        <button class="social-option" type="button" data-social-option data-label="WEEKLY TOURNAMENT" data-price="900" data-duration="This week" data-mode="tournament" data-note="Weekly Court Green tournament brackets are available this Friday and Sunday.">
+        <button class="social-option" type="button" data-social-option data-variant="green-weekly-tournament" data-label="WEEKLY TOURNAMENT" data-price="900" data-duration="This week" data-mode="tournament" data-note="Weekly Court Green tournament brackets are available this Friday and Sunday.">
           <strong>WEEKLY TOURNAMENT ₱900</strong>
           <small>Compete in this week's Court Green bracket.</small>
         </button>
         <div class="social-product-actions">
           <button class="social-book-now" type="button" data-tooltip="Connect and Play">Book now</button>
           <form method="post" action="cart.php" id="socialCartForm">
-            <input type="hidden" name="action" value="add_custom" />
-            <input type="hidden" name="name" value="OPEN MATCH-PLAY" />
-            <input type="hidden" name="price" value="350" />
-            <input type="hidden" name="description" value="COURT GREEN · 2 hours" />
+            <input type="hidden" name="action" value="add_booking" />
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
+            <input type="hidden" name="variant_id" value="green-open-match-play" />
+            <input type="hidden" name="date" value="Tuesday, May 5, 2026" />
+            <input type="hidden" name="time" value="07:00 PM - 09:00 PM" />
             <input type="hidden" name="quantity" value="1" />
             <button class="social-cart-button" type="submit">Add to cart</button>
           </form>
@@ -318,7 +321,11 @@ $faqs = [
   const calendarGrid = modal.querySelector('.calendar-grid');
   const calendarTitle = modal.querySelector('.calendar-head strong');
   const calendarNavButtons = modal.querySelectorAll('.calendar-head button');
+  const csrfToken = '<?= htmlspecialchars(pickled_csrf_token()) ?>';
+  const availabilityEndpoint = '../../backend/api/availability.php';
+  let availability = { dates: {} };
   const state = {
+    variant: 'green-open-match-play',
     label: 'OPEN MATCH-PLAY',
     note: 'Open match-play dates are available on Tuesdays, Thursdays, and Saturdays.',
     mode: 'open-play',
@@ -391,8 +398,18 @@ $faqs = [
     return true;
   }
 
-  function dateBooked(date){
-    return state.mode === 'open-play' && [14, 23].includes(date.getDate());
+  function selectedDayAvailability(){
+    return availability.dates[state.date] || null;
+  }
+
+  async function loadAvailability(){
+    const year = visibleMonth.getFullYear();
+    const month = visibleMonth.getMonth() + 1;
+    const response = await fetch(availabilityEndpoint + '?variant=' + encodeURIComponent(state.variant) + '&year=' + year + '&month=' + month);
+    availability = await response.json();
+    renderCalendar();
+    updateTimes();
+    updateSummary();
   }
 
   function renderCalendar(){
@@ -407,8 +424,9 @@ $faqs = [
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
       const label = formatDate(year, month, day);
-      const allowed = dateAllowed(date);
-      const booked = dateBooked(date);
+      const availableDate = availability.dates[label];
+      const allowed = dateAllowed(date) && !!availableDate;
+      const booked = allowed && !availableDate.available;
       const active = allowed && !booked && label === state.date ? ' is-selected' : '';
       const status = booked ? ' is-booked' : allowed ? ' is-available' : ' is-unavailable';
       const disabled = allowed && !booked ? '' : ' disabled title="' + (booked ? 'Booked' : 'Not available for this session') + '"';
@@ -432,7 +450,9 @@ $faqs = [
     modal.querySelectorAll('.social-time').forEach(button => {
       const modes = (button.dataset.modes || '').split(',');
       const show = modes.includes(state.mode);
-      const booked = button.dataset.booked === 'true';
+      const dayAvailability = selectedDayAvailability();
+      const slot = dayAvailability && dayAvailability.slots ? dayAvailability.slots[button.dataset.time] : null;
+      const booked = !slot || slot.full;
       button.hidden = !show;
       button.disabled = !show || booked;
       if (!show || booked) button.classList.remove('is-selected');
@@ -450,8 +470,7 @@ $faqs = [
     document.getElementById('socialBookingTitle').textContent = 'Book a ' + state.duration + ' session';
     document.getElementById('socialSummaryProduct').textContent = state.label + ' ₱' + state.price.toLocaleString('en-PH');
     document.getElementById('socialPaymentProduct').textContent = state.label + ' ₱' + state.price.toLocaleString('en-PH');
-    renderCalendar();
-    updateTimes();
+    loadAvailability();
     updateSummary();
   }
 
@@ -509,9 +528,9 @@ $faqs = [
   const socialCartForm = document.getElementById('socialCartForm');
   if (socialCartForm) {
     socialCartForm.addEventListener('submit', () => {
-      socialCartForm.elements.name.value = state.label;
-      socialCartForm.elements.price.value = state.price;
-      socialCartForm.elements.description.value = ['COURT GREEN', state.duration, state.note].filter(Boolean).join(' · ');
+      socialCartForm.elements.variant_id.value = state.variant;
+      socialCartForm.elements.date.value = state.date;
+      socialCartForm.elements.time.value = state.time;
       socialCartForm.elements.quantity.value = state.qty;
     });
   }
@@ -537,6 +556,7 @@ $faqs = [
       document.querySelectorAll('[data-social-option]').forEach(item => item.classList.remove('is-selected'));
       button.classList.add('is-selected');
       state.label = button.dataset.label;
+      state.variant = button.dataset.variant;
       state.price = Number(button.dataset.price);
       state.duration = button.dataset.duration;
       state.mode = button.dataset.mode;
@@ -556,12 +576,12 @@ $faqs = [
 
   calendarNavButtons[0].addEventListener('click', () => {
     visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1);
-    updateBookingCopy();
+    loadAvailability();
   });
 
   calendarNavButtons[1].addEventListener('click', () => {
     visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1);
-    updateBookingCopy();
+    loadAvailability();
   });
 
   calendarGrid.addEventListener('click', event => {
@@ -600,11 +620,12 @@ $faqs = [
     updateSummary();
     const form = document.createElement('form');
     const fields = {
-      action: 'add_custom',
-      name: state.label,
-      price: String(state.price * state.qty),
-      description: ['COURT GREEN', state.duration, state.date, state.time, 'Participants: ' + state.qty].filter(Boolean).join(' · '),
-      quantity: '1'
+      action: 'add_booking',
+      csrf_token: csrfToken,
+      variant_id: state.variant,
+      date: state.date,
+      time: state.time,
+      quantity: String(state.qty)
     };
     form.method = 'post';
     form.action = 'cart.php';
@@ -658,7 +679,7 @@ $faqs = [
   }
   tick();
   setInterval(tick, 30000);
-  updateBookingCopy();
+  loadAvailability();
 })();
 </script>
 
