@@ -1,8 +1,12 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+require_once __DIR__ . '/../includes/security.php';
+pickled_start_secure_session();
+
+$logoutTarget = defined('PICKLED_FRONTEND_ENTRY') ? 'index.php' : '../../frontend/index.php';
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !pickled_validate_csrf_token($_POST['csrf_token'] ?? null)) {
+    header('Location: ' . $logoutTarget);
+    exit;
 }
-$appConfig = require __DIR__ . '/../config/app.php';
 
 // Clear user-related session data including the session-only cart on logout.
 unset($_SESSION['user'], $_SESSION['cart'], $_SESSION['cart_started_at'], $_SESSION['cart_expires_at'], $_SESSION['last_booking']);
@@ -13,9 +17,7 @@ if (ini_get('session.use_cookies')) {
         $params['path'], $params['domain'],
         $params['secure'], $params['httponly']
     );
-    setcookie($appConfig['login_cookie']['name'], '', time() - 42000, '/');
 }
 session_destroy();
-$logoutTarget = defined('PICKLED_FRONTEND_ENTRY') ? 'index.php' : '../../frontend/index.php';
 header('Location: ' . $logoutTarget);
 exit;

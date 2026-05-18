@@ -1,97 +1,26 @@
 <?php
-session_start();
-$appConfig = require __DIR__ . '/../config/app.php';
+require_once __DIR__ . '/../includes/security.php';
+require_once __DIR__ . '/../includes/booking_system.php';
+require_once __DIR__ . '/../services/AuthService.php';
+pickled_start_secure_session();
+pickled_init_csrf();
+
 $pageTitle = 'Login - Pickled';
 $activePage = 'login.php';
 $frontendPath = __DIR__ . '/../../frontend';
-$loginAssetPrefix = defined('PICKLED_FRONTEND_ENTRY') ? '' : 'frontend/';
-$extraHead = '<link rel="stylesheet" href="' . $loginAssetPrefix . 'css/login.css"/>';
+require_once $frontendPath . '/includes/paths.php';
+$extraHead = '<link rel="stylesheet" href="' . htmlspecialchars(pickled_asset_url('css/login.css')) . '"/>';
 
-class User {
-    private string $email;
-    private string $password;
-    public string $name;
-
-    public function __construct(string $email = '', string $password = '', string $name = '') {
-        $this->email = $email;
-        $this->password = $password;
-        $this->name = $name;
-    }
-
-    public function __set(string $property, $value) {
-        if ($property === 'email') {
-            if (!filter_var($value, FILTER_VALIDATE_EMAIL)) {
-                throw new Exception('Email must be valid.');
-            }
-            $this->email = $value;
-            return;
-        }
-
-        if ($property === 'password') {
-            if (strlen((string)$value) < 6) {
-                throw new Exception('Password must be at least 6 characters.');
-            }
-            $this->password = $value;
-            return;
-        }
-
-        if ($property === 'name') {
-            $this->name = trim((string)$value);
-            return;
-        }
-
-        throw new Exception("Cannot set property '$property'.");
-    }
-
-    public function __get(string $property) {
-        if (in_array($property, ['email', 'password', 'name'], true)) {
-            return $this->$property;
-        }
-
-        throw new Exception("Cannot get property '$property'.");
-    }
-}
-
-class Member extends User {
-    public string $role = 'guest';
-
-    public function __construct(string $email = '', string $password = '', string $name = '', string $role = 'guest') {
-        parent::__construct($email, $password, $name);
-        $this->role = $role;
-    }
-
-    public function getRoleLabel(): string {
-        return ucfirst($this->role);
-    }
-}
-
-$demoMember = new Member('player@example.com', 'pickle123', 'Player', 'player');
-$demoMember->email = 'player@example.com'; // uses __set()
-$demoMember->password = 'pickle123';      // uses __set()
-$demoMember->role = 'player';             // public property
-
-$defaultUsers = [
-    'player@example.com' => ['password' => password_hash('pickle123', PASSWORD_DEFAULT), 'name' => 'Player'],
-    'coach@example.com' => ['password' => password_hash('coach123', PASSWORD_DEFAULT), 'name' => 'Coach'],
-];
-
-$_SESSION['registered_users'] = $_SESSION['registered_users'] ?? $defaultUsers;
-
-if (!empty($_SESSION['user']) && !isset($_COOKIE['login_cookie'])) {
-    unset($_SESSION['user'], $_SESSION['cart'], $_SESSION['last_booking']);
-}
+$auth = new AuthService();
 
 if (!empty($_SESSION['user'])) {
-    header('Location: index.php');
+    header('Location: ' . pickled_frontend_url('index.php'));
     exit;
 }
 
 $mode = $_GET['mode'] ?? 'login';
 $mode = $mode === 'signup' ? 'signup' : 'login';
-$redirect = $_POST['redirect'] ?? ($_GET['redirect'] ?? 'index.php');
-if (!preg_match('/^(?:pages\/)?[A-Za-z0-9_-]+\.php(?:#[A-Za-z0-9_-]+)?$/', $redirect)) {
-    $redirect = 'index.php';
-}
+$redirect = pickled_safe_redirect($_POST['redirect'] ?? ($_GET['redirect'] ?? 'index.php'));
 $bookingNotice = ($_GET['notice'] ?? '') === 'booking' ? 'Please sign up or sign in before booking.' : '';
 $loginError = '';
 $signupError = '';
@@ -101,48 +30,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'login';
     $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
     $password = trim($_POST['password'] ?? '');
+    $csrfToken = $_POST['csrf_token'] ?? null;
 
-    if ($action === 'signup') {
-        $mode = 'signup';
-        $name = trim($_POST['name'] ?? '');
-        $confirmPassword = trim($_POST['confirm_password'] ?? '');
-
-        if ($name === '') {
-            $signupError = 'Name is required.';
-        } elseif (!$email) {
-            $signupError = 'Enter a valid email.';
-        } elseif (isset($_SESSION['registered_users'][$email])) {
-            $signupError = 'Email is already registered. Please log in.';
-        } elseif (strlen($password) < 6) {
-            $signupError = 'Password must be at least 6 characters.';
-        } elseif ($password !== $confirmPassword) {
-            $signupError = 'Passwords do not match.';
-        } else {
-            $_SESSION['registered_users'][$email] = [
-                'password' => password_hash($password, PASSWORD_DEFAULT),
-                'name' => $name,
-            ];
-            $mode = 'login';
-            $signupSuccess = 'Account created. Please log in.';
-        }
+    if (!pickled_validate_csrf_token($csrfToken)) {
+        $loginError = 'Invalid request. Please refresh and try again.';
     } else {
-        $mode = 'login';
-        $users = $_SESSION['registered_users'];
+        if ($action === 'signup') {
+            $mode = 'signup';
+            $name = trim($_POST['name'] ?? '');
+            $confirmPassword = trim($_POST['confirm_password'] ?? '');
 
-        if ($email && $password !== '' && isset($users[$email]) && password_verify($password, $users[$email]['password'])) {
-            $_SESSION['user'] = [
-                'email' => $email,
-                'name'  => $users[$email]['name'],
-            ];
+            if ($name === '') {
+                $signupError = 'Name is required.';
+            } elseif (!$email) {
+                $signupError = 'Enter a valid email.';
+            } elseif (strlen($password) < 6) {
+                $signupError = 'Password must be at least 6 characters.';
+            } elseif ($password !== $confirmPassword) {
+                $signupError = 'Passwords do not match.';
+            } else {
+                try {
+                    $auth->register($name, $email, $password);
+                    $mode = 'login';
+                    $signupSuccess = 'Account created. Please log in.';
+                } catch (RuntimeException $e) {
+                    $signupError = $e->getMessage();
+                }
+            }
+        } else {
+            $mode = 'login';
+            $user = $email && $password !== '' ? $auth->attempt($email, $password) : null;
+            if ($user) {
+                $_SESSION['user'] = [
+                    'id' => (int) $user['id'],
+                    'email' => $email,
+                    'name'  => $user['name'],
+                    'role' => $user['role'],
+                ];
+                session_regenerate_id(true);
+                pickled_restore_cart_for_user();
 
-            // Login is intentionally short for the school project demo: the cookie expires after 1 minute.
-            setcookie($appConfig['login_cookie']['name'], '1', time() + (int) $appConfig['login_cookie']['ttl_seconds'], '/');
+                header('Location: ' . pickled_frontend_url($redirect));
+                exit;
+            }
 
-            header('Location: ' . $redirect);
-            exit;
+            $loginError = 'Invalid email or password.';
         }
-
-        $loginError = 'Invalid email or password.';
     }
 }
 include $frontendPath . '/includes/_header.php';
@@ -156,6 +89,7 @@ include $frontendPath . '/includes/_header.php';
     <form class="login-form" action="login.php?mode=signup" method="post">
       <input type="hidden" name="action" value="signup" />
       <input type="hidden" name="redirect" value="<?= htmlspecialchars($redirect) ?>" />
+      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
       <?php if ($signupError): ?>
         <div class="login-error"><?= htmlspecialchars($signupError) ?></div>
       <?php endif; ?>
@@ -186,6 +120,7 @@ include $frontendPath . '/includes/_header.php';
     <form class="login-form" action="login.php" method="post">
       <input type="hidden" name="action" value="login" />
       <input type="hidden" name="redirect" value="<?= htmlspecialchars($redirect) ?>" />
+      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
       <?php if ($signupSuccess): ?>
         <div class="login-success"><?= htmlspecialchars($signupSuccess) ?></div>
       <?php endif; ?>
@@ -211,7 +146,7 @@ include $frontendPath . '/includes/_header.php';
     <?php endif; ?>
 
     <div class="login-links">
-      <a href="#">Forgot your password?</a>
+      <a href="forgot-password.php">Forgot your password?</a>
       <?php if ($mode === 'signup'): ?>
         <p>Already have an account? <a href="login.php">Log in</a></p>
       <?php else: ?>
