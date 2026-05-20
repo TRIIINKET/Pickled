@@ -1,0 +1,216 @@
+:root {
+    /* Pickled Colors */
+    --pink: #F85696;
+    --orange: #F68806;
+    --green: #264414;
+    --green-dark: #1a2e0e;
+    --cream: #F6EFE1;
+    --white: #ffffff;
+    --muted: #7a7a6e;
+    
+    /* Shadow */
+    --sh-md: 0 6px 24px rgba(0, 0, 0, .09);
+    --sh-lg: 0 16px 48px rgba(0, 0, 0, .13);
+    --sh-xl: 0 32px 80px rgba(0, 0, 0, .18);
+    
+    /* Border Radius */
+    --r-md: 18px;
+    --r-lg: 24px;
+    
+    /* Typography */
+    --font-primary: 'DM Sans', sans-serif;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: linear-gradient(135deg, var(--pink) 0%, var(--orange) 50%, var(--green) 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 400px;
+    padding: 20px;
+}
+
+.login-box {
+    background: var(--white);
+    padding: 40px;
+    border-radius: var(--r-lg);
+    box-shadow: var(--sh-xl);
+    animation: popIn 0.5s cubic-bezier(.22,.68,0,1.4) both;
+}
+
+.login-box h1 {
+    font-size: clamp(1.75rem, 5vw, 2rem);
+    color: var(--green);
+    margin-bottom: 8px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+}
+
+.login-subtitle {
+    color: var(--muted);
+    margin-bottom: 30px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.login-form {
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--green);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 14px 18px;
+    border: 1.5px solid rgba(38, 68, 20, .15);
+    border-radius: var(--r-md);
+    font-size: 15px;
+    font-family: var(--font-primary);
+    transition: all 0.2s;
+    outline: none;
+}
+
+.form-group input::placeholder {
+    color: #aaa;
+}
+
+.form-group input:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px rgba(38, 68, 20, .09);
+}
+
+.btn {
+    display: inline-block;
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 100px;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: var(--font-primary);
+    cursor: pointer;
+    transition: all 0.22s cubic-bezier(.22,.68,0,1.2);
+    text-align: center;
+}
+
+.btn-primary {
+    background-color: var(--green);
+    color: var(--white);
+    box-shadow: 0 4px 18px rgba(38, 68, 20, .3);
+}
+
+.btn-primary:hover {
+    background-color: var(--green-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(38, 68, 20, .4);
+}
+
+.btn-lg {
+    padding: 14px;
+    font-size: 15px;
+}
+
+.alert {
+    padding: 15px 20px;
+    border-radius: var(--r-md);
+    margin-bottom: 20px;
+    border-left: 4px solid;
+    animation: slideRight 0.55s cubic-bezier(.22,.68,0,1.1) both;
+}
+
+.alert-error {
+    background-color: rgba(248, 86, 150, .1);
+    border-color: var(--pink);
+    color: var(--pink);
+}
+
+.alert-success {
+    background-color: rgba(221, 226, 85, .1);
+    border-color: #DDE255;
+    color: var(--green);
+}
+
+.demo-credentials {
+    background: rgba(38, 68, 20, .05);
+    padding: 15px;
+    border-radius: var(--r-md);
+    margin-top: 20px;
+    border-left: 4px solid var(--green);
+}
+
+.demo-credentials p {
+    margin: 8px 0;
+    font-size: 13px;
+    color: var(--green);
+    line-height: 1.5;
+}
+
+.demo-credentials strong {
+    font-weight: 700;
+    display: block;
+    margin-bottom: 8px;
+}
+
+/* Animations */
+@keyframes popIn {
+    from {
+        transform: scale(.65);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes slideRight {
+    from {
+        opacity: 0;
+        transform: translateX(-24px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@media (max-width: 600px) {
+    .login-box {
+        padding: 30px 20px;
+    }
+    
+    .login-box h1 {
+        font-size: 1.5rem;
+    }
+    
+    .login-container {
+        padding: 10px;
+    }
+}
+

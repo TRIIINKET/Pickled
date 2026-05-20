@@ -90,3 +90,25 @@ function pickled_safe_redirect(string $redirect): string {
 
     return 'index.php';
 }
+
+// Admin security functions
+function pickled_require_admin(): void {
+    pickled_start_secure_session();
+    
+    if (empty($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
+        header('Location: /admin/admin-login.php');
+        exit;
+    }
+}
+
+function pickled_is_admin(): bool {
+    pickled_start_secure_session();
+    return !empty($_SESSION['user']) && $_SESSION['user']['role'] === 'admin';
+}
+
+function pickled_admin_redirect_if_not_admin(): void {
+    if (!pickled_is_admin()) {
+        header('Location: /admin/admin-login.php');
+        exit;
+    }
+}

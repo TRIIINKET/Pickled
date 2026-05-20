@@ -62,4 +62,67 @@ final class BookingRepository
 
         return $booking + ['id' => $bookingId];
     }
+
+    // Admin methods
+    public function findById(int $id): ?array
+    {
+        $stmt = Database::connection()->prepare('SELECT * FROM bookings WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $id]);
+        $booking = $stmt->fetch();
+        return $booking ?: null;
+    }
+
+    public function findAll($limit = 50, $offset = 0): array
+    {
+        $stmt = Database::connection()->prepare('SELECT * FROM bookings ORDER BY created_at DESC LIMIT :limit OFFSET :offset');
+        $stmt->execute(['limit' => $limit, 'offset' => $offset]);
+        return $stmt->fetchAll() ?: [];
+    }
+
+    public function findByStatus(string $status): array
+    {
+        $stmt = Database::connection()->prepare('SELECT * FROM bookings WHERE status = :status ORDER BY created_at DESC');
+        $stmt->execute(['status' => $status]);
+        return $stmt->fetchAll() ?: [];
+    }
+
+    public function findByPaymentStatus(string $status): array
+    {
+        $stmt = Database::connection()->prepare('SELECT * FROM bookings WHERE payment_status = :status ORDER BY created_at DESC');
+        $stmt->execute(['status' => $status]);
+        return $stmt->fetchAll() ?: [];
+    }
+
+    public function findByUserId(int $userId): array
+    {
+        $stmt = Database::connection()->prepare('SELECT * FROM bookings WHERE user_id = :user_id ORDER BY created_at DESC');
+        $stmt->execute(['user_id' => $userId]);
+        return $stmt->fetchAll() ?: [];
+    }
+
+    public function updateStatus(int $id, string $status): bool
+    {
+        $stmt = Database::connection()->prepare('UPDATE bookings SET status = :status WHERE id = :id');
+        return $stmt->execute(['id' => $id, 'status' => $status]);
+    }
+
+    public function updatePaymentStatus(int $id, string $status): bool
+    {
+        $stmt = Database::connection()->prepare('UPDATE bookings SET payment_status = :status WHERE id = :id');
+        return $stmt->execute(['id' => $id, 'status' => $status]);
+    }
+
+    public function getBookingItems(int $bookingId): array
+    {
+        $stmt = Database::connection()->prepare('SELECT * FROM booking_items WHERE booking_id = :booking_id');
+        $stmt->execute(['booking_id' => $bookingId]);
+        return $stmt->fetchAll() ?: [];
+    }
+
+    public function getTotalCount(): int
+    {
+        $stmt = Database::connection()->query('SELECT COUNT(*) as count FROM bookings');
+        $result = $stmt->fetch();
+        return (int) ($result['count'] ?? 0);
+    }
 }

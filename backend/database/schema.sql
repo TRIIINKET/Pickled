@@ -108,8 +108,48 @@ CREATE TABLE IF NOT EXISTS booking_items (
   FOREIGN KEY (session_id) REFERENCES sessions(id)
 );
 
+CREATE TABLE IF NOT EXISTS events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(160) NOT NULL,
+  description TEXT,
+  event_date VARCHAR(80) NOT NULL,
+  event_time VARCHAR(80),
+  location VARCHAR(160),
+  max_participants INT,
+  current_participants INT DEFAULT 0,
+  status VARCHAR(40) DEFAULT 'upcoming',
+  created_by INT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT,
+  title VARCHAR(160) NOT NULL,
+  message TEXT NOT NULL,
+  type VARCHAR(40) DEFAULT 'info',
+  is_read TINYINT(1) DEFAULT 0,
+  link VARCHAR(255),
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS admin_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  admin_id INT NOT NULL,
+  action VARCHAR(120) NOT NULL,
+  entity_type VARCHAR(40),
+  entity_id INT,
+  details JSON,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (admin_id) REFERENCES users(id)
+);
+
 INSERT INTO users (name, email, password_hash, role)
 VALUES
+  ('Admin', 'admin@example.com', '$2y$12$KNh/CplDSuT71nQMLS7/iOKrsTDtlWIYdMM2XzKcZmojpCznjiUg.', 'admin'),
   ('Player', 'player@example.com', '$2y$12$KNh/CplDSuT71nQMLS7/iOKrsTDtlWIYdMM2XzKcZmojpCznjiUg.', 'player'),
   ('Coach', 'coach@example.com', '$2y$12$OtmXd8ca7eatk3JguuO4HuuyBabiXEVcJPZ8/xZ95AfxZPI7wwvZS', 'coach')
 ON DUPLICATE KEY UPDATE email = VALUES(email);
