@@ -1,5 +1,7 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 $activePage = $activePage ?? '';
 
@@ -28,7 +30,9 @@ require_once __DIR__ . '/paths.php';
         </ul>
         
         <div class="navbar-user">
-            <span><?php echo htmlspecialchars($_SESSION['user']['name']); ?></span>
+            <span>
+                <?php echo htmlspecialchars($_SESSION['user']['name'] ?? 'Admin'); ?>
+            </span>
             <a href="<?php echo pickled_admin_url('admin-logout.php'); ?>" class="btn btn-secondary btn-sm">Logout</a>
         </div>
     </div>
