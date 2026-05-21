@@ -1,9 +1,11 @@
 <?php
 function pickled_admin_asset_url($path) {
-    return '/TRIINKET/Pickled/admin/' . $path;
+    $base = dirname($_SERVER['SCRIPT_NAME']);
+    return rtrim($base, '/') . '/' . ltrim($path, '/');
 }
 
 function pickled_admin_url($page) {
-    return '/TRIINKET/Pickled/admin/' . $page;
+    $base = dirname($_SERVER['SCRIPT_NAME']);
+    return rtrim($base, '/') . '/' . ltrim($page, '/');
 }
 ?>
