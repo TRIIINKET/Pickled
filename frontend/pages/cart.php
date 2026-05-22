@@ -144,10 +144,14 @@ include __DIR__ . '/../includes/_header.php';
   <div class="cart-shell">
     <div class="cart-top">
       <h1>Shopping Cart</h1>
+<<<<<<< HEAD
       <div class="cart-top-links">
         <a href="booking.php">Booking status</a>
         <a href="courts.php#court-detail">Continue shopping</a>
       </div>
+=======
+      <a href="courts.php#court-detail">Continue shopping</a>
+>>>>>>> 41f43d210a6c4a68538ed38b5be9488863ce2946
     </div>
 
     <?php if ($message): ?>
@@ -193,7 +197,11 @@ include __DIR__ . '/../includes/_header.php';
         <?php endif; ?>
 
         <?php if (!empty($_SESSION['last_booking'])): ?>
+<<<<<<< HEAD
           <section id="booking-status" class="confirmation">
+=======
+          <section class="confirmation">
+>>>>>>> 41f43d210a6c4a68538ed38b5be9488863ce2946
             <h2>Booking Confirmation</h2>
             <p>Reference: <?= htmlspecialchars($_SESSION['last_booking']['reference']) ?></p>
             <p>Status: <?= htmlspecialchars($_SESSION['last_booking']['status']) ?> · <?= htmlspecialchars($_SESSION['last_booking']['cancellation_policy']['label']) ?></p>
