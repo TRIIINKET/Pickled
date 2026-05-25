@@ -1,5 +1,5 @@
-### Lesson 2 — Meron sa Code
-Oo, halos lahat ng core lesson 2 topics ay present sa kasalukuyang code.
+
+### Lesson 2
 
 - **Embedding PHP Code**
   - Makikita sa index.php, courts.php, social-play.php, login.php, contact.php, private.php
