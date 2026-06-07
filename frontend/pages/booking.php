@@ -1,15 +1,11 @@
 <?php
 require_once __DIR__ . '/../../backend/includes/security.php';
 require_once __DIR__ . '/../../backend/includes/booking_system.php';
-<<<<<<< HEAD
 require_once __DIR__ . '/../../backend/repositories/BookingRepository.php';
-=======
->>>>>>> 41f43d210a6c4a68538ed38b5be9488863ce2946
 pickled_start_secure_session();
 
 if (!pickled_is_logged_in()) {
   unset($_SESSION['user'], $_SESSION['membership'], $_SESSION['cart'], $_SESSION['cart_started_at'], $_SESSION['cart_expires_at'], $_SESSION['last_booking'], $_SESSION['waitlist']);
-<<<<<<< HEAD
   header('Location: ../login.php?notice=booking&redirect=pages/booking.php');
   exit;
 }
@@ -146,11 +142,10 @@ include __DIR__ . '/../includes/_header.php';
 </script>
 
 <?php include __DIR__ . '/../includes/_footer.php';
-=======
+{
   header('Location: ../login.php?notice=booking&redirect=pages/courts.php%23court-detail');
   exit;
 }
 
 header('Location: courts.php#court-detail');
 exit;
->>>>>>> 41f43d210a6c4a68538ed38b5be9488863ce2946

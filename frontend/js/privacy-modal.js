@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 // Privacy/Terms Modal Functionality
 document.addEventListener('DOMContentLoaded', function(){
   var modalButtons = document.querySelectorAll('[data-modal-target]');
@@ -49,7 +48,6 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   });
 });
-=======
 // Privacy/Terms Modal Functionality
 document.addEventListener('DOMContentLoaded', function(){
   var modalButtons = document.querySelectorAll('[data-modal-target]');
@@ -100,4 +98,4 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   });
 });
->>>>>>> 41f43d210a6c4a68538ed38b5be9488863ce2946
+
