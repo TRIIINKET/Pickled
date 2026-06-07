@@ -75,11 +75,12 @@ $recentBookings = $adminService->getAllBookings(10, 0);
                     </thead>
                     <tbody>
                         <?php foreach ($recentBookings as $booking): ?>
+                            <?php $bookingStatusKey = pickled_booking_status_key($booking['status']); ?>
                             <tr>
                                 <td><?php echo htmlspecialchars($booking['reference']); ?></td>
                                 <td><?php echo htmlspecialchars($booking['user_id']); ?></td>
                                 <td>₱<?php echo number_format($booking['total'], 2); ?></td>
-                                <td><span class="badge badge-<?php echo strtolower($booking['status']); ?>"><?php echo htmlspecialchars($booking['status']); ?></span></td>
+                                <td><span class="badge badge-<?php echo htmlspecialchars($bookingStatusKey); ?>"><?php echo htmlspecialchars(pickled_booking_status_label($booking['status'])); ?></span></td>
                                 <td><span class="badge badge-payment-<?php echo strtolower(str_replace(' ', '-', $booking['payment_status'])); ?>"><?php echo htmlspecialchars($booking['payment_status']); ?></span></td>
                                 <td><?php echo date('M d, Y', strtotime($booking['created_at'])); ?></td>
                                 <td>

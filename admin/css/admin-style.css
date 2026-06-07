@@ -420,9 +420,31 @@ h3 {
     color: var(--muted);
 }
 
+.badge-pending,
+.badge-Pending_Payment {
+    background: #fff9db;
+    color: #6d4b00;
+}
+
+.badge-confirmed,
+.badge-Confirmed {
+    background: #e8ffe1;
+    color: #12401f;
+}
+
+.badge-ongoing {
+    background: #e7f3ff;
+    color: #0b4a7a;
+}
+
+.badge-completed {
+    background: #f2f2f2;
+    color: #6b6b6b;
+}
+
 .badge-cancelled {
-    background: rgba(248, 86, 150, .15);
-    color: var(--pink);
+    background: #ffe7e9;
+    color: #8f1d2f;
 }
 
 .badge-role-player {
@@ -440,19 +462,9 @@ h3 {
     color: var(--orange);
 }
 
-.badge-Pending_Payment {
-    background: rgba(246, 136, 6, .15);
-    color: var(--orange);
-}
-
-.badge-Confirmed {
-    background: var(--lime);
-    color: var(--green);
-}
-
 .badge-Cancelled {
-    background: rgba(248, 86, 150, .15);
-    color: var(--pink);
+    background: #ffe7e9;
+    color: #8f1d2f;
 }
 
 .badge-payment-pending {

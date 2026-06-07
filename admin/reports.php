@@ -67,9 +67,10 @@ $revenueStats = $adminService->getRevenueStats($period);
                             <?php
                             $totalBookings = $stats['total_bookings'] ?? 1;
                             foreach ($bookingStats as $stat):
+                                $bookingStatusKey = pickled_booking_status_key($stat['status']);
                             ?>
                                 <tr>
-                                    <td><span class="badge badge-<?php echo strtolower($stat['status']); ?>"><?php echo htmlspecialchars($stat['status']); ?></span></td>
+                                    <td><span class="badge badge-<?php echo htmlspecialchars($bookingStatusKey); ?>"><?php echo htmlspecialchars(pickled_booking_status_label($stat['status'])); ?></span></td>
                                     <td><?php echo $stat['count']; ?></td>
                                     <td><?php echo number_format(($stat['count'] / $totalBookings) * 100, 1); ?>%</td>
                                 </tr>
