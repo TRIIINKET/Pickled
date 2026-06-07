@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../backend/includes/booking_system.php';
 require_once __DIR__ . '/../../backend/includes/security.php';
 require_once __DIR__ . '/../../backend/controllers/CheckoutController.php';
 require_once __DIR__ . '/../../backend/services/CheckoutService.php';
+require_once __DIR__ . '/../../backend/services/EmailService.php';
 
 pickled_start_secure_session();
 pickled_init_csrf();
@@ -107,6 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           $selectedPayment,
           trim($_POST['notes'] ?? '')
         );
+        (new EmailService())->sendBookingConfirmation($_SESSION['user'], $_SESSION['last_booking']);
       } catch (RuntimeException $e) {
         $message = $e->getMessage();
         $messageType = 'warning';

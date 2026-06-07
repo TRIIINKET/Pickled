@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/booking_system.php';
 require_once __DIR__ . '/../services/AuthService.php';
+require_once __DIR__ . '/../services/EmailService.php';
 pickled_start_secure_session();
 pickled_init_csrf();
 
@@ -69,6 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ];
                 session_regenerate_id(true);
                 pickled_restore_cart_for_user();
+                (new EmailService())->sendLoginNotification($_SESSION['user']);
 
                 header('Location: ' . pickled_frontend_url($redirect));
                 exit;

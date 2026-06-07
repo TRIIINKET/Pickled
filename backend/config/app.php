@@ -8,6 +8,10 @@ return [
         'hold_seconds' => 300,
         'item_limit' => 3,
     ],
+    'mail' => [
+        'from_email' => 'no-reply@pickled.local',
+        'from_name' => 'PICKLED',
+    ],
     'payment_methods' => [
         'gcash' => ['label' => 'GCash', 'fee_rate' => 0.00],
         'maya' => ['label' => 'Maya', 'fee_rate' => 0.00],
