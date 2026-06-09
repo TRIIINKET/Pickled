@@ -1,11 +1,11 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
 $activePage = $activePage ?? '';
 
+require_once __DIR__ . '/security.php';
 require_once __DIR__ . '/admin-paths.php';
+
+pickled_init_csrf();
+$logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 ?>
 <nav class="admin-navbar">
     <div class="navbar-container">
@@ -33,7 +33,10 @@ require_once __DIR__ . '/admin-paths.php';
             <span>
                 <?php echo htmlspecialchars($_SESSION['user']['name'] ?? 'Admin'); ?>
             </span>
-            <a href="<?php echo pickled_admin_url('admin-logout.php'); ?>" class="btn btn-secondary btn-sm">Logout</a>
+            <form method="post" action="<?php echo pickled_admin_url('admin-logout.php'); ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo $logoutCsrf; ?>">
+                <button type="submit" class="btn btn-secondary btn-sm">Logout</button>
+            </form>
         </div>
     </div>
 </nav>

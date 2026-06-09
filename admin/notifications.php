@@ -24,8 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $count = $adminService->sendBroadcastNotification(
                     $_POST['title'] ?? '',
                     $_POST['message'] ?? '',
-                    $_POST['type'] ?? 'info',
-                    $_SESSION['user']['id']
+                    (int) $_SESSION['user']['id'],
+                    $_POST['type'] ?? 'info'
                 );
                 if ($count > 0) {
                     $successMsg = "Broadcast sent to $count users";
@@ -37,9 +37,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $userId,
                     $_POST['title'] ?? '',
                     $_POST['message'] ?? '',
+                    (int) $_SESSION['user']['id'],
                     $_POST['type'] ?? 'info',
-                    $_POST['link'] ?? null,
-                    $_SESSION['user']['id']
+                    $_POST['link'] ?? null
                 )) {
                     $successMsg = 'Notification sent successfully';
                 } else {
@@ -91,7 +91,7 @@ $notifications = $adminService->getAdminLogs(50);
                         <select id="user_id" name="user_id" required>
                             <option value="0">Broadcast (All Users)</option>
                             <?php foreach ($users as $user): ?>
-                                <option value="<?php echo $user['id']; ?>"><?php echo htmlspecialchars($user['name']); ?> (<?php echo htmlspecialchars($user['email']); ?>)</option>
+                                <option value="<?php echo (int) $user['id']; ?>"><?php echo htmlspecialchars($user['name']); ?> (<?php echo htmlspecialchars($user['email']); ?>)</option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -143,7 +143,7 @@ $notifications = $adminService->getAdminLogs(50);
                                 <tr>
                                     <td><?php echo htmlspecialchars($log['name'] ?? 'Unknown'); ?></td>
                                     <td><?php echo htmlspecialchars($log['action']); ?></td>
-                                    <td><?php echo htmlspecialchars($log['entity_type'] ?? '-'); ?> #<?php echo $log['entity_id'] ?? '-'; ?></td>
+                                    <td><?php echo htmlspecialchars($log['entity_type'] ?? '-'); ?> #<?php echo isset($log['entity_id']) ? (int) $log['entity_id'] : '-'; ?></td>
                                     <td><?php echo date('M d, Y H:i', strtotime($log['created_at'])); ?></td>
                                 </tr>
                             <?php endforeach; ?>

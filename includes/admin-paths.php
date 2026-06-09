@@ -44,4 +44,3 @@ function pickled_booking_status_label($status) {
 
     return $labels[pickled_booking_status_key($status)];
 }
-?>

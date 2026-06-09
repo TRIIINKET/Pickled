@@ -29,6 +29,12 @@ The project focuses on creating a modern, responsive, and user-friendly experien
 
 This project is currently under development for academic and collaborative learning purposes.
 
+## Local Setup
+
+1. Import `database/schema.sql` into a MySQL database named `pickled`.
+2. Open the project through XAMPP/Apache.
+3. Use the seeded demo admin account from `database/schema.sql` for admin testing.
+
 ## Developers
 
 * Shemaiah Ezra Magpayo

@@ -109,7 +109,7 @@ if ($bookingId) {
                                     <td><?php echo htmlspecialchars($booking['reference']); ?></td>
                                     <td>₱<?php echo number_format($booking['total'], 2); ?></td>
                                     <td><span class="badge badge-<?php echo htmlspecialchars($bookingStatusKey); ?>"><?php echo htmlspecialchars(pickled_booking_status_label($booking['status'])); ?></span></td>
-                                    <td><span class="badge badge-payment-<?php echo strtolower(str_replace(' ', '-', $booking['payment_status'])); ?>"><?php echo htmlspecialchars($booking['payment_status']); ?></span></td>
+                                    <td><span class="badge badge-payment-<?php echo htmlspecialchars(strtolower(str_replace(' ', '-', (string) $booking['payment_status'])), ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($booking['payment_status']); ?></span></td>
                                     <td><?php echo date('M d, Y', strtotime($booking['created_at'])); ?></td>
                                     <td>
                                         <a href="?id=<?php echo $booking['id']; ?>&filter=<?php echo urlencode($filter); ?>" class="btn btn-primary btn-sm">View</a>
@@ -136,7 +136,7 @@ if ($bookingId) {
                         <h3>Booking Items</h3>
                         <ul>
                             <?php foreach ($currentBooking['items'] as $item): ?>
-                                <li><?php echo htmlspecialchars($item['name']); ?> - ₱<?php echo number_format($item['unit_price'], 2); ?> x <?php echo $item['quantity']; ?></li>
+                                <li><?php echo htmlspecialchars($item['name']); ?> - ₱<?php echo number_format((float) $item['unit_price'], 2); ?> x <?php echo (int) $item['quantity']; ?></li>
                             <?php endforeach; ?>
                         </ul>
                         

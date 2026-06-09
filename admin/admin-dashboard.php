@@ -81,7 +81,7 @@ $recentBookings = $adminService->getAllBookings(10, 0);
                                 <td><?php echo htmlspecialchars($booking['user_id']); ?></td>
                                 <td>₱<?php echo number_format($booking['total'], 2); ?></td>
                                 <td><span class="badge badge-<?php echo htmlspecialchars($bookingStatusKey); ?>"><?php echo htmlspecialchars(pickled_booking_status_label($booking['status'])); ?></span></td>
-                                <td><span class="badge badge-payment-<?php echo strtolower(str_replace(' ', '-', $booking['payment_status'])); ?>"><?php echo htmlspecialchars($booking['payment_status']); ?></span></td>
+                                <td><span class="badge badge-payment-<?php echo htmlspecialchars(strtolower(str_replace(' ', '-', (string) $booking['payment_status'])), ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($booking['payment_status']); ?></span></td>
                                 <td><?php echo date('M d, Y', strtotime($booking['created_at'])); ?></td>
                                 <td>
                                     <a href="manage-bookings.php?id=<?php echo $booking['id']; ?>" class="btn btn-primary btn-sm">View</a>

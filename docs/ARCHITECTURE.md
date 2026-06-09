@@ -30,7 +30,6 @@ PICKLED keeps the current visible booking experience, but the folders are organi
   - `CartRepository`
   - `BookingRepository`
   - `PasswordResetRepository`
-- `app/models/` contains simple domain model/catalog files.
 - `database/Database.php` provides the shared PDO connection.
 - `database/schema.sql` defines the MySQL schema.
 - `app/api/availability.php` exposes month-by-month database availability for the booking calendars.
@@ -61,6 +60,7 @@ PICKLED keeps the current visible booking experience, but the folders are organi
    - `PICKLED_DB_DSN`
    - `PICKLED_DB_USER`
    - `PICKLED_DB_PASS`
+4. `database/schema.sql` seeds demo users, including `admin@example.com`.
 
 ## Next architectural steps
 

@@ -16,14 +16,14 @@ class AdminService {
     private $adminRepo;
 
     public function __construct() {
-    $connection = Database::connection();
+        $connection = Database::connection();
 
-    $this->userRepo = new UserRepository();
-    $this->bookingRepo = new BookingRepository();
-    $this->eventRepo = new EventRepository($connection);
-    $this->notificationRepo = new NotificationRepository($connection);
-    $this->adminRepo = new AdminRepository($connection);
-}
+        $this->userRepo = new UserRepository();
+        $this->bookingRepo = new BookingRepository();
+        $this->eventRepo = new EventRepository($connection);
+        $this->notificationRepo = new NotificationRepository($connection);
+        $this->adminRepo = new AdminRepository($connection);
+    }
 
     // User Management
     public function isAdmin(array $user): bool {
@@ -174,7 +174,7 @@ class AdminService {
     }
 
     // Notification Management
-    public function sendNotification(int $userId, string $title, string $message, string $type = 'info', ?string $link = null, int $adminId) {
+    public function sendNotification(int $userId, string $title, string $message, int $adminId, string $type = 'info', ?string $link = null) {
         $notificationId = $this->notificationRepo->create($userId, $title, $message, $type, $link);
         if ($notificationId) {
             $this->adminRepo->logAction($adminId, 'notification_sent', 'notification', $notificationId, ['user_id' => $userId]);
@@ -182,7 +182,7 @@ class AdminService {
         return $notificationId;
     }
 
-    public function sendBroadcastNotification(string $title, string $message, string $type = 'info', int $adminId) {
+    public function sendBroadcastNotification(string $title, string $message, int $adminId, string $type = 'info') {
         $users = $this->userRepo->findAll();
         $count = 0;
         foreach ($users as $user) {
@@ -229,4 +229,3 @@ class AdminService {
         return $this->adminRepo->getLogsByAdmin($adminId, $limit);
     }
 }
-?>

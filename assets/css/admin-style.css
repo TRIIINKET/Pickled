@@ -199,6 +199,10 @@ body {
     font-size: 14px;
 }
 
+.navbar-user form {
+    margin: 0;
+}
+
 /* Main Layout */
 .admin-main {
     flex: 1;
