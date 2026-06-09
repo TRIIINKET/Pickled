@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '/../helpers/security.php';
-require_once __DIR__ . '/../config/admin-paths.php';
+require_once __DIR__ . '/security.php';
+require_once __DIR__ . '/admin-paths.php';
 
 pickled_start_secure_session();
 

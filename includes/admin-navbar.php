@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 $activePage = $activePage ?? '';
 
-require_once __DIR__ . '/../config/admin-paths.php';
+require_once __DIR__ . '/admin-paths.php';
 ?>
 <nav class="admin-navbar">
     <div class="navbar-container">

@@ -1,7 +1,7 @@
 <?php
 // Shared HTML head. Set $pageTitle and $activePage before including.
-require_once __DIR__ . '/../config/paths.php';
-require_once __DIR__ . '/../helpers/security.php';
+require_once __DIR__ . '/paths.php';
+require_once __DIR__ . '/security.php';
 
 pickled_start_secure_session();
 

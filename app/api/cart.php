@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../../includes/helpers/security.php';
+require_once __DIR__ . '/../../includes/security.php';
 pickled_start_secure_session();
-require_once __DIR__ . '/../../includes/helpers/booking-system.php';
+require_once __DIR__ . '/../../includes/booking-system.php';
 
 header('Content-Type: application/json');
 echo json_encode([

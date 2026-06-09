@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../../includes/helpers/security.php';
-require_once __DIR__ . '/../repositories/UserRepository.php';
+require_once __DIR__ . '/../includes/security.php';
+require_once __DIR__ . '/../app/repositories/UserRepository.php';
 
 pickled_start_secure_session();
 

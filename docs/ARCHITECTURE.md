@@ -10,28 +10,31 @@ PICKLED keeps the current visible booking experience, but the folders are organi
 - `resident/private.php` handles coaching and private lessons.
 - `resident/cart.php` renders cart review and checkout UI.
 - `auth/login.php`, `auth/forgot-password.php`, and `auth/reset-password.php` expose auth pages.
-- `includes/layouts/` stores shared headers, navbars, and footers.
-- `includes/components/` stores reusable UI pieces.
-- `includes/config/` stores app, database, and path configuration.
-- `includes/helpers/` stores small reusable helper functions.
+- `includes/header.php`, `includes/navbar.php`, and `includes/footer.php` store shared resident layouts.
+- `includes/admin-header.php`, `includes/admin-navbar.php`, and `includes/admin-footer.php` store shared admin layouts.
+- `includes/config.php`, `includes/database.php`, and `includes/paths.php` store app, database, and path configuration.
+- `includes/booking-system.php` and `includes/security.php` store small reusable helper functions.
+- `includes/payment-methods.php` stores the reusable payment method UI.
 
 ## PHP Code
 
-- `app/auth/` contains auth page handlers.
+- `auth/` contains the public auth pages and shared auth handlers, including the admin login handler.
 - `app/controllers/` contains UI-facing controller helpers such as payment calculations.
+- `app/api/` exposes small JSON endpoints.
 - `app/services/` contains application logic:
   - `AuthService`
   - `CartService`
   - `CheckoutService`
-- `app/repositories/` contains persistence code:
+- `app/repositories/` contains persistence files:
   - `UserRepository`
   - `CartRepository`
   - `BookingRepository`
   - `PasswordResetRepository`
+- `app/models/` contains simple domain model/catalog files.
 - `database/Database.php` provides the shared PDO connection.
 - `database/schema.sql` defines the MySQL schema.
 - `app/api/availability.php` exposes month-by-month database availability for the booking calendars.
-- `includes/helpers/booking-system.php` contains small booking-domain helpers; catalog data comes from database repositories.
+- `includes/booking-system.php` contains small booking-domain helpers; catalog data comes from database repositories.
 
 ## State and persistence
 

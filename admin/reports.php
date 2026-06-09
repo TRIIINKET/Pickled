@@ -1,7 +1,7 @@
 <?php
 $pageTitle = 'Reports & Analytics';
 $activePage = 'reports';
-require_once __DIR__ . '/../includes/layouts/admin-header.php';
+require_once __DIR__ . '/../includes/admin-header.php';
 require_once __DIR__ . '/../app/services/AdminService.php';
 
 $adminService = new AdminService();
@@ -12,7 +12,7 @@ $bookingStats = $adminService->getBookingStats();
 $revenueStats = $adminService->getRevenueStats($period);
 ?>
 
-<?php require_once __DIR__ . '/../includes/layouts/admin-navbar.php'; ?>
+<?php require_once __DIR__ . '/../includes/admin-navbar.php'; ?>
 
 <main class="admin-main">
     <div class="container">
@@ -108,4 +108,4 @@ $revenueStats = $adminService->getRevenueStats($period);
     </div>
 </main>
 
-<?php require_once __DIR__ . '/../includes/layouts/admin-footer.php'; ?>
+<?php require_once __DIR__ . '/../includes/admin-footer.php'; ?>

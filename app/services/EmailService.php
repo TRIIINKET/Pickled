@@ -9,9 +9,9 @@ final class EmailService
 
     public function __construct()
     {
-        $config = require __DIR__ . '/../../includes/config/app.php';
+        $config = require __DIR__ . '/../../includes/config.php';
         $mail = $config['mail'] ?? [];
-        $localMailPath = __DIR__ . '/../../includes/config/mail.local.php';
+        $localMailPath = __DIR__ . '/../../includes/mail.local.php';
         if (is_file($localMailPath)) {
             $mail = array_merge($mail, require $localMailPath);
         }

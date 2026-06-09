@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../app/auth/admin-login.php';
+require_once __DIR__ . '/../auth/admin-login-handler.php';
 
 $errorMsg = $errorMsg ?? '';
 $successMsg = $successMsg ?? '';

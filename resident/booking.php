@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '/../includes/helpers/security.php';
-require_once __DIR__ . '/../includes/helpers/booking-system.php';
+require_once __DIR__ . '/../includes/security.php';
+require_once __DIR__ . '/../includes/booking-system.php';
 require_once __DIR__ . '/../app/repositories/BookingRepository.php';
 pickled_start_secure_session();
 
@@ -18,7 +18,7 @@ $bookings = $userId > 0 ? $bookingRepo->findByUserId($userId) : [];
 $hasBookings = !empty($bookings);
 $extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260430d"/>';
 
-include __DIR__ . '/../includes/layouts/header.php';
+include __DIR__ . '/../includes/header.php';
 ?>
 
 <main class="cart-page">
@@ -141,4 +141,4 @@ include __DIR__ . '/../includes/layouts/header.php';
 })();
 </script>
 
-<?php include __DIR__ . '/../includes/layouts/footer.php'; ?>
+<?php include __DIR__ . '/../includes/footer.php'; ?>

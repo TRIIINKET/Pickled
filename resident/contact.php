@@ -3,7 +3,7 @@ $pageTitle  = 'Contact - Pickled';
 $activePage = 'contact.php';
 $basePath   = '../';
 $extraHead  = '<link rel="stylesheet" href="../assets/css/contact.css"/>';
-include __DIR__ . '/../includes/layouts/header.php';
+include __DIR__ . '/../includes/header.php';
 ?>
 
 <main class="contact-page">
@@ -65,4 +65,4 @@ include __DIR__ . '/../includes/layouts/header.php';
 })();
 </script>
 
-<?php include __DIR__ . '/../includes/layouts/footer.php'; ?>
+<?php include __DIR__ . '/../includes/footer.php'; ?>

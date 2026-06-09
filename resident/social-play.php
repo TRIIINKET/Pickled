@@ -1,11 +1,11 @@
 <?php
-require_once __DIR__ . '/../includes/helpers/security.php';
+require_once __DIR__ . '/../includes/security.php';
 pickled_init_csrf();
 $pageTitle  = 'Social Play - Pickled';
 $activePage = 'social-play.php';
 $basePath   = '../';
 $extraHead  = '<link rel="stylesheet" href="../assets/css/social-play.css"/>';
-include __DIR__ . '/../includes/layouts/header.php';
+include __DIR__ . '/../includes/header.php';
 
 $galleryImages = [
   'https://pickleand.club/cdn/shop/files/250411_-_Pickle__058.jpg?v=1744700811&width=1200',
@@ -683,4 +683,4 @@ $faqs = [
 })();
 </script>
 
-<?php include __DIR__ . '/../includes/layouts/footer.php'; ?>
+<?php include __DIR__ . '/../includes/footer.php'; ?>

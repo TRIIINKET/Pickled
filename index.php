@@ -2,7 +2,7 @@
 $basePath = '';
 $pageTitle  = 'Pickled - Indoor Pickleball Courts in Manila';
 $activePage = 'index.php';
-include __DIR__ . '/includes/layouts/header.php';
+include __DIR__ . '/includes/header.php';
 $courtBookingHref = !empty($_SESSION['user']) ? 'resident/courts.php#court-detail' : 'auth/login.php?notice=booking&redirect=resident/courts.php%23court-detail';
 
 $events = [
@@ -384,4 +384,4 @@ $rules = [
 </script>
 
 <script src="assets/js/rules-flashcards.js"></script>
-<?php include __DIR__ . '/includes/layouts/footer.php'; ?>
+<?php include __DIR__ . '/includes/footer.php'; ?>

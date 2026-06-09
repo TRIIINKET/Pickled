@@ -1,14 +1,14 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/../../app/services/CartService.php';
-require_once __DIR__ . '/../../app/repositories/CatalogRepository.php';
+require_once __DIR__ . '/../app/services/CartService.php';
+require_once __DIR__ . '/../app/repositories/CatalogRepository.php';
 
 const PICKLED_CART_LIMIT = 3;
 const PICKLED_CART_HOLD_SECONDS = 300;
 const PICKLED_WAITLIST_CLAIM_SECONDS = 900;
 
 function pickled_app_config(): array {
-    return require __DIR__ . '/../config/app.php';
+    return require __DIR__ . '/config.php';
 }
 
 function pickled_cart_limit(): int {

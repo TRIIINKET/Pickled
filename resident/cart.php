@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '/../includes/helpers/booking-system.php';
-require_once __DIR__ . '/../includes/helpers/security.php';
+require_once __DIR__ . '/../includes/booking-system.php';
+require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../app/controllers/CheckoutController.php';
 require_once __DIR__ . '/../app/services/CheckoutService.php';
 require_once __DIR__ . '/../app/services/EmailService.php';
@@ -139,7 +139,7 @@ $waitlist = $_SESSION['waitlist'] ?? [];
 
 $extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260430d"/>';
 
-include __DIR__ . '/../includes/layouts/header.php';
+include __DIR__ . '/../includes/header.php';
 ?>
 
 <main class="cart-page">
@@ -231,7 +231,7 @@ include __DIR__ . '/../includes/layouts/header.php';
           <h2>Order Special Instructions</h2>
           <textarea name="notes" placeholder="Notes for the PICKLED team"></textarea>
           <h2 class="checkout-card__payment-title">Payment Method</h2>
-          <?php include __DIR__ . '/../includes/components/payment-methods.php'; ?>
+          <?php include __DIR__ . '/../includes/payment-methods.php'; ?>
           <div class="checkout-summary">
             <span><small>Subtotal</small><strong data-subtotal="<?= htmlspecialchars((string) $cartTotal) ?>">₱<?= number_format($cartTotal, 2) ?></strong></span>
             <span><small>Payment fee</small><strong data-payment-fee>₱<?= number_format($paymentFee, 2) ?></strong></span>
@@ -304,4 +304,4 @@ include __DIR__ . '/../includes/layouts/header.php';
 })();
 </script>
 
-<?php include __DIR__ . '/../includes/layouts/footer.php'; ?>
+<?php include __DIR__ . '/../includes/footer.php'; ?>

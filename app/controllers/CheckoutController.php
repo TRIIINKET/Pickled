@@ -5,7 +5,7 @@ final class CheckoutController
 {
     public static function paymentMethods(): array
     {
-        $config = require __DIR__ . '/../../includes/config/app.php';
+        $config = require __DIR__ . '/../../includes/config.php';
         return $config['payment_methods'];
     }
 

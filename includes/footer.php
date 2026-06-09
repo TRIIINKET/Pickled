@@ -1,6 +1,6 @@
 <?php
 // Shared footer.
-require_once __DIR__ . '/../config/paths.php';
+require_once __DIR__ . '/paths.php';
 ?>
 <footer class="footer">
   <div class="footer-inner">

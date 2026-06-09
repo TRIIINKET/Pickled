@@ -1,6 +1,6 @@
 <?php
 // Shared site navigation.
-require_once __DIR__ . '/../config/paths.php';
+require_once __DIR__ . '/paths.php';
 $activePage = $activePage ?? '';
 $links = [
   'index.php'       => 'Home',

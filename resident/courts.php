@@ -1,11 +1,11 @@
 <?php
-require_once __DIR__ . '/../includes/helpers/security.php';
+require_once __DIR__ . '/../includes/security.php';
 pickled_init_csrf();
 $pageTitle  = 'Courts - Pickled';
 $activePage = 'courts.php';
 $basePath   = '../';
 $extraHead  = '<link rel="stylesheet" href="../assets/css/courts.css?v=20260430d"/>';
-include __DIR__ . '/../includes/layouts/header.php';
+include __DIR__ . '/../includes/header.php';
 
 $courtImages = [
   'green' => [
@@ -906,4 +906,4 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
 })();
 </script>
 
-<?php include __DIR__ . '/../includes/layouts/footer.php'; ?>
+<?php include __DIR__ . '/../includes/footer.php'; ?>

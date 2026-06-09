@@ -11,7 +11,7 @@ final class Database
             return self::$pdo;
         }
 
-        $config = require __DIR__ . '/../includes/config/database.php';
+        $config = require __DIR__ . '/../includes/database.php';
         self::$pdo = new PDO(
             $config['dsn'],
             $config['username'],
