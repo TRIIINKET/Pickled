@@ -142,7 +142,10 @@ include __DIR__ . '/../includes/_header.php';
 </script>
 
 <?php include __DIR__ . '/../includes/_footer.php';
+<<<<<<< Updated upstream
 {
+=======
+>>>>>>> Stashed changes
   header('Location: ../login.php?notice=booking&redirect=pages/courts.php%23court-detail');
   exit;
 }
