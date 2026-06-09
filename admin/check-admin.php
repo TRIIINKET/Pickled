@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '/../backend/database/Database.php';
-require_once __DIR__ . '/../backend/repositories/UserRepository.php';
+require_once __DIR__ . '/../database/Database.php';
+require_once __DIR__ . '/../app/repositories/UserRepository.php';
 
 $userRepo = new UserRepository();
 

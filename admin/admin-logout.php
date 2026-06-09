@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../backend/includes/security.php';
+require_once __DIR__ . '/../includes/helpers/security.php';
 
 pickled_start_secure_session();
 session_destroy();

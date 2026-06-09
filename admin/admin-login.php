@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../backend/auth/admin-login.php';
+require_once __DIR__ . '/../app/auth/admin-login.php';
 
 $errorMsg = $errorMsg ?? '';
 $successMsg = $successMsg ?? '';
@@ -13,7 +13,7 @@ $successMsg = $successMsg ?? '';
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/admin-login.css">
+    <link rel="stylesheet" href="../assets/css/admin-login.css">
 </head>
 <body class="login-body">
     <div class="login-container">

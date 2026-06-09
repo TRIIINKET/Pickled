@@ -1,15 +1,15 @@
 <?php
 $pageTitle = 'Admin Dashboard';
 $activePage = 'dashboard';
-require_once __DIR__ . '/includes/_header.php';
-require_once __DIR__ . '/../backend/services/AdminService.php';
+require_once __DIR__ . '/../includes/layouts/admin-header.php';
+require_once __DIR__ . '/../app/services/AdminService.php';
 
 $adminService = new AdminService();
 $stats = $adminService->getDashboardStats();
 $recentBookings = $adminService->getAllBookings(10, 0);
 ?>
 
-<?php require_once __DIR__ . '/includes/_navbar.php'; ?>
+<?php require_once __DIR__ . '/../includes/layouts/admin-navbar.php'; ?>
 
 <main class="admin-main">
     <div class="container">
@@ -95,4 +95,4 @@ $recentBookings = $adminService->getAllBookings(10, 0);
     </div>
 </main>
 
-<?php require_once __DIR__ . '/includes/_footer.php'; ?>
+<?php require_once __DIR__ . '/../includes/layouts/admin-footer.php'; ?>

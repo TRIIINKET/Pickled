@@ -1,9 +1,9 @@
 <?php
 $pageTitle = 'Manage Users';
 $activePage = 'users';
-require_once __DIR__ . '/includes/_header.php';
-require_once __DIR__ . '/../backend/services/AdminService.php';
-require_once __DIR__ . '/../backend/repositories/UserRepository.php';
+require_once __DIR__ . '/../includes/layouts/admin-header.php';
+require_once __DIR__ . '/../app/services/AdminService.php';
+require_once __DIR__ . '/../app/repositories/UserRepository.php';
 
 $adminService = new AdminService();
 $userRepo = new UserRepository();
@@ -53,7 +53,7 @@ if ($userId) {
 }
 ?>
 
-<?php require_once __DIR__ . '/includes/_navbar.php'; ?>
+<?php require_once __DIR__ . '/../includes/layouts/admin-navbar.php'; ?>
 
 <main class="admin-main">
     <div class="container">
@@ -151,4 +151,4 @@ if ($userId) {
     </div>
 </main>
 
-<?php require_once __DIR__ . '/includes/_footer.php'; ?>
+<?php require_once __DIR__ . '/../includes/layouts/admin-footer.php'; ?>

@@ -1,8 +1,8 @@
 <?php
 $pageTitle = 'Manage Bookings';
 $activePage = 'bookings';
-require_once __DIR__ . '/includes/_header.php';
-require_once __DIR__ . '/../backend/services/AdminService.php';
+require_once __DIR__ . '/../includes/layouts/admin-header.php';
+require_once __DIR__ . '/../app/services/AdminService.php';
 
 $adminService = new AdminService();
 $filter = $_GET['filter'] ?? 'all';
@@ -61,7 +61,7 @@ if ($bookingId) {
 }
 ?>
 
-<?php require_once __DIR__ . '/includes/_navbar.php'; ?>
+<?php require_once __DIR__ . '/../includes/layouts/admin-navbar.php'; ?>
 
 <main class="admin-main">
     <div class="container">
@@ -169,4 +169,4 @@ if ($bookingId) {
     </div>
 </main>
 
-<?php require_once __DIR__ . '/includes/_footer.php'; ?>
+<?php require_once __DIR__ . '/../includes/layouts/admin-footer.php'; ?>
