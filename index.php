@@ -170,14 +170,12 @@ $rules = [
     <div class="section-inner home-court__grid">
       <div class="home-court__gallery">
         <div class="home-court__thumbs">
-          <button type="button" class="is-active" data-court-thumb data-full="https://pickleand.club/cdn/shop/files/250411_-_Pickle__008.jpg?v=1744701445&width=1946" aria-label="Show Court Green image 1"><img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__008.jpg?v=1744701445&width=220" alt="" /></button>
-          <button type="button" data-court-thumb data-full="https://pickleand.club/cdn/shop/files/250411_-_Pickle__010.jpg?v=1744701445&width=1946" aria-label="Show Court Green image 2"><img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__010.jpg?v=1744701445&width=220" alt="" /></button>
-          <button type="button" data-court-thumb data-full="https://pickleand.club/cdn/shop/files/250411_-_Pickle__215.jpg?v=1744701445&width=1200" aria-label="Show Court Green image 3"><img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__215.jpg?v=1744701445&width=220" alt="" /></button>
-          <button type="button" data-court-thumb data-full="https://pickleand.club/cdn/shop/files/class2-touched.jpg?v=1744706809&width=1600" aria-label="Show Court Green image 4"><img src="https://pickleand.club/cdn/shop/files/class2-touched.jpg?v=1744706809&width=220" alt="" /></button>
-          <button type="button" data-court-thumb data-full="https://pickleand.club/cdn/shop/files/rachel_class1.jpg?v=1745813319&width=1200" aria-label="Show Court Green image 5"><img src="https://pickleand.club/cdn/shop/files/rachel_class1.jpg?v=1745813319&width=220" alt="" /></button>
+          <button type="button" class="is-active" data-court-thumb data-full="assets/img/court/court green-1.png" aria-label="Show Court Green image 1"><img src="assets/img/court/court green-1.png" alt="" /></button>
+          <button type="button" data-court-thumb data-full="assets/img/court/court green-2.png" aria-label="Show Court Green image 2"><img src="assets/img/court/court green-2.png" alt="" /></button>
+          <button type="button" data-court-thumb data-full="assets/img/court/court green-3.png" aria-label="Show Court Green image 3"><img src="assets/img/court/court green-3.png" alt="" /></button>
         </div>
         <div class="home-court__media">
-          <img data-court-main src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__008.jpg?v=1744701445&width=1946" alt="Green indoor pickleball court" />
+          <img data-court-main src="assets/img/court/court green-1.png" alt="Green indoor pickleball court" />
         </div>
       </div>
       <div class="home-court__content">
@@ -185,12 +183,10 @@ $rules = [
         <p class="home-court__notice">Join as a member for <strong>Zero Guest Fees and Advanced Booking!</strong></p>
         <p class="home-price"><span data-court-price>₱600.00</span> <small>/ session</small></p>
         <ul class="home-court__list">
-          <li><button type="button" class="is-active" data-court-option data-price="₱600.00" data-package="Peak ₱600"><strong>Peak ₱600</strong><span>Mon-Fri 6pm-10pm, Sat-Sun &amp; holidays</span></button></li>
-          <li><button type="button" data-court-option data-price="₱400.00" data-package="Off-Peak ₱400"><strong>Off-Peak ₱400</strong><span>Mon-Fri 7am-5pm</span></button></li>
+          <li><button type="button" class="is-active" data-court-option data-price="₱600.00" data-package="Court Rentals ₱600"><strong>Court Rentals ₱600</strong><span>Reserve Court Green for casual or private play</span></button></li>
+          <li><button type="button" data-court-option data-price="₱500.00" data-package="Lessons ₱500"><strong>Lessons ₱500</strong><span>Beginner-friendly drills and guided class sessions</span></button></li>
           <li><button type="button" data-court-option data-price="₱1,200.00" data-package="Private Coaching ₱1200"><strong>Private Coaching ₱1,200</strong><span>1-on-1 session with a certified coach</span></button></li>
-          <li><button type="button" data-court-option data-price="₱300.00" data-package="Social Play ₱300"><strong>Social Play ₱300</strong><span>Open play, meet new players and rotate games</span></button></li>
-          <li><button type="button" data-court-option data-price="₱500.00" data-package="Intermediate Clinic ₱500"><strong>Intermediate Clinic ₱500</strong><span>Skills and drills for leveled-up players</span></button></li>
-          <li><button type="button" data-court-option data-price="₱2,500.00" data-package="Pro Series Bootcamp ₱2500"><strong>Pro Series Bootcamp ₱2,500</strong><span>3-day intensive workshop for tournament prep</span></button></li>
+          <li><button type="button" data-court-option data-price="₱800.00" data-package="Training ₱800"><strong>Training ₱800</strong><span>Focused skills training for stronger gameplay</span></button></li>
         </ul>
         <a href="<?= htmlspecialchars($courtBookingHref) ?>" class="btn btn-court-book btn-md" data-court-book data-court="green">Book now</a>
         <p class="home-court__badge">Main standard court</p>
@@ -203,14 +199,12 @@ $rules = [
     <div class="section-inner home-court__grid">
       <div class="home-court__gallery">
         <div class="home-court__thumbs">
-          <button type="button" class="is-active" data-court-thumb data-full="https://pickleand.club/cdn/shop/files/250411_-_Pickle__024r.jpg?v=1744816152&width=1946" aria-label="Show Court Pink image 1"><img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__024r.jpg?v=1744816152&width=220" alt="" /></button>
-          <button type="button" data-court-thumb data-full="https://pickleand.club/cdn/shop/files/250411_-_Pickle__208_cc44460d-89be-4e85-a4cb-835987f57ee6.jpg?v=1744816152&width=1200" aria-label="Show Court Pink image 2"><img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__208_cc44460d-89be-4e85-a4cb-835987f57ee6.jpg?v=1744816152&width=220" alt="" /></button>
-          <button type="button" data-court-thumb data-full="https://pickleand.club/cdn/shop/files/250411_-_Pickle__010.jpg?v=1744701445&width=1946" aria-label="Show Court Pink image 3"><img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__010.jpg?v=1744701445&width=220" alt="" /></button>
-          <button type="button" data-court-thumb data-full="https://pickleand.club/cdn/shop/files/class2-touched.jpg?v=1744706809&width=1600" aria-label="Show Court Pink image 4"><img src="https://pickleand.club/cdn/shop/files/class2-touched.jpg?v=1744706809&width=220" alt="" /></button>
-          <button type="button" data-court-thumb data-full="https://pickleand.club/cdn/shop/files/250411_-_Pickle__008.jpg?v=1744701445&width=1946" aria-label="Show Court Pink image 5"><img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__008.jpg?v=1744701445&width=220" alt="" /></button>
+          <button type="button" class="is-active" data-court-thumb data-full="assets/img/court/court pink-1.webp" aria-label="Show Court Pink image 1"><img src="assets/img/court/court pink-1.webp" alt="" /></button>
+          <button type="button" data-court-thumb data-full="assets/img/court/court pink-2.png" aria-label="Show Court Pink image 2"><img src="assets/img/court/court pink-2.png" alt="" /></button>
+          <button type="button" data-court-thumb data-full="assets/img/court/court pink-3.png" aria-label="Show Court Pink image 3"><img src="assets/img/court/court pink-3.png" alt="" /></button>
         </div>
         <div class="home-court__media">
-          <img data-court-main src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__024r.jpg?v=1744816152&width=1946" alt="Pink indoor pickleball court" />
+          <img data-court-main src="assets/img/court/court pink-1.webp" alt="Pink indoor pickleball court" />
         </div>
       </div>
       <div class="home-court__content">
@@ -219,11 +213,11 @@ $rules = [
         <p class="home-price"><span data-court-price>₱400.00</span> <small>/ session</small></p>
         <ul class="home-court__list">
           <li><button type="button" class="is-active" data-court-option data-price="₱400.00" data-package="Court Pink Base ₱400"><strong>Base Rate ₱400</strong><span>Community court for beginners, families, and future champions</span></button></li>
-          <li><button type="button" data-court-option data-price="₱1,200.00" data-package="Foundational ₱1200"><strong>Foundational ₱1,200</strong><span>4-session course for ages 6-10</span></button></li>
-          <li><button type="button" data-court-option data-price="₱1,200.00" data-package="Youth Development ₱1200"><strong>Youth Development ₱1,200</strong><span>4-session course for ages 11-17</span></button></li>
-          <li><button type="button" data-court-option data-price="₱1,800.00" data-package="Adult Beginner Bootcamp ₱1800"><strong>Adult Beginner Bootcamp ₱1,800</strong><span>4-session program for rules and basic strokes</span></button></li>
-          <li><button type="button" data-court-option data-price="₱250.00" data-package="Intro Trial ₱250"><strong>Intro Trial ₱250</strong><span>Single-session experience for up to 8 students</span></button></li>
-          <li><button type="button" data-court-option data-price="₱500.00" data-package="Parent & Child Trial ₱500"><strong>Parent &amp; Child Trial ₱500</strong><span>One adult and one child, ages 6+</span></button></li>
+          <li><button type="button" data-court-option data-price="₱1,200.00" data-package="Foundational Ages 6-10 ₱1200"><strong>Foundational Ages 6-10 ₱1,200</strong><span>Comprehensive 4-session course focused on hand-eye coordination and fun</span></button></li>
+          <li><button type="button" data-court-option data-price="₱1,200.00" data-package="Youth Development Ages 11-17 ₱1200"><strong>Youth Development Ages 11-17 ₱1,200</strong><span>4-session course building technical consistency and match confidence</span></button></li>
+          <li><button type="button" data-court-option data-price="₱1,800.00" data-package="Adult Beginner Bootcamp ₱1800"><strong>Adult Beginner Bootcamp ₱1,800</strong><span>4-session program covering essential rules and basic strokes</span></button></li>
+          <li><button type="button" data-court-option data-price="₱250.00" data-package="Introductory Trial Class ₱250"><strong>Introductory Trial Class ₱250</strong><span>A single-session experience for up to 8 students</span></button></li>
+          <li><button type="button" data-court-option data-price="₱500.00" data-package="Parent & Child Trial ₱500"><strong>Parent &amp; Child Trial ₱500</strong><span>A combined session for one adult and one child, ages 6+</span></button></li>
         </ul>
         <a href="<?= htmlspecialchars($courtBookingHref) ?>" class="btn btn-court-book btn-md" data-court-book data-court="pink">Book now</a>
         <p class="home-court__badge">Slightly smaller but a lot happier</p>

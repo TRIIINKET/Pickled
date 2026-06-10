@@ -11,23 +11,21 @@ $courtImages = [
   'green' => [
     'title' => 'COURT GREEN',
     'tag' => "EVERYONE'S GAME",
-    'image' => 'https://pickleand.club/cdn/shop/files/250411_-_Pickle__008.jpg?v=1744701445&width=1946',
+    'image' => '../assets/img/court/court green-1.png',
     'thumbs' => [
-      'https://pickleand.club/cdn/shop/files/250411_-_Pickle__058.jpg?v=1744700811&width=400',
-      'https://pickleand.club/cdn/shop/files/250411_-_Pickle__061.jpg?v=1744700811&width=400',
-      '../assets/img/Hero.jpg',
-      'https://pickleand.club/cdn/shop/files/250411_-_Pickle__055.jpg?v=1744709434&width=400',
+      '../assets/img/court/court green-1.png',
+      '../assets/img/court/court green-2.png',
+      '../assets/img/court/court green-3.png',
     ],
   ],
   'pink' => [
     'title' => 'COURT PINK',
     'tag' => 'VIBE ON',
-    'image' => 'https://pickleand.club/cdn/shop/files/250411_-_Pickle__024r.jpg?v=1744816152&width=1946',
+    'image' => '../assets/img/court/court pink-1.webp',
     'thumbs' => [
-      'https://pickleand.club/cdn/shop/files/250411_-_Pickle__055.jpg?v=1744709434&width=400',
-      'https://pickleand.club/cdn/shop/files/250411_-_Pickle__058.jpg?v=1744700811&width=400',
-      '../assets/img/Hero.jpg',
-      'https://pickleand.club/cdn/shop/files/250411_-_Pickle__061.jpg?v=1744700811&width=400',
+      '../assets/img/court/court pink-1.webp',
+      '../assets/img/court/court pink-2.png',
+      '../assets/img/court/court pink-3.png',
     ],
   ],
 ];
@@ -140,7 +138,7 @@ $coaches = [
       <div class="classes-carousel" data-classes-carousel>
         <div class="classes-track">
           <article class="class-slide is-active" data-class-slide>
-            <img src="../assets/img/Hero.jpg" alt="Private and semi-private pickleball lesson" />
+            <img src="../assets/img/court/private lesson.png" alt="Private and semi-private pickleball lesson" />
             <div>
               <p>Pickled Classes</p>
               <h3>PRIVATE AND SEMI-PRIVATE LESSON</h3>
@@ -149,7 +147,7 @@ $coaches = [
             </div>
           </article>
           <article class="class-slide" data-class-slide hidden>
-            <img src="<?= htmlspecialchars($courtImages['pink']['image']) ?>" alt="Kids pickleball class" />
+            <img src="../assets/img/court/court pink-3.png" alt="Kids pickleball class" />
             <div>
               <p>Kids Program</p>
               <h3>FOUNDATIONAL AND YOUTH DEVELOPMENT</h3>
@@ -418,6 +416,22 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
     email: ''
   };
   const money = value => '₱' + Number(value).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const courtRateCatalog = {
+    green: [
+      { variant: 'green-court-rentals', label: 'COURT RENTALS', price: 600, duration: '1 hour', court: 'COURT GREEN', title: 'COURT RENTALS ₱600', note: 'Reserve Court Green for casual or private play' },
+      { variant: 'green-lessons', label: 'LESSONS', price: 500, duration: '1 hour', court: 'COURT GREEN', title: 'LESSONS ₱500', note: 'Beginner-friendly drills and guided class sessions' },
+      { variant: 'green-private-coaching', label: 'PRIVATE COACHING', price: 1200, duration: '1 hour', court: 'COURT GREEN', title: 'PRIVATE COACHING ₱1,200', note: '1-on-1 session with a certified coach', dateMode: 'coach' },
+      { variant: 'green-training', label: 'TRAINING', price: 800, duration: '1 hour', court: 'COURT GREEN', title: 'TRAINING ₱800', note: 'Focused skills training for stronger gameplay' },
+    ],
+    pink: [
+      { variant: 'pink-base-rate', label: 'BASE RATE', price: 400, duration: '1 hour', court: 'COURT PINK', title: 'Base Rate ₱400', note: 'Community court for beginners, families, and future champions' },
+      { variant: 'pink-foundational-ages-6-10', label: 'FOUNDATIONAL AGES 6-10', price: 1200, duration: '4 sessions', court: 'COURT PINK', title: 'Foundational Ages 6-10 ₱1,200', note: 'Comprehensive 4-session course focused on hand-eye coordination and fun' },
+      { variant: 'pink-youth-development-ages-11-17', label: 'YOUTH DEVELOPMENT AGES 11-17', price: 1200, duration: '4 sessions', court: 'COURT PINK', title: 'Youth Development Ages 11-17 ₱1,200', note: '4-session course building technical consistency and match confidence' },
+      { variant: 'pink-adult-beginner-bootcamp', label: 'ADULT BEGINNER BOOTCAMP', price: 1800, duration: '4 sessions', court: 'COURT PINK', title: 'Adult Beginner Bootcamp ₱1,800', note: '4-session program covering essential rules and basic strokes' },
+      { variant: 'pink-introductory-trial-class', label: 'INTRODUCTORY TRIAL CLASS', price: 250, duration: '1 hour', court: 'COURT PINK', title: 'Introductory Trial Class ₱250', note: 'A single-session experience for up to 8 students' },
+      { variant: 'pink-parent-child-trial', label: 'PARENT & CHILD TRIAL', price: 500, duration: '1 hour', court: 'COURT PINK', title: 'Parent & Child Trial ₱500', note: 'A combined session for one adult and one child, ages 6+' },
+    ],
+  };
   const modal = document.getElementById('bookingModal');
   const dateStep = modal.querySelector('.booking-step--date');
   const detailsStep = modal.querySelector('.booking-step--details');
@@ -426,6 +440,23 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
   const calendarGrid = modal.querySelector('.calendar-grid');
   const calendarTitle = modal.querySelector('.calendar-head strong');
   const calendarNavButtons = modal.querySelectorAll('.calendar-head button');
+  const rateList = document.querySelector('.rate-list');
+  const courtThumbs = document.querySelector('.court-thumbs');
+  const courtMainImage = document.getElementById('courtMainImage');
+  const courtGalleryCatalog = <?= json_encode([
+    'green' => [
+      'image' => $courtImages['green']['image'],
+      'alt' => 'Court Green main view',
+      'thumbAlt' => 'Court Green view',
+      'thumbs' => $courtImages['green']['thumbs'],
+    ],
+    'pink' => [
+      'image' => $courtImages['pink']['image'],
+      'alt' => 'Court Pink main view',
+      'thumbAlt' => 'Court Pink view',
+      'thumbs' => $courtImages['pink']['thumbs'],
+    ],
+  ], JSON_UNESCAPED_SLASHES) ?>;
   const coachRow = document.getElementById('coachRow');
   const coachSelect = document.getElementById('coachSelect');
   const coachSchedule = document.getElementById('coachSchedule');
@@ -635,12 +666,70 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
     document.getElementById('selectedCourtPrice').textContent = money(state.price);
   }
 
-  document.querySelectorAll('[data-gallery-src]').forEach(button => {
-    button.addEventListener('click', () => {
-      document.querySelectorAll('[data-gallery-src]').forEach(item => item.classList.remove('is-active'));
-      button.classList.add('is-active');
-      document.getElementById('courtMainImage').src = button.dataset.gallerySrc;
+  function applyRateOption(button){
+    rateList.querySelectorAll('.rate-option').forEach(item => item.classList.remove('is-selected'));
+    button.classList.add('is-selected');
+    state.label = button.dataset.label;
+    state.variant = button.dataset.variant || state.variant;
+    state.note = button.dataset.note || button.querySelector('span').textContent;
+    state.price = Number(button.dataset.price);
+    state.duration = button.dataset.duration;
+    state.court = button.dataset.court;
+    state.dateMode = button.dataset.dateMode || 'daily';
+    document.getElementById('selectedCourtPrice').textContent = money(state.price);
+    updateBookingCopy();
+  }
+
+  function renderRateOptions(courtKey){
+    const options = courtRateCatalog[courtKey] || courtRateCatalog.green;
+    rateList.replaceChildren();
+    options.forEach((option, index) => {
+      const button = document.createElement('button');
+      button.className = 'rate-option' + (index === 0 ? ' is-selected' : '');
+      button.type = 'button';
+      button.dataset.variant = option.variant;
+      button.dataset.label = option.label;
+      button.dataset.note = option.note;
+      button.dataset.price = String(option.price);
+      button.dataset.duration = option.duration;
+      button.dataset.court = option.court;
+      if (option.dateMode) button.dataset.dateMode = option.dateMode;
+
+      const title = document.createElement('strong');
+      title.textContent = option.title;
+      const note = document.createElement('span');
+      note.textContent = option.note;
+      button.append(title, note);
+      rateList.appendChild(button);
     });
+    applyRateOption(rateList.querySelector('.rate-option'));
+  }
+
+  function renderCourtGallery(courtKey){
+    const gallery = courtGalleryCatalog[courtKey] || courtGalleryCatalog.green;
+    courtMainImage.src = gallery.image;
+    courtMainImage.alt = gallery.alt;
+    courtThumbs.replaceChildren();
+    gallery.thumbs.forEach((src, index) => {
+      const button = document.createElement('button');
+      button.className = 'court-thumb' + (index === 0 ? ' is-active' : '');
+      button.type = 'button';
+      button.dataset.gallerySrc = src;
+
+      const image = document.createElement('img');
+      image.src = src;
+      image.alt = gallery.thumbAlt + ' ' + (index + 1);
+      button.appendChild(image);
+      courtThumbs.appendChild(button);
+    });
+  }
+
+  courtThumbs.addEventListener('click', event => {
+    const button = event.target.closest('[data-gallery-src]');
+    if (!button) return;
+    courtThumbs.querySelectorAll('[data-gallery-src]').forEach(item => item.classList.remove('is-active'));
+    button.classList.add('is-active');
+    courtMainImage.src = button.dataset.gallerySrc;
   });
 
   document.querySelectorAll('[data-jump-court]').forEach(button => {
@@ -648,35 +737,23 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
       document.getElementById('court-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
       if (button.dataset.jumpCourt === 'pink') {
         document.getElementById('selectedCourtTitle').textContent = 'COURT PINK';
-        document.getElementById('selectedCourtPrice').textContent = '₱400.00';
-        document.getElementById('courtMainImage').src = '<?= htmlspecialchars($courtImages['pink']['image']) ?>';
-        state.label = 'COURT PINK BASE RATE';
-        state.note = 'Community and development court for beginners, families, and future champions.';
-        state.price = 400;
-        state.duration = '1 hour';
-        state.court = 'COURT PINK';
-        state.dateMode = 'daily';
-        state.variant = 'pink-base-rate';
+        renderCourtGallery('pink');
+        renderRateOptions('pink');
       } else {
         document.getElementById('selectedCourtTitle').textContent = 'COURT GREEN';
-        document.getElementById('selectedCourtPrice').textContent = '₱600.00';
-        document.getElementById('courtMainImage').src = '<?= htmlspecialchars($courtImages['green']['image']) ?>';
-        state.label = 'COURT RENTALS';
-        state.note = 'Reserve Court Green for casual or private play.';
-        state.price = 600;
-        state.duration = '1 hour';
-        state.court = 'COURT GREEN';
-        state.dateMode = 'daily';
-        state.variant = 'green-court-rentals';
+        renderCourtGallery('green');
+        renderRateOptions('green');
       }
-      updateBookingCopy();
     });
   });
 
-  document.querySelectorAll('.rate-option, .option-card').forEach(button => {
+  rateList.addEventListener('click', event => {
+    const button = event.target.closest('.rate-option');
+    if (button) applyRateOption(button);
+  });
+
+  document.querySelectorAll('.option-card').forEach(button => {
     button.addEventListener('click', () => {
-      document.querySelectorAll('.rate-option').forEach(item => item.classList.remove('is-selected'));
-      if (button.classList.contains('rate-option')) button.classList.add('is-selected');
       state.label = button.dataset.label;
       state.variant = button.dataset.variant || state.variant;
       state.note = button.dataset.note || button.querySelector('span').textContent;
@@ -686,7 +763,7 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
       state.dateMode = button.dataset.dateMode || 'daily';
       document.getElementById('selectedCourtPrice').textContent = money(state.price);
       updateBookingCopy();
-      if (button.classList.contains('option-card')) openModal();
+      openModal();
     });
   });
 
