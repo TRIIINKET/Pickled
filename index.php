@@ -125,7 +125,7 @@ $rules = [
       </div>
       <div class="home-lesson-layout">
         <article class="home-lesson home-lesson--large">
-          <img src="https://pickleand.club/cdn/shop/files/class2-touched.jpg?v=1744706809&width=1600" alt="Academy pickleball lesson" />
+          <img src="assets/img/court/academy.png" alt="Academy pickleball lesson" />
           <div>
             <h3>Academy</h3>
             <p>Build your skills through structured programs designed for beginners to intermediate players.</p>
@@ -135,7 +135,7 @@ $rules = [
         </article>
         <div class="home-lesson-stack">
           <article class="home-lesson home-lesson--pink">
-            <img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__205.jpg?v=1744700285&width=900" alt="Private pickleball lesson" />
+            <img src="assets/img/court/private lesson.png" alt="Private pickleball lesson" />
             <div>
               <h3>Private Lesson</h3>
               <p>Get one-on-one coaching tailored to your level and progress faster with personalized guidance.</p>
@@ -144,7 +144,7 @@ $rules = [
             <p class="home-lesson__ticker"><span>Certified coach | 1 on 1 with an internationally certified coach | Certified coach | 1 on 1 with an internationally certified coach | </span></p>
           </article>
           <article class="home-lesson home-lesson--orange">
-            <img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__050.jpg?v=1744709442&width=900" alt="Friends private pickleball lesson" />
+            <img src="assets/img/court/friends private.png" alt="Friends private pickleball lesson" />
             <div>
               <h3>Friends Private</h3>
               <p>Train together with friends in a private group session while improving teamwork and gameplay.</p>

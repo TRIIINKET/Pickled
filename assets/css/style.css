@@ -858,7 +858,7 @@ input, textarea, select { font-family: inherit; }
   display: grid;
   place-items: end center;
   overflow: hidden;
-  background: url('../img/Hero.jpg') center 43% / cover no-repeat;
+  background: url('../img/Hero Section.png') center 43% / cover no-repeat;
   isolation: isolate;
 }
 
