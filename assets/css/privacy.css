@@ -1,152 +1,4 @@
-footer-legal__link {
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  padding: 0;
-  text-decoration: none;
-  transition: opacity 0.2s;
-}
-
-.footer-legal__link:hover {
-  opacity: 0.7;
-}
-
-.privacy-modal,
-.terms-modal,
-.cancellation-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 9998;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  overflow: hidden;
-}
-
-.privacy-modal__overlay,
-.terms-modal__overlay,
-.cancellation-modal__overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.72);
-  z-index: 9998;
-}
-
-.privacy-modal__content,
-.terms-modal__content,
-.cancellation-modal__content {
-  position: relative;
-  z-index: 9999;
-  background: white;
-  width: min(1080px, calc(100% - 40px));
-  height: calc(100vh - 60px);
-  max-height: calc(100vh - 60px);
-  overflow: hidden;
-  padding: 32px 32px 24px;
-  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.24);
-  border-radius: 20px;
-}
-
-.privacy-modal__close,
-.terms-modal__close,
-.cancellation-modal__close {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  background: none;
-  border: none;
-  font-size: 32px;
-  cursor: pointer;
-  color: #444;
-  padding: 0;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.privacy-modal__close:hover,
-.terms-modal__close:hover,
-.cancellation-modal__close:hover {
-  color: #000;
-}
-
-.privacy-modal__body,
-.terms-modal__body,
-.cancellation-modal__body {
-  height: calc(100vh - 120px);
-  overflow-y: auto;
-}
-
-.privacy-modal__body h1,
-.terms-modal__body h1,
-.cancellation-modal__body h1 {
-  color: #2c5f5f;
-  font-size: clamp(1.8rem, 2.2vw, 2.8rem);
-  margin-bottom: 24px;
-  text-transform: uppercase;
-}
-
-.privacy-modal__body h2,
-.terms-modal__body h2,
-.cancellation-modal__body h2 {
-  color: #2c5f5f;
-  font-size: clamp(1.05rem, 1.2vw, 1.3rem);
-  margin-top: 30px;
-  margin-bottom: 16px;
-  text-transform: uppercase;
-}
-
-.privacy-modal__body h3,
-.terms-modal__body h3,
-.cancellation-modal__body h3 {
-  color: #333;
-  font-size: 1rem;
-  margin-top: 22px;
-  margin-bottom: 12px;
-}
-
-.privacy-modal__body p,
-.terms-modal__body p,
-.cancellation-modal__body p,
-.privacy-modal__body li,
-.terms-modal__body li,
-.cancellation-modal__body li {
-  margin-bottom: 14px;
-  line-height: 1.7;
-  color: #333;
-  font-size: 0.95rem;
-}
-
-.privacy-modal__body ul,
-.terms-modal__body ul,
-.cancellation-modal__body ul {
-  margin-left: 24px;
-  margin-bottom: 18px;
-}
-
-.privacy-modal__body li,
-.terms-modal__body li,
-.cancellation-modal__body li {
-  margin-bottom: 10px;
-}
-
-.privacy-modal__body strong,
-.terms-modal__body strong,
-.cancellation-modal__body strong {
-  font-weight: 600;
-}
-
-body.modal-open .promo-bar,
-body.modal-open .nav {
-  z-index: 10002;
-}
-/* Privacy Modal Styles */
-
+/* Modal styles shared by privacy/terms/cancellation dialogs */
 .footer-legal__link {
   background: none;
   border: none;
@@ -169,9 +21,9 @@ body.modal-open .nav {
   inset: 0;
   z-index: 9998;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 0;
+  padding: calc(var(--nav-h) + 44px) 0 20px;
   overflow: hidden;
 }
 
@@ -189,10 +41,10 @@ body.modal-open .nav {
 .cancellation-modal__content {
   position: relative;
   z-index: 9999;
-  background: white;
+  background: #fff;
   width: min(1080px, calc(100% - 40px));
-  height: calc(100vh - 60px);
-  max-height: calc(100vh - 60px);
+  height: calc(100vh - var(--nav-h) - 124px);
+  max-height: calc(100vh - var(--nav-h) - 124px);
   overflow: hidden;
   padding: 32px 32px 24px;
   box-shadow: 0 32px 90px rgba(0, 0, 0, 0.24);
@@ -205,17 +57,17 @@ body.modal-open .nav {
   position: absolute;
   top: 18px;
   right: 18px;
-  background: none;
-  border: none;
-  font-size: 32px;
-  cursor: pointer;
-  color: #444;
-  padding: 0;
   width: 40px;
   height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #444;
+  font-size: 32px;
+  cursor: pointer;
 }
 
 .privacy-modal__close:hover,
@@ -227,16 +79,17 @@ body.modal-open .nav {
 .privacy-modal__body,
 .terms-modal__body,
 .cancellation-modal__body {
-  height: calc(100vh - 120px);
+  height: calc(100vh - var(--nav-h) - 204px);
   overflow-y: auto;
+  font-size: 0.82rem;
 }
 
 .privacy-modal__body h1,
 .terms-modal__body h1,
 .cancellation-modal__body h1 {
   color: #2c5f5f;
-  font-size: clamp(1.8rem, 2.2vw, 2.8rem);
-  margin-bottom: 24px;
+  font-size: clamp(1.4rem, 1.8vw, 2rem);
+  margin-bottom: 14px;
   text-transform: uppercase;
 }
 
@@ -244,9 +97,9 @@ body.modal-open .nav {
 .terms-modal__body h2,
 .cancellation-modal__body h2 {
   color: #2c5f5f;
-  font-size: clamp(1.05rem, 1.2vw, 1.3rem);
-  margin-top: 30px;
-  margin-bottom: 16px;
+  font-size: clamp(0.92rem, 1vw, 1.05rem);
+  margin-top: 18px;
+  margin-bottom: 10px;
   text-transform: uppercase;
 }
 
@@ -254,9 +107,9 @@ body.modal-open .nav {
 .terms-modal__body h3,
 .cancellation-modal__body h3 {
   color: #333;
-  font-size: 1rem;
-  margin-top: 22px;
-  margin-bottom: 12px;
+  font-size: 0.88rem;
+  margin-top: 14px;
+  margin-bottom: 8px;
 }
 
 .privacy-modal__body p,
@@ -265,23 +118,23 @@ body.modal-open .nav {
 .privacy-modal__body li,
 .terms-modal__body li,
 .cancellation-modal__body li {
-  margin-bottom: 14px;
-  line-height: 1.7;
+  margin-bottom: 10px;
+  line-height: 1.45;
   color: #333;
-  font-size: 0.95rem;
+  font-size: inherit;
 }
 
 .privacy-modal__body ul,
 .terms-modal__body ul,
 .cancellation-modal__body ul {
   margin-left: 24px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 
 .privacy-modal__body li,
 .terms-modal__body li,
 .cancellation-modal__body li {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .privacy-modal__body strong,
@@ -293,4 +146,34 @@ body.modal-open .nav {
 body.modal-open .promo-bar,
 body.modal-open .nav {
   z-index: 10002;
+}
+
+@media (max-width: 640px) {
+  .privacy-modal,
+  .terms-modal,
+  .cancellation-modal {
+    padding-top: calc(var(--nav-h) + 18px);
+  }
+
+  .privacy-modal__content,
+  .terms-modal__content,
+  .cancellation-modal__content {
+    width: calc(100% - 24px);
+    height: calc(100vh - var(--nav-h) - 72px);
+    max-height: calc(100vh - var(--nav-h) - 72px);
+    padding: 24px 20px 18px;
+  }
+
+  .privacy-modal__body,
+  .terms-modal__body,
+  .cancellation-modal__body {
+    height: calc(100vh - var(--nav-h) - 122px);
+  }
+
+  .privacy-modal__close,
+  .terms-modal__close,
+  .cancellation-modal__close {
+    top: 12px;
+    right: 12px;
+  }
 }

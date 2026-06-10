@@ -129,6 +129,8 @@
   justify-content: flex-end;
   gap: 18px;
   flex-wrap: wrap;
+  align-items: flex-start;
+  max-width: 100%;
 }
 
 .footer-legal a,
@@ -183,6 +185,17 @@
   }
 
   .footer-legal {
-    gap: 14px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    justify-content: start;
+    width: 100%;
+  }
+
+  .footer-legal a,
+  .footer-legal__link {
+    width: fit-content;
+    max-width: 100%;
+    line-height: 1.4;
   }
 }
