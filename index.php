@@ -180,7 +180,6 @@ $rules = [
       </div>
       <div class="home-court__content">
         <p class="home-kicker">Court Green</p>
-        <p class="home-court__notice">Join as a member for <strong>Zero Guest Fees and Advanced Booking!</strong></p>
         <p class="home-price"><span data-court-price>₱600.00</span> <small>/ session</small></p>
         <ul class="home-court__list">
           <li><button type="button" class="is-active" data-court-option data-price="₱600.00" data-package="Court Rentals ₱600"><strong>Court Rentals ₱600</strong><span>Reserve Court Green for casual or private play</span></button></li>
@@ -209,15 +208,12 @@ $rules = [
       </div>
       <div class="home-court__content">
         <p class="home-kicker">Court Pink</p>
-        <p class="home-court__notice">Join as a member for <strong>Zero Guest Fees and Advanced Booking!</strong></p>
         <p class="home-price"><span data-court-price>₱400.00</span> <small>/ session</small></p>
         <ul class="home-court__list">
-          <li><button type="button" class="is-active" data-court-option data-price="₱400.00" data-package="Court Pink Base ₱400"><strong>Base Rate ₱400</strong><span>Community court for beginners, families, and future champions</span></button></li>
-          <li><button type="button" data-court-option data-price="₱1,200.00" data-package="Foundational Ages 6-10 ₱1200"><strong>Foundational Ages 6-10 ₱1,200</strong><span>Comprehensive 4-session course focused on hand-eye coordination and fun</span></button></li>
-          <li><button type="button" data-court-option data-price="₱1,200.00" data-package="Youth Development Ages 11-17 ₱1200"><strong>Youth Development Ages 11-17 ₱1,200</strong><span>4-session course building technical consistency and match confidence</span></button></li>
-          <li><button type="button" data-court-option data-price="₱1,800.00" data-package="Adult Beginner Bootcamp ₱1800"><strong>Adult Beginner Bootcamp ₱1,800</strong><span>4-session program covering essential rules and basic strokes</span></button></li>
-          <li><button type="button" data-court-option data-price="₱250.00" data-package="Introductory Trial Class ₱250"><strong>Introductory Trial Class ₱250</strong><span>A single-session experience for up to 8 students</span></button></li>
-          <li><button type="button" data-court-option data-price="₱500.00" data-package="Parent & Child Trial ₱500"><strong>Parent &amp; Child Trial ₱500</strong><span>A combined session for one adult and one child, ages 6+</span></button></li>
+          <li><button type="button" class="is-active" data-court-option data-price="₱400.00" data-package="Court Rental ₱400"><strong>Court Rental ₱400</strong><span>Reserve Court Pink for casual games, family play, and beginner-friendly sessions.</span></button></li>
+          <li><button type="button" data-court-option data-price="₱350.00" data-package="Kids Pickleball Class Ages 6-10 ₱350"><strong>Kids Pickleball Class (Ages 6-10) ₱350</strong><span>Fun and engaging introductory session focused on movement, coordination, and basic skills.</span></button></li>
+          <li><button type="button" data-court-option data-price="₱350.00" data-package="Youth Development Class Ages 11-17 ₱350"><strong>Youth Development Class (Ages 11-17) ₱350</strong><span>Guided session designed to build confidence, consistency, and match awareness.</span></button></li>
+          <li><button type="button" data-court-option data-price="₱500.00" data-package="Parent & Child Session ₱500"><strong>Parent &amp; Child Session ₱500</strong><span>A shared beginner-friendly experience for one parent and one child.</span></button></li>
         </ul>
         <a href="<?= htmlspecialchars($courtBookingHref) ?>" class="btn btn-court-book btn-md" data-court-book data-court="pink">Book now</a>
         <p class="home-court__badge">Slightly smaller but a lot happier</p>
@@ -272,20 +268,14 @@ $rules = [
         <div class="home-score-card">
           <img src="https://pickleand.club/cdn/shop/files/Screenshot_2025-03-07_at_3.36.29_PM.png?v=1741332999&width=535" alt="Pickleball live score system" />
         </div>
-        <a href="#pickleball-101" class="btn btn-lime btn-sm" data-tutorial-start>Interactive Tutorial</a>
       </div>
       <div class="home-rules__list">
         <?php foreach ($rules as $index => $rule): ?>
-          <article class="home-rule <?= $index === 0 ? 'is-active' : '' ?> <?= $index % 2 ? 'home-rule--green' : 'home-rule--pink' ?>">
+          <article class="home-rule <?= $index % 2 ? 'home-rule--green' : 'home-rule--pink' ?>">
             <h3><?= $index + 1 ?>. <?= htmlspecialchars($rule[0]) ?></h3>
             <p><?= htmlspecialchars($rule[1]) ?></p>
           </article>
         <?php endforeach; ?>
-        <div class="home-rules__controls" aria-label="Pickleball tutorial controls">
-          <button type="button" data-rule-prev aria-label="Previous tutorial card">‹</button>
-          <span><b data-rule-current>1</b> / <?= count($rules) ?></span>
-          <button type="button" data-rule-next aria-label="Next tutorial card">›</button>
-        </div>
       </div>
     </div>
   </section>

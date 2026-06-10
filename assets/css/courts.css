@@ -220,15 +220,6 @@ select {
   margin-bottom: 28px;
 }
 
-.member-callout {
-  background: #c0ffac;
-  padding: 15px 16px;
-  border-radius: 5px;
-  font-size: 17px;
-  line-height: 1.35;
-  margin-bottom: 26px;
-}
-
 .court-price {
   font-family: 'DM Sans', sans-serif;
   font-size: clamp(24px, 3vw, 32px);

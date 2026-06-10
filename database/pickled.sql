@@ -109,12 +109,10 @@ INSERT INTO `booking_variants` (`id`, `court_id`, `slug`, `name`, `category`, `d
 (4, 1, 'green-training', 'Training', 'Training', '1 hour', 800.00, 6, 12, '../assets/img/Hero.jpg', 1),
 (5, 1, 'green-open-match-play', 'Open Match-Play', 'Social Play', '2 hours', 350.00, 8, 16, '../assets/img/Hero.jpg', 1),
 (6, 1, 'green-weekly-tournament', 'Weekly Tournament', 'Social Play', 'This week', 900.00, 1, 16, '../assets/img/Hero.jpg', 1),
-(7, 2, 'pink-base-rate', 'Court Pink Base Rate', 'Court Reservation', '1 hour', 400.00, 6, 10, '../assets/img/Hero.jpg', 1),
-(8, 2, 'pink-foundational-ages-6-10', 'Foundational Ages 6-10', 'Academy', '4 sessions', 1200.00, 8, 10, '../assets/img/Hero.jpg', 1),
-(9, 2, 'pink-youth-development-ages-11-17', 'Youth Development Ages 11-17', 'Academy', '4 sessions', 1200.00, 8, 10, '../assets/img/Hero.jpg', 1),
-(10, 2, 'pink-adult-beginner-bootcamp', 'Adult Beginner Bootcamp', 'Academy', '4 sessions', 1800.00, 8, 10, '../assets/img/Hero.jpg', 1),
-(11, 2, 'pink-introductory-trial-class', 'Introductory Trial Class', 'Academy', '1 hour', 250.00, 8, 10, '../assets/img/Hero.jpg', 1),
-(12, 2, 'pink-parent-child-trial', 'Parent & Child Trial', 'Academy', '1 hour', 500.00, 2, 10, '../assets/img/Hero.jpg', 1);
+(7, 2, 'pink-base-rate', 'Court Rental', 'Court Reservation', '1 hour', 400.00, 6, 10, '../assets/img/Hero.jpg', 1),
+(8, 2, 'pink-kids-pickleball-class-ages-6-10', 'Kids Pickleball Class (Ages 6-10)', 'Academy', '1 hour', 350.00, 8, 10, '../assets/img/Hero.jpg', 1),
+(9, 2, 'pink-youth-development-class-ages-11-17', 'Youth Development Class (Ages 11-17)', 'Academy', '1 hour', 350.00, 8, 10, '../assets/img/Hero.jpg', 1),
+(10, 2, 'pink-parent-child-session', 'Parent & Child Session', 'Academy', '1 hour', 500.00, 2, 10, '../assets/img/Hero.jpg', 1);
 
 -- --------------------------------------------------------
 
@@ -1636,7 +1634,7 @@ ALTER TABLE `booking_items`
 -- AUTO_INCREMENT for table `booking_variants`
 --
 ALTER TABLE `booking_variants`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `carts`
