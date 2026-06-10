@@ -19,11 +19,19 @@ $activePage = $activePage ?? '';
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;500;600;700;800;900&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/style.css?v=20260610a')) ?>"/>
+<<<<<<< HEAD
   <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/navbar.css?v=20260610a')) ?>"/>
   <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/footer.css?v=20260610a')) ?>"/>
   <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/privacy.css?v=20260610a')) ?>"/>
   <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/terms.css?v=20260610a')) ?>"/>
   <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/cancellation.css?v=20260610a')) ?>"/>
+=======
+  <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/navbar.css?v=20260430d')) ?>"/>
+  <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/footer.css?v=20260430d')) ?>"/>
+  <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/privacy.css?v=20260430d')) ?>"/>
+  <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/terms.css?v=20260430d')) ?>"/>
+  <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/cancellation.css?v=20260430d')) ?>"/>
+>>>>>>> 3c0db1b0447495b08c4747548a7ad9808112ec40
   <?= $extraHead ?? '' ?>
 </head>
 <body>
