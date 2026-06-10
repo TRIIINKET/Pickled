@@ -1539,6 +1539,7 @@ CREATE TABLE `users` (
 INSERT INTO `users` (`id`, `name`, `email`, `password_hash`, `role`, `created_at`) VALUES
 (1, 'Player', 'player@example.com', '$2y$12$KNh/CplDSuT71nQMLS7/iOKrsTDtlWIYdMM2XzKcZmojpCznjiUg.', 'player', '2026-05-18 20:17:04'),
 (2, 'Coach', 'coach@example.com', '$2y$12$OtmXd8ca7eatk3JguuO4HuuyBabiXEVcJPZ8/xZ95AfxZPI7wwvZS', 'coach', '2026-05-18 20:17:04'),
+(3, 'Admin', 'admin@example.com', '$2y$12$bHChgoYH/V5MNw5Mtr7/eu2q9geiVID5k1fQ9bqM39XmKf/EqCZja', 'admin', '2026-05-18 20:17:04'),
 (9, 'Shemaiah', 'magpayo.shemaiahezra@gmail.com', '$2y$10$59K3Woxomtif84vBM9HpRu5yI4/B3Dk0RGkrWzO0N9ZLz0CqPAOOC', 'player', '2026-05-18 20:39:42'),
 (10, 'Aya', 'shemaiahezra@gmail.com', '$2y$10$UIMsxYx693tkYCsrpbcoI.YfG9hX2DfhTtHsYSayPPQUjrgLmwM6y', 'player', '2026-05-20 15:14:25');
 

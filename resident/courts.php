@@ -4,7 +4,7 @@ pickled_init_csrf();
 $pageTitle  = 'Courts - Pickled';
 $activePage = 'courts.php';
 $basePath   = '../';
-$extraHead  = '<link rel="stylesheet" href="../assets/css/courts.css?v=20260430d"/>';
+$extraHead  = '<link rel="stylesheet" href="../assets/css/courts.css?v=20260610b"/>';
 include __DIR__ . '/../includes/header.php';
 
 $courtImages = [

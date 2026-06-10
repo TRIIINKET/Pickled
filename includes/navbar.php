@@ -9,11 +9,11 @@ $links = [
   'private.php'     => 'Private',
   'contact.php'     => 'Contact',
 ];
-$lightLogoPages = ['courts.php', 'social-play.php', 'login.php'];
-$whiteNavTextPages = ['courts.php', 'social-play.php'];
-$logoFile = in_array($activePage, $lightLogoPages, true) ? 'WM-LPink.png' : 'WM-DGreen.png';
+$darkNavPages = ['courts.php', 'social-play.php', 'login.php'];
+$useDarkNav = in_array($activePage, $darkNavPages, true);
+$logoFile = $useDarkNav ? 'nav-logo-lpink.png' : 'nav-logo-dgreen.png';
 $logoImage = pickled_asset_url('img/' . $logoFile);
-$navClasses = 'nav' . (in_array($activePage, $whiteNavTextPages, true) ? ' nav--white-actions' : '');
+$navClasses = 'nav' . ($useDarkNav ? ' nav--dark' : '');
 $loggedIn = !empty($_SESSION['user']);
 $cartCount = !empty($_SESSION['cart']) ? array_sum(array_column($_SESSION['cart'], 'quantity')) : 0;
 $bookNowRedirect = 'resident/courts.php#court-detail';

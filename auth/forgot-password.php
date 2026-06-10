@@ -8,7 +8,7 @@ $pageTitle = 'Forgot Password - Pickled';
 $activePage = 'login.php';
 $frontendPath = __DIR__ . '/..';
 require_once $frontendPath . '/includes/paths.php';
-$extraHead = '<link rel="stylesheet" href="' . htmlspecialchars(pickled_asset_url('css/login.css')) . '"/>';
+$extraHead = '<link rel="stylesheet" href="' . htmlspecialchars(pickled_asset_url('css/login.css?v=20260610b')) . '"/>';
 $message = '';
 $resetLink = '';
 
