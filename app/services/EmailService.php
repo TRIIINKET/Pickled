@@ -6,14 +6,21 @@ final class EmailService
     private string $fromEmail;
     private string $fromName;
     private array $smtp;
+  private ?string $lastError = null;
 
     public function __construct()
     {
         $config = require __DIR__ . '/../../includes/config.php';
         $mail = $config['mail'] ?? [];
-        $localMailPath = __DIR__ . '/../../includes/mail.local.php';
-        if (is_file($localMailPath)) {
-            $mail = array_merge($mail, require $localMailPath);
+    $mailConfigPaths = [
+      __DIR__ . '/../../includes/mail.local.php',
+      __DIR__ . '/../../backend/config/mail.local.php',
+    ];
+
+    foreach ($mailConfigPaths as $mailConfigPath) {
+      if (is_file($mailConfigPath)) {
+        $mail = array_merge($mail, require $mailConfigPath);
+      }
         }
 
         $this->fromEmail = (string) ($mail['from_email'] ?? 'no-reply@pickled.local');
@@ -74,10 +81,17 @@ TEXT;
         return $this->send((string) ($user['email'] ?? ''), $subject, $text, $html);
     }
 
+      public function getLastError(): ?string
+      {
+        return $this->lastError;
+      }
+
     private function send(string $to, string $subject, string $textBody, string $htmlBody): bool
     {
+        $this->lastError = null;
         $to = trim($to);
         if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            $this->lastError = 'invalid recipient email';
             error_log('EmailService::send - invalid recipient email');
             return false;
         }
@@ -99,6 +113,7 @@ TEXT;
             ])
         );
         if (!$sent) {
+            $this->lastError = 'mail() failed';
             error_log('EmailService::send - mail() failed for ' . $to);
         }
 
@@ -116,6 +131,7 @@ TEXT;
 
         $socket = @stream_socket_client($remote, $errno, $errstr, 20, STREAM_CLIENT_CONNECT);
         if (!$socket) {
+          $this->lastError = "connection failed: {$errno} {$errstr}";
             error_log("EmailService::sendViaSmtp - connection failed: {$errno} {$errstr}");
             return false;
         }
@@ -148,6 +164,7 @@ TEXT;
             fclose($socket);
             return true;
         } catch (Throwable $e) {
+          $this->lastError = $e->getMessage();
             error_log('EmailService::sendViaSmtp - ' . $e->getMessage());
             fclose($socket);
             return false;

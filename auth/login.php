@@ -70,7 +70,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ];
                 session_regenerate_id(true);
                 pickled_restore_cart_for_user();
-                (new EmailService())->sendLoginNotification($_SESSION['user']);
+              $emailService = new EmailService();
+              if (!$emailService->sendLoginNotification($_SESSION['user'])) {
+                $_SESSION['flash'] = [
+                  'type' => 'warning',
+                  'message' => 'Logged in, but the notification email could not be sent.'
+                ];
+                error_log('Login notification failed for ' . ($_SESSION['user']['email'] ?? 'unknown email'));
+              }
 
                 header('Location: ' . pickled_frontend_url($redirect));
                 exit;

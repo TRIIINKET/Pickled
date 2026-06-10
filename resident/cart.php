@@ -108,7 +108,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           $selectedPayment,
           trim($_POST['notes'] ?? '')
         );
-        (new EmailService())->sendBookingConfirmation($_SESSION['user'], $_SESSION['last_booking']);
+        $emailService = new EmailService();
+        if (!$emailService->sendBookingConfirmation($_SESSION['user'], $_SESSION['last_booking'])) {
+          $_SESSION['flash'] = [
+            'type' => 'warning',
+            'message' => 'Booking confirmed, but the confirmation email could not be sent.'
+          ];
+          error_log('Booking confirmation email failed for ' . ($_SESSION['user']['email'] ?? 'unknown email'));
+        }
       } catch (RuntimeException $e) {
         $message = $e->getMessage();
         $messageType = 'warning';

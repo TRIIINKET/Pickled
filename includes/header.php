@@ -37,3 +37,12 @@ $activePage = $activePage ?? '';
 <body>
 
 <?php include __DIR__ . '/navbar.php'; ?>
+
+<?php if (!empty($_SESSION['flash'])): ?>
+  <?php $flash = $_SESSION['flash']; unset($_SESSION['flash']); ?>
+  <div style="position:relative; z-index: 899; padding: 12px clamp(16px, 4vw, 56px); background: <?= htmlspecialchars(($flash['type'] ?? 'info') === 'warning' ? '#FFF4D6' : (($flash['type'] ?? 'info') === 'error' ? '#FBE4E8' : '#EAF4E2')) ?>; color: #264414; border-bottom: 1px solid rgba(38,68,20,.12); font-family: 'DM Sans', sans-serif; font-size: 14px; line-height: 1.45;">
+    <div style="max-width: var(--max-w); margin: 0 auto;">
+      <?= htmlspecialchars((string) ($flash['message'] ?? '')) ?>
+    </div>
+  </div>
+<?php endif; ?>
