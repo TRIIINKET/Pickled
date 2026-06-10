@@ -8,10 +8,9 @@ $extraHead  = '<link rel="stylesheet" href="../assets/css/social-play.css"/>';
 include __DIR__ . '/../includes/header.php';
 
 $galleryImages = [
-  'https://pickleand.club/cdn/shop/files/250411_-_Pickle__058.jpg?v=1744700811&width=1200',
-  'https://pickleand.club/cdn/shop/files/250411_-_Pickle__061.jpg?v=1744700811&width=600',
-  'https://pickleand.club/cdn/shop/files/250411_-_Pickle__055.jpg?v=1744709434&width=600',
-  '../assets/img/Hero.jpg',
+  '../assets/img/court/social play-1.png',
+  '../assets/img/court/social play-2.png',
+  '../assets/img/court/social play-3.png',
 ];
 
 $faqs = [
@@ -28,7 +27,7 @@ $faqs = [
 
 <main class="social-page">
   <section class="social-hero">
-    <img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__205.jpg?v=1744700285&width=900" alt="Social Play" />
+    <img src="../assets/img/court/social play-1.png" alt="Social Play" />
     <div class="social-hero__overlay">
       <p>Join our Social Play Events</p>
       <h1>SOCIAL PLAY</h1>
@@ -38,7 +37,7 @@ $faqs = [
 
   <section class="social-intro">
     <div class="social-wrap intro-grid">
-      <img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__215.jpg?v=1744701445&width=900" alt="Players at private pickleball event" />
+      <img src="../assets/img/court/social play-2.png" alt="Players at social pickleball session" />
       <article>
         <h2>Join our Community Open Session</h2>
         <p>Ready to mix it up on the court? Our Community Open Session brings together pickleball enthusiasts of all skill levels to share the game we cannot get enough of.</p>

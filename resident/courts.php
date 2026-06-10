@@ -149,9 +149,9 @@ $coaches = [
           <article class="class-slide" data-class-slide hidden>
             <img src="../assets/img/court/court pink-3.png" alt="Kids pickleball class" />
             <div>
-              <p>Kids Program</p>
-              <h3>FOUNDATIONAL AND YOUTH DEVELOPMENT</h3>
-              <span>Fun 4-session courses for ages 6-17</span>
+              <p>Pickle &amp; Classes</p>
+              <h3>KIDS</h3>
+              <span>4-8 players with internationally certified coach</span>
               <button class="book-trigger" type="button" data-tooltip="Order now">Book now</button>
             </div>
           </article>
