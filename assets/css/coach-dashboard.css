@@ -103,6 +103,7 @@ button {
 .coach-nav svg,
 .coach-top-actions svg,
 .coach-card svg,
+.coach-kpi svg,
 .coach-account svg,
 .coach-top-profile svg,
 .coach-help-card svg,
@@ -112,7 +113,20 @@ button {
     height: 22px;
     fill: none;
     stroke: currentColor;
-    stroke-width: 1.9;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.coach-portal-body svg path,
+.coach-portal-body svg rect,
+.coach-portal-body svg circle,
+.coach-portal-body svg line,
+.coach-portal-body svg polyline,
+.coach-portal-body svg polygon {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: inherit;
     stroke-linecap: round;
     stroke-linejoin: round;
 }
@@ -1502,7 +1516,7 @@ button {
     height: 20px;
     fill: none;
     stroke: currentColor;
-    stroke-width: 1.9;
+    stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
 }
@@ -2158,10 +2172,11 @@ button {
 }
 
 .coach-kpi > svg {
-    width: 64px;
-    height: 64px;
+    width: 58px;
+    height: 58px;
     padding: 16px;
-    border-radius: 16px;
+    border-radius: 50%;
+    stroke-width: 1.8;
 }
 
 .coach-kpi.green > svg { background: #e6f6e3; color: var(--green); }
