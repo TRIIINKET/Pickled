@@ -1,26 +1,37 @@
-# PICKLED Database ERD and Schema Documentation
+# PICKLED Final Database ERD and Schema Documentation
 
-Generated from the application source, especially `database/schema.sql`, `database/pickled.sql`, repository classes in `app/repositories`, and CRUD/admin flows in `app/services` and `admin`.
+This document defines the finalized database design for the PICKLED system. It reflects the current defended scope of the application: user authentication, player and coach account management, court and booking catalog management, scheduling, carts, bookings, payments, feedback, notifications, admin audit logs, and private session inquiries.
 
-Important source note: `database/schema.sql` is the most complete schema because it includes `events`, `notifications`, and `admin_logs`, all of which are used by repository/service code. `database/pickled.sql` appears to be an older phpMyAdmin dump and contains only `users`, `password_resets`, `carts`, `cart_items`, `courts`, `booking_variants`, `sessions`, `bookings`, and `booking_items`.
+The finalized scope intentionally excludes unsupported or out-of-scope entities such as generic events, content pages, media assets, waitlists, session attendance, session notes, and private events. Public content and images are handled as static/customizable assets, not database-managed records.
 
-## A. Entity Relationship Diagram
+## A. Final Entity Relationship Diagram
 
 ```mermaid
 erDiagram
+    USERS ||--o| USER_PROFILES : optionally_has
+    USERS ||--o| COACH_PROFILES : optionally_has
     USERS ||--o{ PASSWORD_RESETS : requests
     USERS ||--o| CARTS : owns
     USERS ||--o{ BOOKINGS : creates
-    USERS ||--o{ EVENTS : creates
     USERS ||--o{ NOTIFICATIONS : receives
-    USERS ||--o{ ADMIN_LOGS : performs
+    USERS ||--o{ ADMIN_LOGS : admin_id
+    USERS ||--o{ COACH_AVAILABILITY : defines
+    USERS ||--o{ PRIVATE_INQUIRIES : submits
 
     COURTS ||--o{ BOOKING_VARIANTS : offers
     BOOKING_VARIANTS ||--o{ SESSIONS : schedules
-    SESSIONS ||--o{ CART_ITEMS : reserved_in
-    SESSIONS ||--o{ BOOKING_ITEMS : booked_as
+    USERS ||--o{ SESSIONS : coaches
+
     CARTS ||--o{ CART_ITEMS : contains
+    SESSIONS ||--o{ CART_ITEMS : reserved_in
+
     BOOKINGS ||--o{ BOOKING_ITEMS : contains
+    SESSIONS ||--o{ BOOKING_ITEMS : booked_as
+    BOOKINGS ||--o{ PAYMENTS : paid_by
+    BOOKINGS ||--o{ FEEDBACK : receives
+    USERS ||--o{ FEEDBACK : gives
+
+    PRIVATE_PACKAGES ||--o{ PRIVATE_INQUIRIES : requested_for
 
     USERS {
         int id PK
@@ -29,6 +40,29 @@ erDiagram
         string password_hash
         string role
         datetime created_at
+        datetime updated_at
+    }
+
+    USER_PROFILES {
+        int id PK
+        int user_id FK_UK
+        string phone
+        string city
+        string province
+        string avatar
+        datetime created_at
+        datetime updated_at
+    }
+
+    COACH_PROFILES {
+        int id PK
+        int user_id FK_UK
+        string specialization
+        text bio
+        string experience
+        string status
+        datetime created_at
+        datetime updated_at
     }
 
     PASSWORD_RESETS {
@@ -38,6 +72,56 @@ erDiagram
         datetime expires_at
         datetime used_at
         datetime created_at
+    }
+
+    COURTS {
+        int id PK
+        string name
+        string slug UK
+        string status
+        datetime created_at
+        datetime updated_at
+    }
+
+    BOOKING_VARIANTS {
+        int id PK
+        int court_id FK
+        string slug UK
+        string name
+        string category
+        string duration_label
+        decimal price
+        int participants_limit
+        int capacity
+        string image
+        boolean active
+        datetime created_at
+        datetime updated_at
+    }
+
+    SESSIONS {
+        int id PK
+        int variant_id FK
+        int coach_user_id FK
+        date session_date
+        time start_time
+        time end_time
+        int capacity
+        int booked_count
+        string status
+        datetime created_at
+        datetime updated_at
+    }
+
+    COACH_AVAILABILITY {
+        int id PK
+        int coach_user_id FK
+        int day_of_week
+        time start_time
+        time end_time
+        string status
+        datetime created_at
+        datetime updated_at
     }
 
     CARTS {
@@ -58,35 +142,6 @@ erDiagram
         datetime created_at
     }
 
-    COURTS {
-        int id PK
-        string name
-        string slug UK
-    }
-
-    BOOKING_VARIANTS {
-        int id PK
-        int court_id FK
-        string slug UK
-        string name
-        string category
-        string duration_label
-        decimal price
-        int participants_limit
-        int capacity
-        string image
-        boolean active
-    }
-
-    SESSIONS {
-        int id PK
-        int variant_id FK
-        string session_date
-        string session_time
-        int capacity
-        int booked_count
-    }
-
     BOOKINGS {
         int id PK
         int user_id FK
@@ -100,37 +155,44 @@ erDiagram
         text notes
         string cancellation_label
         datetime created_at
+        datetime updated_at
     }
 
     BOOKING_ITEMS {
         int id PK
         int booking_id FK
         int session_id FK
-        string variant_id
+        string variant_slug
         string name
         string court
         string category
         string duration_label
-        string booking_date
-        string booking_time
+        date booking_date
+        time start_time
+        time end_time
         int quantity
         decimal unit_price
         string image
+        datetime created_at
     }
 
-    EVENTS {
+    PAYMENTS {
         int id PK
-        string title
-        text description
-        string event_date
-        string event_time
-        string location
-        int max_participants
-        int current_participants
+        int booking_id FK
+        string receipt
         string status
-        int created_by FK
+        int reviewed_by_admin_id FK
+        datetime reviewed_at
         datetime created_at
-        datetime updated_at
+    }
+
+    FEEDBACK {
+        int id PK
+        int user_id FK
+        int booking_id FK
+        int rating
+        text comment
+        datetime created_at
     }
 
     NOTIFICATIONS {
@@ -153,299 +215,541 @@ erDiagram
         json details
         datetime created_at
     }
+
+    PRIVATE_PACKAGES {
+        int id PK
+        string name
+        text description
+        string guest_range
+        decimal starting_price
+        boolean active
+        datetime created_at
+        datetime updated_at
+    }
+
+    PRIVATE_INQUIRIES {
+        int id PK
+        int user_id FK
+        int private_package_id FK
+        string name
+        string email
+        string phone
+        date event_date
+        text message
+        string status
+        datetime created_at
+        datetime updated_at
+    }
 ```
 
-## B. Database Schema Documentation
+## B. Final Database Schema
 
 ### Table: users
 
-Purpose: Stores player, coach, and admin accounts used for authentication, authorization, booking ownership, notifications, and admin audit activity.
+Purpose: Stores all system accounts for players, coaches, and admins. This table is the authentication and authorization root for the system.
 
-| Column | Data Type | Key | Description |
-| --- | --- | --- | --- |
-| id | INT AUTO_INCREMENT | PK | User identifier. |
-| name | VARCHAR(120) |  | Display/full name. |
-| email | VARCHAR(160) | UNIQUE | Login email; repository lowercases email before storage/search. |
-| password_hash | VARCHAR(255) |  | Hashed password generated with PHP `password_hash`. |
-| role | VARCHAR(40) |  | Application role: code uses `player`, `coach`, and `admin`. |
-| created_at | DATETIME |  | Account creation timestamp. |
+Primary key: `id`
+
+Foreign keys: none
+
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `name` | Full/display name used across the public, coach, and admin interfaces. |
+| `email` | Unique login email. |
+| `password_hash` | Hashed password generated by PHP password hashing. |
+| `role` | Account role: `player`, `coach`, or `admin`. |
+| `created_at`, `updated_at` | Account lifecycle timestamps. |
+
+### Table: user_profiles
+
+Purpose: Stores optional player-facing profile details that are separate from login credentials. Admin and coach accounts may not need player profile details.
+
+Primary key: `id`
+
+Foreign keys:
+
+| Column | References | Relationship |
+| --- | --- | --- |
+| `user_id` | `users.id` | One user has zero or one user profile. |
+
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `phone` | Contact number shown in player/admin profile views. |
+| `city` | Player city. |
+| `province` | Player province. |
+| `avatar` | Optional profile photo path or identifier. |
+| `created_at`, `updated_at` | Profile timestamps. |
+
+### Table: coach_profiles
+
+Purpose: Stores optional coach-specific profile information used by coach management and coach-facing pages. Only coach accounts need coach profile details.
+
+Primary key: `id`
+
+Foreign keys:
+
+| Column | References | Relationship |
+| --- | --- | --- |
+| `user_id` | `users.id` | One coach user has zero or one coach profile. |
+
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `specialization` | Coaching focus such as private coaching, youth coaching, group coaching, or social play. |
+| `bio` | Coach description. |
+| `experience` | Human-readable coaching experience summary. |
+| `status` | Coach state such as active, inactive, or leave. |
+| `created_at`, `updated_at` | Profile timestamps. |
 
 ### Table: password_resets
 
-Purpose: Stores one active password reset token per user; repository deletes prior resets before creating a new one.
+Purpose: Stores password reset requests for user accounts.
 
-| Column | Data Type | Key | Description |
-| --- | --- | --- | --- |
-| id | INT AUTO_INCREMENT | PK | Password reset row identifier. |
-| user_id | INT | FK | References `users.id`. |
-| token_hash | CHAR(64) | UNIQUE | SHA-256-sized reset token hash. |
-| expires_at | DATETIME |  | Expiration timestamp. |
-| used_at | DATETIME NULL |  | Timestamp when reset was consumed. |
-| created_at | DATETIME |  | Reset request creation timestamp. |
+Primary key: `id`
 
-### Table: carts
+Foreign keys:
 
-Purpose: Stores a user's temporary checkout cart and hold timer. The `user_id` unique key enforces at most one cart per user.
+| Column | References | Relationship |
+| --- | --- | --- |
+| `user_id` | `users.id` | One user can have many reset requests over time. |
 
-| Column | Data Type | Key | Description |
-| --- | --- | --- | --- |
-| id | INT AUTO_INCREMENT | PK | Cart identifier. |
-| user_id | INT | FK, UNIQUE | References `users.id`; one cart per user. |
-| started_at | DATETIME NULL |  | Cart hold start time. |
-| expires_at | DATETIME NULL |  | Cart hold expiration time. |
-| created_at | DATETIME |  | Cart creation timestamp. |
-| updated_at | DATETIME |  | Last update timestamp. |
+Important fields:
 
-### Table: cart_items
-
-Purpose: Stores sessions temporarily reserved in a user's cart before checkout.
-
-| Column | Data Type | Key | Description |
-| --- | --- | --- | --- |
-| id | INT AUTO_INCREMENT | PK | Cart item identifier. |
-| cart_id | INT | FK | References `carts.id`. |
-| session_id | INT | FK | References `sessions.id`. |
-| quantity | INT |  | Participant/reservation quantity. |
-| unit_price | DECIMAL(10,2) |  | Price captured for the cart item. |
-| created_at | DATETIME |  | Cart item creation timestamp. |
-
-Unique constraint: `(cart_id, session_id)` prevents duplicate session rows in the same cart.
+| Column | Description |
+| --- | --- |
+| `token_hash` | Unique hash of the reset token. |
+| `expires_at` | Expiration time. |
+| `used_at` | Timestamp once the reset token is consumed. |
+| `created_at` | Request timestamp. |
 
 ### Table: courts
 
-Purpose: Master list of physical courts.
+Purpose: Stores physical courts available in the PICKLED facility.
 
-| Column | Data Type | Key | Description |
-| --- | --- | --- | --- |
-| id | INT AUTO_INCREMENT | PK | Court identifier. |
-| name | VARCHAR(80) |  | Court display name. |
-| slug | VARCHAR(80) | UNIQUE | Stable URL/code value such as `green` or `pink`. |
+Primary key: `id`
+
+Foreign keys: none
+
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `name` | Court display name, such as Court Green or Court Pink. |
+| `slug` | Unique stable code, such as `green` or `pink`. |
+| `status` | Court availability state, such as active or inactive. |
+| `created_at`, `updated_at` | Court record timestamps. |
 
 ### Table: booking_variants
 
-Purpose: Catalog of bookable products/services offered by a court, such as court rentals, lessons, private coaching, training, social play, and tournaments.
+Purpose: Stores bookable services and products offered on each court.
 
-| Column | Data Type | Key | Description |
-| --- | --- | --- | --- |
-| id | INT AUTO_INCREMENT | PK | Variant identifier. |
-| court_id | INT | FK | References `courts.id`. |
-| slug | VARCHAR(120) | UNIQUE | Stable variant code used by UI/API, e.g. `green-lessons`. |
-| name | VARCHAR(160) |  | Variant display name. |
-| category | VARCHAR(120) |  | Business category, e.g. Coaching or Social Play. |
-| duration_label | VARCHAR(80) |  | Human-readable duration. |
-| price | DECIMAL(10,2) |  | Base price. |
-| participants_limit | INT |  | Maximum quantity/participants per cart add. |
-| capacity | INT |  | Default capacity copied into generated sessions. |
-| image | VARCHAR(255) NULL |  | Image path used in cart/booking UI. |
-| active | TINYINT(1) |  | Active flag used by catalog queries. |
+Primary key: `id`
+
+Foreign keys:
+
+| Column | References | Relationship |
+| --- | --- | --- |
+| `court_id` | `courts.id` | One court offers many booking variants. |
+
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `slug` | Unique code used by the booking UI/API. |
+| `name` | Service name, such as Court Rentals, Lessons, Training, Private Coaching, Open Match Play, or Weekly Tournament. |
+| `category` | Service category, such as Court Rental, Coaching, Training, Private Coaching, or Social Play. |
+| `duration_label` | Human-readable duration. |
+| `price` | Base service price. |
+| `participants_limit` | Maximum quantity allowed per cart add. |
+| `capacity` | Default capacity used when creating sessions. |
+| `image` | Optional display image path. |
+| `active` | Whether the service can be booked. |
 
 ### Table: sessions
 
-Purpose: Concrete dated/time-slotted availability for a booking variant. Sessions are created or updated by `AvailabilityService` and `CatalogRepository`.
+Purpose: Stores concrete bookable schedule slots generated from booking variants.
 
-| Column | Data Type | Key | Description |
-| --- | --- | --- | --- |
-| id | INT AUTO_INCREMENT | PK | Session identifier. |
-| variant_id | INT | FK | References `booking_variants.id`. |
-| session_date | VARCHAR(80) | UNIQUE PART | Human-readable date label, e.g. `Monday, May 18, 2026`. |
-| session_time | VARCHAR(80) | UNIQUE PART | Human-readable time range. |
-| capacity | INT |  | Session capacity. |
-| booked_count | INT |  | Confirmed quantity already booked. |
+Primary key: `id`
 
-Unique constraint: `(variant_id, session_date, session_time)` prevents duplicate slots for the same variant/date/time.
+Foreign keys:
+
+| Column | References | Relationship |
+| --- | --- | --- |
+| `variant_id` | `booking_variants.id` | One booking variant schedules many sessions. |
+| `coach_user_id` | `users.id` | Optional coach assigned to a coaching/private coaching session. |
+
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `session_date` | Date of the session. |
+| `start_time` | Session start time. |
+| `end_time` | Session end time. |
+| `capacity` | Slot capacity. |
+| `booked_count` | Number of confirmed booked participants. |
+| `status` | Session status, such as open, full, cancelled, or completed. |
+
+Recommended unique constraint: `(variant_id, session_date, start_time, end_time)`.
+
+### Table: coach_availability
+
+Purpose: Stores recurring coach availability used by coach management and scheduling.
+
+Primary key: `id`
+
+Foreign keys:
+
+| Column | References | Relationship |
+| --- | --- | --- |
+| `coach_user_id` | `users.id` | One coach defines many availability windows. |
+
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `day_of_week` | Numeric day value for recurring availability. |
+| `start_time` | Available start time. |
+| `end_time` | Available end time. |
+| `status` | Availability state, such as available, unavailable, or leave. |
+
+### Table: carts
+
+Purpose: Stores one active cart and booking hold timer per user.
+
+Primary key: `id`
+
+Foreign keys:
+
+| Column | References | Relationship |
+| --- | --- | --- |
+| `user_id` | `users.id` | One user owns zero or one active cart. |
+
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `started_at` | Cart hold start time. |
+| `expires_at` | Cart hold expiration time. |
+| `created_at`, `updated_at` | Cart timestamps. |
+
+Unique constraint: `user_id`.
+
+### Table: cart_items
+
+Purpose: Stores temporary session reservations before checkout.
+
+Primary key: `id`
+
+Foreign keys:
+
+| Column | References | Relationship |
+| --- | --- | --- |
+| `cart_id` | `carts.id` | One cart contains many cart items. |
+| `session_id` | `sessions.id` | One session can be reserved in many carts until capacity is reached. |
+
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `quantity` | Number of participants or slots selected. |
+| `unit_price` | Price captured at the time the item was added. |
+| `created_at` | Cart item timestamp. |
+
+Recommended unique constraint: `(cart_id, session_id)`.
 
 ### Table: bookings
 
-Purpose: Checkout order header for confirmed or pending reservations.
+Purpose: Stores checkout/order headers for confirmed or pending reservations.
 
-| Column | Data Type | Key | Description |
-| --- | --- | --- | --- |
-| id | INT AUTO_INCREMENT | PK | Booking identifier. |
-| user_id | INT | FK | References `users.id`. |
-| reference | VARCHAR(40) | UNIQUE | Public booking reference such as `PKL-4D3F917B`. |
-| status | VARCHAR(40) |  | Booking lifecycle status. |
-| subtotal | DECIMAL(10,2) |  | Sum of booking item prices before payment fee. |
-| payment_fee | DECIMAL(10,2) |  | Fee computed from payment method. |
-| total | DECIMAL(10,2) |  | Subtotal plus payment fee. |
-| payment_method | VARCHAR(80) |  | Human-readable method label. |
-| payment_status | VARCHAR(80) |  | Payment state used by admin filters. |
-| notes | TEXT NULL |  | Customer/admin notes captured during checkout. |
-| cancellation_label | VARCHAR(120) |  | Human-readable cancellation policy label captured at booking time. |
-| created_at | DATETIME |  | Booking creation timestamp. |
+Primary key: `id`
+
+Foreign keys:
+
+| Column | References | Relationship |
+| --- | --- | --- |
+| `user_id` | `users.id` | One user can create many bookings. |
+
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `reference` | Unique public booking reference, such as `PKL-4D3F917B`. |
+| `status` | Booking lifecycle status, such as pending, confirmed, completed, or cancelled. |
+| `subtotal` | Total before payment fee. |
+| `payment_fee` | Additional payment method fee. |
+| `total` | Final total amount. |
+| `payment_method` | Selected payment method label or code. |
+| `payment_status` | Payment state, such as pending, paid, rejected, or pay on site. |
+| `notes` | Customer notes from checkout. |
+| `cancellation_label` | Cancellation policy snapshot. |
+| `created_at`, `updated_at` | Booking timestamps. |
 
 ### Table: booking_items
 
-Purpose: Booking line items created from cart/session selections. This table intentionally snapshots display and pricing details at checkout time.
+Purpose: Stores booking line items and historical snapshots of service, schedule, court, and price details.
 
-| Column | Data Type | Key | Description |
-| --- | --- | --- | --- |
-| id | INT AUTO_INCREMENT | PK | Booking item identifier. |
-| booking_id | INT | FK | References `bookings.id`. |
-| session_id | INT | FK | References `sessions.id`. |
-| variant_id | VARCHAR(120) |  | Variant slug captured at checkout; not a declared FK. |
-| name | VARCHAR(160) |  | Variant name snapshot. |
-| court | VARCHAR(120) |  | Court name snapshot. |
-| category | VARCHAR(120) |  | Category snapshot. |
-| duration_label | VARCHAR(80) |  | Duration snapshot. |
-| booking_date | VARCHAR(80) |  | Session date snapshot. |
-| booking_time | VARCHAR(80) |  | Session time snapshot. |
-| quantity | INT |  | Quantity booked. |
-| unit_price | DECIMAL(10,2) |  | Price captured at booking time. |
-| image | VARCHAR(255) NULL |  | Image snapshot/path. |
+Primary key: `id`
 
-### Table: events
+Foreign keys:
 
-Purpose: Admin-managed event listings with capacity counters. Used by `EventRepository` and admin event management screens.
+| Column | References | Relationship |
+| --- | --- | --- |
+| `booking_id` | `bookings.id` | One booking contains many booking items. |
+| `session_id` | `sessions.id` | One session can appear in many booking items until capacity is full. |
 
-| Column | Data Type | Key | Description |
-| --- | --- | --- | --- |
-| id | INT AUTO_INCREMENT | PK | Event identifier. |
-| title | VARCHAR(160) |  | Event title. |
-| description | TEXT NULL |  | Event details. |
-| event_date | VARCHAR(80) |  | Event date. Code form uses an HTML date input, but schema stores string. |
-| event_time | VARCHAR(80) NULL |  | Event time. Code form uses an HTML time input, but schema stores string. |
-| location | VARCHAR(160) NULL |  | Event location. |
-| max_participants | INT NULL |  | Event capacity. |
-| current_participants | INT |  | Current participant count. |
-| status | VARCHAR(40) |  | Event status; admin UI uses `upcoming`, `past`, `cancelled`. |
-| created_by | INT | FK | References `users.id`; admin user who created event. |
-| created_at | DATETIME |  | Event creation timestamp. |
-| updated_at | DATETIME NULL |  | Last update timestamp. |
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `variant_slug` | Booking variant slug captured at checkout. |
+| `name` | Service name snapshot. |
+| `court` | Court name snapshot. |
+| `category` | Service category snapshot. |
+| `duration_label` | Duration snapshot. |
+| `booking_date` | Booked date snapshot. |
+| `start_time`, `end_time` | Booked time range snapshot. |
+| `quantity` | Quantity booked. |
+| `unit_price` | Price captured at checkout. |
+| `image` | Optional image snapshot. |
+
+### Table: payments
+
+Purpose: Stores payment review and receipt information for booking management.
+
+Primary key: `id`
+
+Foreign keys:
+
+| Column | References | Relationship |
+| --- | --- | --- |
+| `booking_id` | `bookings.id` | One booking can have one or more payment records. |
+| `reviewed_by_admin_id` | `users.id` | Admin user who reviewed the payment. |
+
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `receipt` | Optional receipt/proof reference. |
+| `status` | Payment status, such as pending, approved, rejected, or paid on site. |
+| `reviewed_at` | Timestamp of admin review. |
+| `created_at` | Payment record timestamp. |
+
+### Table: feedback
+
+Purpose: Stores booking feedback submitted by players after a booking flow.
+
+Primary key: `id`
+
+Foreign keys:
+
+| Column | References | Relationship |
+| --- | --- | --- |
+| `user_id` | `users.id` | One user can submit many feedback entries. |
+| `booking_id` | `bookings.id` | One booking can receive feedback. |
+
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `rating` | Numeric rating. |
+| `comment` | Optional written feedback. |
+| `created_at` | Feedback timestamp. |
 
 ### Table: notifications
 
-Purpose: User notifications created by admin actions and broadcast notification flows.
+Purpose: Stores user notifications created by admin actions and booking/payment updates.
 
-| Column | Data Type | Key | Description |
-| --- | --- | --- | --- |
-| id | INT AUTO_INCREMENT | PK | Notification identifier. |
-| user_id | INT NULL | FK | References `users.id`; nullable in schema, though repository create flows pass a user id. |
-| title | VARCHAR(160) |  | Notification title. |
-| message | TEXT |  | Notification body. |
-| type | VARCHAR(40) |  | Type such as `info`, `success`, or `error`. |
-| is_read | TINYINT(1) |  | Read/unread flag. |
-| link | VARCHAR(255) NULL |  | Optional destination URL. |
-| created_at | DATETIME |  | Notification creation timestamp. |
+Primary key: `id`
+
+Foreign keys:
+
+| Column | References | Relationship |
+| --- | --- | --- |
+| `user_id` | `users.id` | One user can receive many notifications. |
+
+Important fields:
+
+| Column | Description |
+| --- | --- |
+| `title` | Notification title. |
+| `message` | Notification body. |
+| `type` | Notification type, such as info, success, warning, or error. |
+| `is_read` | Read/unread flag. |
+| `link` | Optional destination link. |
+| `created_at` | Notification timestamp. |
 
 ### Table: admin_logs
 
-Purpose: Audit log for admin actions, including user management, booking payment decisions, event changes, and notification sending.
+Purpose: Stores an audit trail of admin actions for user management, booking management, payment review, notifications, and private session management.
 
-| Column | Data Type | Key | Description |
-| --- | --- | --- | --- |
-| id | INT AUTO_INCREMENT | PK | Log row identifier. |
-| admin_id | INT | FK | References `users.id`; should point to a user with role `admin`. |
-| action | VARCHAR(120) |  | Action code such as `payment_approved` or `event_created`. |
-| entity_type | VARCHAR(40) NULL |  | Logical entity type such as `user`, `booking`, `event`, `notification`. |
-| entity_id | INT NULL |  | Logical entity id; no declared FK because it is polymorphic. |
-| details | JSON NULL |  | Optional structured action metadata. |
-| created_at | DATETIME |  | Log creation timestamp. |
+Primary key: `id`
 
-## C. Relationship Analysis
+Foreign keys:
 
-### One-to-One
+| Column | References | Relationship |
+| --- | --- | --- |
+| `admin_id` | `users.id` | One admin user can perform many logged actions. The referenced user should have `role = 'admin'`. |
 
-- `users` to `carts`: declared as `users.id` -> `carts.user_id` with a unique key on `carts.user_id`. The application calls `INSERT ... ON DUPLICATE KEY UPDATE`, confirming one active cart/timer row per user.
+Important fields:
 
-### One-to-Many
+| Column | Description |
+| --- | --- |
+| `action` | Action code, such as `payment_approved`, `booking_status_changed`, or `notification_sent`. |
+| `entity_type` | Logical entity affected by the action. |
+| `entity_id` | Identifier of affected entity. Polymorphic and not enforced by one FK. |
+| `details` | Optional JSON metadata. |
+| `created_at` | Log timestamp. |
 
-- `users` to `password_resets`: each user can request many password resets over time. The repository deletes previous reset rows for a user before inserting a new reset, but the schema still supports many historical rows.
-- `users` to `bookings`: each booking belongs to one user; resident booking pages and admin booking details fetch bookings by `user_id`.
-- `users` to `events`: each event has a `created_by` user, populated from the admin session id.
-- `users` to `notifications`: notifications are queried by `user_id`; admin payment approval/rejection creates notifications for the booking owner.
-- `users` to `admin_logs`: each audit log has an `admin_id`; admin log queries left join `admin_logs.admin_id = users.id`.
-- `courts` to `booking_variants`: catalog queries join variants to courts on `booking_variants.court_id = courts.id`.
-- `booking_variants` to `sessions`: availability creates sessions from variants and uses the unique variant/date/time slot.
-- `sessions` to `cart_items`: a cart item reserves a concrete session temporarily.
-- `sessions` to `booking_items`: a booking item confirms a concrete session.
-- `carts` to `cart_items`: cart rows contain zero or many items; deleting the cart cascades to items.
-- `bookings` to `booking_items`: booking rows contain one or many line items; deleting the booking cascades to items.
+### Table: private_packages
 
-### Many-to-Many
+Purpose: Stores private session package options promoted by the private sessions/admin flow.
 
-- `carts` to `sessions` through `cart_items`: a cart can hold many sessions, and a session can appear in many users' carts. The code prevents duplicates within the same cart only.
-- `bookings` to `sessions` through `booking_items`: a booking can contain many sessions, and a session can appear in many booking items until capacity is full.
-- `users` to `sessions` through `bookings`/`booking_items`: users book many sessions, and sessions can be booked by many users subject to `sessions.capacity`.
+Primary key: `id`
 
-## Referential Integrity Requirements and Cascade Recommendations
+Foreign keys: none
 
-- Keep `ON DELETE CASCADE` for `password_resets.user_id`, `carts.user_id`, `cart_items.cart_id`, `booking_items.booking_id`, and `notifications.user_id`. These are dependent rows that should not outlive the parent.
-- Consider `ON DELETE RESTRICT` for `bookings.user_id`, `events.created_by`, and `admin_logs.admin_id` to preserve financial, event, and audit history. If user deletion must be allowed, prefer soft-deleting/anonymizing users rather than hard deletes.
-- Consider `ON DELETE RESTRICT` for `booking_variants.court_id`, `sessions.variant_id`, `cart_items.session_id`, and `booking_items.session_id`. Existing bookings and capacity accounting depend on these catalog/session rows.
-- Add `ON UPDATE CASCADE` to foreign keys if primary key values are ever migrated or reseeded. In normal auto-increment usage, primary keys should not change.
-- `admin_logs.entity_type` and `admin_logs.entity_id` are polymorphic and cannot be enforced by a single standard FK. If stricter integrity is required, split logs by entity type or add application-level validation.
+Important fields:
 
-## D. Missing Database Improvements
+| Column | Description |
+| --- | --- |
+| `name` | Package name, such as Corporate Team Building, Birthday Celebration, or Exclusive Venue Rental. |
+| `description` | Package description. |
+| `guest_range` | Expected guest count range. |
+| `starting_price` | Starting package price. |
+| `active` | Whether the package is available for inquiries. |
+| `created_at`, `updated_at` | Package timestamps. |
 
-### Missing or Weak Foreign Keys
+### Table: private_inquiries
 
-- `booking_items.variant_id` stores a variant slug but is not a declared FK to `booking_variants.slug`. This appears intentional as a checkout snapshot, but the name is misleading. Prefer `variant_slug` for the snapshot, or add a separate nullable `variant_id INT FK`.
-- `admin_logs.entity_id` is not constrained. This is expected for polymorphic audit logs, but it means database-level integrity is not guaranteed.
-- `notifications.user_id` is nullable while repository flows use targeted user ids. Make it `NOT NULL` unless broadcast/global notifications without recipients are required.
+Purpose: Stores private package inquiries submitted by customers or entered by admins.
 
-### Redundant or Denormalized Data
+Primary key: `id`
 
-- `booking_items` duplicates `name`, `court`, `category`, `duration_label`, `booking_date`, `booking_time`, `unit_price`, and `image` from catalog/session data. This is acceptable for immutable booking receipts, but should be documented as a snapshot.
-- `sessions.capacity` duplicates `booking_variants.capacity`. This is useful because a specific session capacity may differ from the default variant capacity.
-- `bookings.payment_method` stores a label from config rather than a stable method code. If labels change, historical reports may become inconsistent.
-- `bookings.status` and `bookings.payment_status` are free-form strings. Code uses several values with inconsistent casing/content, including `Pending Payment`, `Confirmed`, `pay on site`, `paid demo checkout`, `Pending`, `Completed`, and `Rejected`.
+Foreign keys:
 
-### Data Type Improvements
+| Column | References | Relationship |
+| --- | --- | --- |
+| `user_id` | `users.id` | Optional logged-in user who submitted the inquiry. |
+| `private_package_id` | `private_packages.id` | Package requested by the inquiry. |
 
-- Convert `sessions.session_date`, `events.event_date` to `DATE`.
-- Convert `sessions.session_time` to structured `start_time TIME` and `end_time TIME`, or use `starts_at DATETIME` and `ends_at DATETIME`.
-- Convert `events.event_time` to `TIME` if a single time is enough.
-- Consider `ENUM` or lookup tables for `users.role`, `bookings.status`, `bookings.payment_status`, `events.status`, and `notifications.type`.
+Important fields:
 
-### Suggested Indexes
+| Column | Description |
+| --- | --- |
+| `name` | Inquiry contact name. |
+| `email` | Inquiry contact email. |
+| `phone` | Inquiry contact phone. |
+| `event_date` | Requested event date. |
+| `message` | Inquiry message. |
+| `status` | Inquiry status, such as new, contacted, confirmed, or closed. |
+| `created_at`, `updated_at` | Inquiry timestamps. |
 
-- `bookings(user_id, created_at)` for resident booking history.
-- `bookings(payment_status, created_at)` for admin payment filters.
-- `bookings(status, created_at)` for admin booking status filters.
-- `booking_items(booking_id)` already exists in the dump; keep it.
-- `booking_items(session_id)` already exists in the dump; keep it.
-- `notifications(user_id, is_read, created_at)` for unread notification counts and listing.
-- `admin_logs(admin_id, created_at)` for admin activity views.
-- `events(status, event_date)` for admin event filters.
-- `sessions(variant_id, session_date)` for monthly availability lookups. The existing unique key starts with `variant_id`, but string date `LIKE` filtering limits index usefulness.
+## C. Relationship and Cardinality Analysis
 
-### Security Concerns
+### Authentication and User Relationships
 
-- Database credentials default to root with no password in `includes/database.php`. Use environment variables in production and a least-privileged DB user.
-- Passwords are properly hashed in application code, and queries are generally prepared statements. Continue avoiding string-concatenated SQL.
-- Session security and CSRF helpers are present. Ensure production cookies use `Secure`, `HttpOnly`, and `SameSite` settings over HTTPS.
-- Do not expose `database/pickled.sql` or reset-token data from a public web root in production.
-- Audit logs store JSON details. Avoid storing secrets, raw tokens, or payment credentials in `admin_logs.details`.
+- `users` to `user_profiles` is optional one-to-one. Login data stays in `users`; player details stay in `user_profiles`. Admin and coach users may have no `user_profiles` row.
+- `users` to `coach_profiles` is optional one-to-one. Only users with role `coach` should have coach profile rows.
+- `users` to `password_resets` is one-to-many. A user can request multiple resets over time.
 
-## E. Normalization Review
+### Court and Scheduling Relationships
 
-### 1NF
+- `courts` to `booking_variants` is one-to-many. Court Green and Court Pink each offer multiple services.
+- `booking_variants` to `sessions` is one-to-many. A service such as Court Rentals or Open Match Play can generate many dated/time-slotted sessions.
+- `users` to `sessions` is one-to-many for coach assignments. This applies to coach-led sessions such as Lessons, Training, and Private Coaching.
+- `users` to `coach_availability` is one-to-many. A coach can define multiple availability windows.
 
-Mostly satisfied because tables use scalar columns and primary keys. The main concern is human-readable date/time ranges stored as strings in `sessions` and `events`; these are scalar, but not ideal atomic temporal values for querying, sorting, or constraint checks.
+### Booking System Relationships
 
-### 2NF
+- `users` to `carts` is one-to-zero-or-one. Each user has at most one active cart.
+- `carts` to `cart_items` is one-to-many. A cart can hold several pending session selections.
+- `sessions` to `cart_items` is one-to-many. A session can appear in multiple carts before checkout, subject to cart and capacity rules.
+- `users` to `bookings` is one-to-many. A player can create many bookings.
+- `bookings` to `booking_items` is one-to-many. A booking can contain one or more booked services/sessions.
+- `sessions` to `booking_items` is one-to-many. A session can receive multiple booking items until capacity is full.
+- `bookings` to `payments` is one-to-many. This supports payment review history and receipt tracking.
+- `bookings` to `feedback` is one-to-many, though the application can enforce one feedback entry per user per booking if desired.
 
-Satisfied for tables with single-column surrogate primary keys. There are no composite primary keys with partial dependencies. Composite unique constraints are used appropriately for `cart_items(cart_id, session_id)` and `sessions(variant_id, session_date, session_time)`.
+### Administration Relationships
 
-### 3NF
+- `users` to `notifications` is one-to-many. Notifications are targeted to users.
+- `users` to `admin_logs` is one-to-many through `admin_logs.admin_id`. Only users with role `admin` should perform logged admin actions.
+- `admin_logs.entity_type` and `admin_logs.entity_id` are polymorphic references. They are intentionally not modeled as one database foreign key.
 
-Mostly satisfied for core account, catalog, session, cart, and booking header tables. Intentional denormalization exists in `booking_items` for historical receipt snapshots. Potential 3NF improvements:
+### Private Sessions Relationships
 
-- Normalize roles/statuses/payment methods into lookup tables or enforce them with `CHECK` constraints/ENUMs.
-- Rename snapshot columns in `booking_items` to clarify they are historical copies.
-- Store stable payment method code and optional display label separately.
-- Model event participants in a join table if users can register for events; `current_participants` alone is only a counter.
+- `private_packages` to `private_inquiries` is one-to-many. A package can receive multiple customer inquiries.
+- `users` to `private_inquiries` is one-to-many and optional. Guests can inquire without an account; logged-in users can be linked.
 
-## Production Readiness Recommendations
+## D. Scope Alignment
 
-1. Use `database/schema.sql` as the canonical migration baseline and update `database/pickled.sql` or remove it to avoid schema drift.
-2. Add migrations instead of relying on manual SQL dumps.
-3. Replace string dates/times with `DATE`, `TIME`, or `DATETIME` columns before the dataset grows.
-4. Add indexes for booking filters, notification unread counts, event filtering, and availability queries.
-5. Standardize status and payment values with lookup tables, ENUMs, or CHECK constraints.
-6. Use soft deletes for `users`, `bookings`, `sessions`, and catalog tables to preserve financial/audit history.
-7. Make user deletion behavior explicit. Current cascades remove carts, resets, and notifications, but bookings/admin logs/events are restricted by FKs.
-8. Add database constraints for positive money and counts, such as `quantity > 0`, `capacity >= 0`, `booked_count >= 0`, and `booked_count <= capacity`.
-9. Protect the database and dump files outside the public document root in production.
-10. Add transaction coverage around checkout cart clearing and booking creation if cart-to-booking conversion is extended. Booking creation already uses a transaction and atomic capacity update.
+This finalized design supports the defended PICKLED scope:
 
+- Court Green and Court Pink through `courts`.
+- Court Rentals, Lessons, Training, Private Coaching, Open Match Play, and Weekly Tournament through `booking_variants`.
+- Date/time booking availability through `sessions`.
+- Coach management through `users`, `coach_profiles`, `coach_availability`, and optional `sessions.coach_user_id`.
+- Player management through `users`, `user_profiles`, `bookings`, and `feedback`.
+- Booking management through `bookings`, `booking_items`, `payments`, and `admin_logs`.
+- Payments through `payments` and booking payment status fields.
+- Feedback through `feedback`.
+- Notifications through `notifications`.
+- Private Packages and inquiries through `private_packages` and `private_inquiries`.
+
+## E. Removed Out-of-Scope Entities
+
+The following entities are intentionally not part of the finalized ERD:
+
+| Removed entity | Reason |
+| --- | --- |
+| `events` | Generic event CRUD is not part of the finalized defended flow. Social play and tournaments are represented as booking variants and sessions. |
+| `content_pages` | Content is customizable/static and not part of transactional database scope. |
+| `media_assets` | Images are managed as static project assets, not database records. |
+| `waitlist_entries` | Waitlist is not part of the finalized project scope. |
+| `session_attendance` | Attendance tracking is not part of the finalized database scope. |
+| `session_notes` | Coach notes are not part of the finalized database scope. |
+| `private_events` | Private session demand is represented by packages and inquiries only. |
+
+## F. Referential Integrity Recommendations
+
+- Use `ON DELETE CASCADE` for dependent rows that should not outlive their parent: `password_resets`, `cart_items`, and non-audit temporary records.
+- Use `ON DELETE RESTRICT` or soft deletes for `users`, `bookings`, `booking_items`, `payments`, `sessions`, `courts`, and `booking_variants` to preserve booking, payment, and audit history.
+- Keep `admin_logs.entity_type` and `admin_logs.entity_id` polymorphic, with integrity enforced at the application level.
+- Use unique constraints for `users.email`, `courts.slug`, `booking_variants.slug`, `carts.user_id`, and session slot uniqueness.
+
+## G. Data Type and Constraint Recommendations
+
+- Store session dates and times using `DATE` and `TIME` fields rather than display strings.
+- Keep snapshot fields in `booking_items` so historical booking receipts remain accurate even if service names, prices, or court labels change later.
+- Enforce positive values for `quantity`, `price`, `capacity`, `booked_count`, `subtotal`, `payment_fee`, `total`, and `starting_price`.
+- Add a constraint or application validation so `sessions.booked_count <= sessions.capacity`.
+- Standardize status values for bookings, payments, sessions, notifications, coach availability, and private inquiries.
+
+## H. Suggested Indexes
+
+| Table | Suggested index | Purpose |
+| --- | --- | --- |
+| `users` | `email` unique | Login lookup. |
+| `users` | `role` | Admin player/coach filtering. |
+| `bookings` | `(user_id, created_at)` | Player booking history. |
+| `bookings` | `(status, created_at)` | Admin booking filters. |
+| `bookings` | `(payment_status, created_at)` | Admin payment filters. |
+| `booking_items` | `booking_id` | Booking detail lookup. |
+| `booking_items` | `session_id` | Session booking lookup. |
+| `sessions` | `(variant_id, session_date, start_time, end_time)` unique | Availability and duplicate prevention. |
+| `cart_items` | `(cart_id, session_id)` unique | Prevent duplicate session rows per cart. |
+| `notifications` | `(user_id, is_read, created_at)` | Notification listing and unread counts. |
+| `admin_logs` | `(admin_id, created_at)` | Admin activity history. |
+| `coach_availability` | `(coach_user_id, day_of_week, start_time)` | Coach schedule lookup. |
+| `private_inquiries` | `(status, created_at)` | Admin private inquiry management. |
+
+## I. Defense Notes
+
+This ERD is intentionally scoped to the operational database needs of PICKLED. It does not model every visual customization on the website because static page content, images, and purely decorative assets do not require database persistence. The final model prioritizes the core system workflows: account access, player and coach management, court/service scheduling, cart checkout, booking records, payment review, feedback, notifications, audit logging, and private package inquiries.
+
+Roles are handled by `users.role`. The finalized design does not add separate `admins`, `coaches`, or `players` tables; role-specific details are represented only where needed through optional profile tables.
