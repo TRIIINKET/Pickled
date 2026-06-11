@@ -59,7 +59,7 @@ $gallery = ['img/court/court green-1.png', 'img/court/court pink-1.webp', 'img/c
 
 <div class="admin-app-shell">
     <aside class="admin-sidebar">
-        <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>"><img src="<?php echo content_asset('img/LM-DGreen.png'); ?>" alt="Pickled"><span>Admin</span></a>
+        <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>"><img src="<?php echo content_asset('img/WM-DGreen.png'); ?>" alt="Pickled"><span>Admin</span></a>
         <nav class="admin-side-nav" aria-label="Admin navigation">
             <?php foreach ($dashboardNav as $item): ?>
                 <?php if ($item['type'] === 'group'): ?>
@@ -69,13 +69,15 @@ $gallery = ['img/court/court green-1.png', 'img/court/court pink-1.webp', 'img/c
                 <?php endif; ?>
             <?php endforeach; ?>
         </nav>
-        <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'sidebar'); ?>
     </aside>
 
     <main class="admin-dashboard-main settings-main content-main">
         <header class="admin-topbar settings-topbar">
             <div><h1>Content</h1><p>Website pages, galleries, banners, and public contact details</p></div>
-            <div class="admin-topbar-actions"><button class="admin-date-pill" type="button"><?php echo content_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button><a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>"><?php echo content_icon($icons, 'bell'); ?></a></div>
+            <div class="admin-topbar-actions"><button class="admin-date-pill" type="button"><?php echo content_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button><a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>"><?php echo content_icon($icons, 'bell'); ?>
+                </a>
+                <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'topbar'); ?>
+            </div>
         </header>
 
         <section class="content-layout">

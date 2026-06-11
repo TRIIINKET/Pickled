@@ -4,7 +4,7 @@ declare(strict_types=1);
 function pickled_app_base_url(): string {
     $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
 
-    foreach (['/admin/', '/resident/', '/auth/'] as $marker) {
+    foreach (['/admin/', '/coach/', '/resident/', '/auth/'] as $marker) {
         $position = strpos($script, $marker);
         if ($position !== false) {
             return substr($script, 0, $position + 1);

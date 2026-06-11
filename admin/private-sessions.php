@@ -81,7 +81,7 @@ $packages = [
 
 <div class="admin-app-shell">
     <aside class="admin-sidebar">
-        <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>"><img src="<?php echo private_asset('img/LM-DGreen.png'); ?>" alt="Pickled"><span>Admin</span></a>
+        <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>"><img src="<?php echo private_asset('img/WM-DGreen.png'); ?>" alt="Pickled"><span>Admin</span></a>
         <nav class="admin-side-nav" aria-label="Admin navigation">
             <?php foreach ($dashboardNav as $item): ?>
                 <?php if ($item['type'] === 'group'): ?>
@@ -91,13 +91,15 @@ $packages = [
                 <?php endif; ?>
             <?php endforeach; ?>
         </nav>
-        <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'sidebar'); ?>
     </aside>
 
     <main class="admin-dashboard-main private-sessions-main">
         <header class="admin-topbar">
             <div><h1>Private Sessions <span class="court-title-badge">Active</span></h1><p class="program-subtitle">Custom events, team-building, and private bookings</p></div>
-            <div class="admin-topbar-actions"><button class="admin-date-pill" type="button"><?php echo private_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button><a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>"><?php echo private_icon($icons, 'bell'); ?><span>3</span></a></div>
+            <div class="admin-topbar-actions"><button class="admin-date-pill" type="button"><?php echo private_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button><a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>"><?php echo private_icon($icons, 'bell'); ?><span>3</span>
+                </a>
+                <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'topbar'); ?>
+            </div>
         </header>
 
         <section class="private-page-actions">
@@ -118,7 +120,7 @@ $packages = [
                     <header><div><h2>Private Packages</h2><p>Manage promoted offerings for private events and group bookings.</p></div><button type="button"><?php echo private_icon($icons, 'plus'); ?> Add Package</button></header>
                     <div class="package-list operational-package-list">
                         <?php foreach ($packages as [$title, $copy, $capacity, $price, $icon, $tone]): ?>
-                            <article class="package-item package-<?php echo $tone; ?>"><span><?php echo private_icon($icons, $icon); ?></span><div><strong><?php echo htmlspecialchars($title); ?></strong><small><?php echo htmlspecialchars($copy); ?></small></div><p><small>Starting at</small><b><?php echo htmlspecialchars($price); ?></b><em><?php echo htmlspecialchars($capacity); ?></em></p><button type="button">Edit</button><button type="button">Archive</button></article>
+                            <article class="package-item package-<?php echo $tone; ?>"><span><?php echo private_icon($icons, $icon); ?></span><div><strong><?php echo htmlspecialchars($title); ?></strong><small><?php echo htmlspecialchars($copy); ?></small></div><p><small>Starting at</small><b><?php echo htmlspecialchars($price); ?></b><em><?php echo htmlspecialchars($capacity); ?></em></p><button type="button">Edit</button><button class="icon-button danger" type="button" aria-label="Archive package"><?php echo private_icon($icons, 'trash'); ?></button></article>
                         <?php endforeach; ?>
                     </div>
                 </article>

@@ -191,7 +191,7 @@ if (!$activityFeed) {
 
 <div class="admin-app-shell">
     <aside class="admin-sidebar">
-        <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>"><img src="<?php echo reports_asset('img/LM-DGreen.png'); ?>" alt="Pickled"><span>Admin</span></a>
+        <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>"><img src="<?php echo reports_asset('img/WM-DGreen.png'); ?>" alt="Pickled"><span>Admin</span></a>
         <nav class="admin-side-nav" aria-label="Admin navigation">
             <?php foreach ($dashboardNav as $item): ?>
                 <?php if ($item['type'] === 'group'): ?>
@@ -201,7 +201,6 @@ if (!$activityFeed) {
                 <?php endif; ?>
             <?php endforeach; ?>
         </nav>
-        <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'sidebar'); ?>
     </aside>
 
     <main class="admin-dashboard-main reports-main">
@@ -212,7 +211,9 @@ if (!$activityFeed) {
                 <button class="bookings-button ghost" type="button"><?php echo reports_icon($icons, 'filter'); ?> Filter</button>
                 <button class="bookings-button ghost reports-export" type="button"><?php echo reports_icon($icons, 'download'); ?> Export PDF</button>
                 <button class="bookings-button primary reports-export" type="button"><?php echo reports_icon($icons, 'download'); ?> Export Excel</button>
-                <a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>" aria-label="Notifications"><?php echo reports_icon($icons, 'bell'); ?></a>
+                <a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>" aria-label="Notifications"><?php echo reports_icon($icons, 'bell'); ?>
+                </a>
+                <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'topbar'); ?>
             </div>
         </header>
 

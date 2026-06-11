@@ -179,7 +179,7 @@ function admin_icon(array $icons, string $name): string {
 <div class="admin-app-shell">
     <aside class="admin-sidebar">
         <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>">
-            <img src="<?php echo admin_asset('img/LM-DGreen.png'); ?>" alt="Pickled" />
+            <img src="<?php echo admin_asset('img/WM-DGreen.png'); ?>" alt="Pickled" />
             <span>Admin</span>
         </a>
 
@@ -205,8 +205,6 @@ function admin_icon(array $icons, string $name): string {
                 <?php endif; ?>
             <?php endforeach; ?>
         </nav>
-
-        <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'sidebar'); ?>
     </aside>
 
     <main class="admin-dashboard-main">
@@ -223,6 +221,7 @@ function admin_icon(array $icons, string $name): string {
                     <?php echo admin_icon($icons, 'bell'); ?>
                     <?php if ($pendingPayments > 0): ?><span><?php echo min($pendingPayments, 9); ?></span><?php endif; ?>
                 </a>
+                <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'topbar'); ?>
             </div>
         </header>
 

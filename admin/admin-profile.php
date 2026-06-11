@@ -90,7 +90,7 @@ $dashboardNav = [
 
 <div class="admin-app-shell">
     <aside class="admin-sidebar">
-        <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>"><img src="<?php echo profile_asset('img/LM-DGreen.png'); ?>" alt="Pickled"><span>Admin</span></a>
+        <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>"><img src="<?php echo profile_asset('img/WM-DGreen.png'); ?>" alt="Pickled"><span>Admin</span></a>
         <nav class="admin-side-nav" aria-label="Admin navigation">
             <?php foreach ($dashboardNav as $item): ?>
                 <?php if ($item['type'] === 'group'): ?>
@@ -100,13 +100,15 @@ $dashboardNav = [
                 <?php endif; ?>
             <?php endforeach; ?>
         </nav>
-        <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'sidebar'); ?>
     </aside>
 
     <main class="admin-dashboard-main settings-main">
         <header class="admin-topbar settings-topbar">
             <div><h1>Admin Profile</h1><p>Manage your admin identity and password</p></div>
-            <div class="admin-topbar-actions"><button class="admin-date-pill" type="button"><?php echo profile_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button><a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>"><?php echo profile_icon($icons, 'bell'); ?></a></div>
+            <div class="admin-topbar-actions"><button class="admin-date-pill" type="button"><?php echo profile_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button><a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>"><?php echo profile_icon($icons, 'bell'); ?>
+                </a>
+                <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'topbar'); ?>
+            </div>
         </header>
 
         <?php if ($successMsg): ?><div class="alert alert-success"><?php echo htmlspecialchars($successMsg); ?></div><?php endif; ?>
