@@ -1,12 +1,28 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../app/support/DatabaseRedesign.php';
+
 final class Database
 {
     private static ?PDO $pdo = null;
 
+    public static function enabled(): bool
+    {
+        return !DatabaseRedesign::active();
+    }
+
+    public static function redesignMode(): bool
+    {
+        return DatabaseRedesign::active();
+    }
+
     public static function connection(): PDO
     {
+        if (!self::enabled()) {
+            throw new RuntimeException('Database connections are disabled while the schema redesign is in progress.');
+        }
+
         if (self::$pdo instanceof PDO) {
             return self::$pdo;
         }

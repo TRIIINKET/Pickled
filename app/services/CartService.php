@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/CartRepository.php';
 require_once __DIR__ . '/../repositories/CatalogRepository.php';
+require_once __DIR__ . '/../support/DatabaseRedesign.php';
 
 final class CartService
 {
@@ -13,6 +14,14 @@ final class CartService
 
     public function restoreForUser(int $userId): array
     {
+        if (DatabaseRedesign::active()) {
+            return [
+                'items' => $_SESSION['cart'] ?? [],
+                'started_at' => $_SESSION['cart_started_at'] ?? null,
+                'expires_at' => $_SESSION['cart_expires_at'] ?? null,
+            ];
+        }
+
         $cart = $this->carts->findForUser($userId);
         if (!$cart) {
             return ['items' => [], 'started_at' => null, 'expires_at' => null];
@@ -37,6 +46,10 @@ final class CartService
         if ((int) $session['booked_count'] + $quantity > (int) $session['capacity']) {
             return ['ok' => false, 'code' => 'full'];
         }
+        if (DatabaseRedesign::active()) {
+            return $this->addOfflineItem($variant, $session, $quantity, $unitPrice ?? (float) $variant['price']);
+        }
+
         $cartId = $this->carts->saveTimerForUser($userId, $startedAt, $expiresAt);
         foreach ($this->carts->itemsForCart($cartId) as $item) {
             if ((int) $item['session_id'] === (int) $session['id']) {
@@ -49,6 +62,11 @@ final class CartService
 
     public function removeForUser(int $userId, int $cartItemId): void
     {
+        if (DatabaseRedesign::active()) {
+            unset($_SESSION['cart'][(string) $cartItemId]);
+            return;
+        }
+
         $cart = $this->carts->findForUser($userId);
         if (!$cart) return;
         foreach ($this->carts->itemsForCart((int) $cart['id']) as $item) {
@@ -61,12 +79,56 @@ final class CartService
 
     public function persistTimerForUser(int $userId, ?int $startedAt, ?int $expiresAt): void
     {
+        if (DatabaseRedesign::active()) {
+            return;
+        }
+
         $this->carts->saveTimerForUser($userId, $startedAt, $expiresAt);
     }
 
     public function clearForUser(int $userId): void
     {
+        if (DatabaseRedesign::active()) {
+            $_SESSION['cart'] = [];
+            return;
+        }
+
         $this->carts->clearForUser($userId);
+    }
+
+    private function addOfflineItem(array $variant, array $session, int $quantity, float $unitPrice): array
+    {
+        $_SESSION['cart'] = $_SESSION['cart'] ?? [];
+        $cartItemId = (string) $session['id'];
+
+        foreach ($_SESSION['cart'] as $item) {
+            if ((int) ($item['session_id'] ?? 0) === (int) $session['id']) {
+                return ['ok' => false, 'code' => 'duplicate'];
+            }
+        }
+
+        $_SESSION['cart'][$cartItemId] = [
+            'id' => $cartItemId,
+            'session_id' => (int) $session['id'],
+            'variant_id' => $variant['slug'],
+            'name' => $variant['name'],
+            'court' => $variant['court'],
+            'category' => $variant['category'],
+            'price' => $unitPrice,
+            'base_price' => (float) $variant['price'],
+            'member_discount' => $unitPrice < (float) $variant['price'],
+            'quantity' => $quantity,
+            'duration' => $variant['duration_label'],
+            'date' => $session['session_date'],
+            'time' => $session['session_time'],
+            'participants' => $quantity,
+            'availability' => 'Temporarily reserved',
+            'description' => $variant['court'] . ' - ' . $variant['duration_label'],
+            'image' => $variant['image'] ?: '../assets/img/Hero.jpg',
+            'status' => 'Reserved in cart',
+        ];
+
+        return ['ok' => true, 'code' => 'added'];
     }
 
     private function hydrateItems(array $rows): array

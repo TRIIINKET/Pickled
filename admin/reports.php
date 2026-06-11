@@ -8,7 +8,8 @@ require_once __DIR__ . '/../database/Database.php';
 
 pickled_init_csrf();
 
-$pdo = Database::connection();
+// TODO(database-redesign): reconnect analytics to aggregate tables/views from the new schema.
+$pdo = Database::enabled() ? Database::connection() : null;
 $adminName = $_SESSION['user']['name'] ?? 'Admin';
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
@@ -16,7 +17,11 @@ $todayLabel = $today->format('M j, Y (D)');
 $rangeStart = $today->modify('-24 days')->format('M j');
 $rangeEnd = $today->format('M j, Y');
 
-function reports_scalar(PDO $pdo, string $sql, array $params = [], float|int $fallback = 0): float|int {
+function reports_scalar(?PDO $pdo, string $sql, array $params = [], float|int $fallback = 0): float|int {
+    if (!$pdo) {
+        return $fallback;
+    }
+
     try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -28,7 +33,11 @@ function reports_scalar(PDO $pdo, string $sql, array $params = [], float|int $fa
     }
 }
 
-function reports_rows(PDO $pdo, string $sql, array $params = []): array {
+function reports_rows(?PDO $pdo, string $sql, array $params = []): array {
+    if (!$pdo) {
+        return [];
+    }
+
     try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -55,7 +64,11 @@ function reports_status_key(string $value): string {
     return 'neutral';
 }
 
-function reports_program_metric(PDO $pdo, string $where, array $params, array $fallback): array {
+function reports_program_metric(?PDO $pdo, string $where, array $params, array $fallback): array {
+    if (!$pdo) {
+        return $fallback;
+    }
+
     $row = reports_rows($pdo, "
         SELECT COALESCE(SUM(bi.quantity), 0) AS bookings,
                COALESCE(SUM(bi.quantity * bi.unit_price), 0) AS revenue

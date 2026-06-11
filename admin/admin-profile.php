@@ -8,7 +8,8 @@ require_once __DIR__ . '/../database/Database.php';
 
 pickled_init_csrf();
 
-$pdo = Database::connection();
+// TODO(database-redesign): persist profile changes through the new account table.
+$pdo = Database::enabled() ? Database::connection() : null;
 $admin = $_SESSION['user'] ?? ['id' => 0, 'name' => 'Admin', 'email' => 'admin@example.com'];
 $adminName = $admin['name'] ?? 'Admin';
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
@@ -42,7 +43,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $errorMsg = 'Password confirmation does not match.';
         } else {
             try {
-                if ($password !== '') {
+                if (!$pdo) {
+                    $_SESSION['user']['name'] = $name;
+                    $_SESSION['user']['email'] = $email;
+                } elseif ($password !== '') {
                     $stmt = $pdo->prepare('UPDATE users SET name = ?, email = ?, password_hash = ? WHERE id = ? AND role = ?');
                     $stmt->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT), (int) $admin['id'], 'admin']);
                 } else {

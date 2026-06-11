@@ -8,6 +8,11 @@ return [
         'hold_seconds' => 300,
         'item_limit' => 3,
     ],
+    'database' => [
+        // TODO(database-redesign): set enabled back to true after the new schema is finalized.
+        'enabled' => false,
+        'redesign_mode' => true,
+    ],
     'mail' => [
         'from_email' => 'no-reply@pickled.local',
         'from_name' => 'PICKLED',
