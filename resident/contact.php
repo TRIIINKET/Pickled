@@ -2,7 +2,7 @@
 $basePath   = '../';
 $pageTitle  = 'Contact - Pickled';
 $activePage = 'contact.php';
-$extraHead  = '<link rel="stylesheet" href="../assets/css/contact.css"/>';
+$extraHead  = '<link rel="stylesheet" href="../assets/css/contact.css?v=20260611a"/>';
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../app/services/EmailService.php';
 
