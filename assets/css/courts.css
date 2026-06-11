@@ -917,14 +917,13 @@ select {
   margin: 0 auto 12px;
 }
 
-.booking-select {
-  min-height: 44px;
-  padding: 0 22px;
-  border: 1px solid rgba(255, 255, 255, .7);
-  border-radius: 999px;
-  background: transparent;
+.booking-label {
+  display: inline-block;
   color: #fff;
+  font-size: 15px;
   font-weight: 900;
+  letter-spacing: .03em;
+  text-transform: uppercase;
 }
 
 .booking-calendar p {

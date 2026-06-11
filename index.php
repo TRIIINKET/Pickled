@@ -2,8 +2,7 @@
 $basePath = '';
 $pageTitle  = 'Pickled - Indoor Pickleball Courts in Manila';
 $activePage = 'index.php';
-$homeLoaderLogo = 'assets/img/WM-DGreen.png';
-$extraHead = ($extraHead ?? '') . '<link rel="preload" as="image" href="' . htmlspecialchars($homeLoaderLogo, ENT_QUOTES, 'UTF-8') . '"/>';
+$showInitialLoader = true;
 include __DIR__ . '/includes/header.php';
 $courtBookingHref = !empty($_SESSION['user']) ? 'resident/courts.php#court-detail' : 'auth/login.php?notice=booking&redirect=resident/courts.php%23court-detail';
 
@@ -40,16 +39,6 @@ $rules = [
   ['End of a Rally', 'A rally ends when the ball lands out, hits the net on your side, or bounces twice.'],
 ];
 ?>
-
-<script>
-document.documentElement.classList.add('home-loader-enabled', 'home-is-loading');
-</script>
-<div class="home-loader" id="homeLoader" role="status" aria-label="Loading Pickled">
-  <div class="home-loader__inner">
-    <img src="<?= htmlspecialchars($homeLoaderLogo) ?>" alt="Pickled" class="home-loader__logo" decoding="async" fetchpriority="high" />
-    <div class="home-loader__spinner" aria-hidden="true"></div>
-  </div>
-</div>
 
 <main class="home-page">
   <section class="home-hero" aria-label="Pickled indoor pickleball">
@@ -305,41 +294,6 @@ document.documentElement.classList.add('home-loader-enabled', 'home-is-loading')
 
 <script>
 (function(){
-  var loader = document.getElementById('homeLoader');
-  if (loader) {
-    var loaderStartedAt = window.performance && performance.now ? performance.now() : Date.now();
-    var loaderHidden = false;
-    var minVisibleMs = 900;
-    var maxVisibleMs = 3200;
-
-    function now(){
-      return window.performance && performance.now ? performance.now() : Date.now();
-    }
-
-    function hideLoader(){
-      if (loaderHidden) return;
-      loaderHidden = true;
-      loader.classList.add('is-hiding');
-      document.documentElement.classList.remove('home-is-loading');
-      window.setTimeout(function(){
-        loader.hidden = true;
-        loader.setAttribute('aria-hidden', 'true');
-      }, 600);
-    }
-
-    function scheduleLoaderHide(){
-      var remaining = Math.max(0, minVisibleMs - (now() - loaderStartedAt));
-      window.setTimeout(hideLoader, remaining);
-    }
-
-    if (document.readyState === 'complete') {
-      scheduleLoaderHide();
-    } else {
-      window.addEventListener('load', scheduleLoaderHide, { once: true });
-      window.setTimeout(scheduleLoaderHide, maxVisibleMs);
-    }
-  }
-
   var courtBookingHref = <?= json_encode($courtBookingHref) ?>;
   var rotator = document.querySelector('[data-pickle-rotator]');
   if (rotator) {

@@ -139,7 +139,7 @@ include $frontendPath . '/includes/header.php';
       <button type="submit">Sign up</button>
     </form>
     <?php else: ?>
-    <form class="login-form" action="login.php" method="post">
+    <form class="login-form" action="login.php" method="post" data-loader="auth">
       <input type="hidden" name="action" value="login" />
       <input type="hidden" name="redirect" value="<?= htmlspecialchars($redirect) ?>" />
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
