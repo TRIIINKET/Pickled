@@ -414,5 +414,5 @@ document.documentElement.classList.add('home-loader-enabled', 'home-is-loading')
 })();
 </script>
 
-<script src="assets/js/rules-flashcards.js"></script>
+<script src="assets/js/rules-flashcards.js?v=20260611b"></script>
 <?php include __DIR__ . '/includes/footer.php'; ?>

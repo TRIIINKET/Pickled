@@ -1940,39 +1940,28 @@ html.home-loader-enabled.home-is-loading .home-page {
 .home-rules.is-js-stack .home-rules__list {
   position: relative;
   display: block;
-  min-height: clamp(360px, 50vh, 520px);
-  padding: 12px 10px clamp(28px, 7vh, 72px);
+  min-height: var(--rules-list-height, clamp(720px, 82vh, 860px));
+  padding: 24px 10px clamp(28px, 7vh, 72px);
+  perspective: 1100px;
 }
 
 .home-rules.is-js-stack .home-rule {
   position: absolute;
-  inset: 12px 10px auto 10px;
-  min-height: clamp(280px, 38vh, 420px);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(36px) rotate(.45deg) scale(.94);
-  transition: transform .34s ease, box-shadow .34s ease, opacity .34s ease, filter .34s ease;
-}
-
-.home-rules.is-js-stack .home-rule.is-active {
+  top: 24px;
+  left: max(10px, calc(50% - 280px));
+  width: min(560px, calc(100% - 20px));
+  min-height: var(--rules-card-height, 148px);
+  padding: clamp(18px, 2vw, 24px) 26px;
   opacity: 1;
-  z-index: 40;
   pointer-events: auto;
-  transform: translateY(0) rotate(0) scale(1.01);
+  transform-origin: 50% 86%;
+  will-change: transform, opacity;
+  transition: box-shadow .28s ease, filter .28s ease;
+}
+
+.home-rules.is-js-stack .home-rule.is-front {
   box-shadow: 0 42px 100px rgba(36,95,73,.24);
-}
-
-.home-rules.is-js-stack .home-rule.is-prev {
-  opacity: .55;
-  z-index: 20;
-  filter: saturate(.95);
-  transform: translateY(-18px) rotate(-.35deg) scale(.96);
-}
-
-.home-rules.is-js-stack .home-rule.is-next {
-  opacity: .42;
-  z-index: 10;
-  transform: translateY(24px) rotate(.35deg) scale(.94);
+  filter: saturate(1.04);
 }
 
 .home-cta {

@@ -81,12 +81,39 @@ TEXT;
         return $this->send((string) ($user['email'] ?? ''), $subject, $text, $html);
     }
 
+  public function sendContactMessage(array $contact): bool
+  {
+    $name = trim((string) ($contact['name'] ?? ''));
+    $email = trim((string) ($contact['email'] ?? ''));
+    $phone = trim((string) ($contact['phone'] ?? ''));
+    $message = trim((string) ($contact['message'] ?? ''));
+
+    if ($name === '') {
+      $name = 'Guest';
+    }
+
+    $subject = 'New contact inquiry from ' . $name;
+    $text = <<<TEXT
+New contact inquiry received.
+
+Name: {$name}
+Email: {$email}
+Phone: {$phone}
+
+Message:
+{$message}
+TEXT;
+    $html = $this->renderContactHtml($name, $email, $phone, $message);
+
+    return $this->send('pickled.shopph@gmail.com', $subject, $text, $html, $email ?: null);
+  }
+
       public function getLastError(): ?string
       {
         return $this->lastError;
       }
 
-    private function send(string $to, string $subject, string $textBody, string $htmlBody): bool
+    private function send(string $to, string $subject, string $textBody, string $htmlBody, ?string $replyTo = null): bool
     {
         $this->lastError = null;
         $to = trim($to);
@@ -100,24 +127,12 @@ TEXT;
             if ($this->sendViaSmtp($to, $subject, $textBody, $htmlBody)) {
                 return true;
             }
+        return false;
         }
 
-        $sent = mail(
-            $to,
-            $subject,
-            wordwrap($textBody, 78),
-            implode("\r\n", [
-                'From: ' . $this->formatAddress($this->fromEmail, $this->fromName),
-                'Reply-To: ' . $this->fromEmail,
-                'Content-Type: text/plain; charset=UTF-8',
-            ])
-        );
-        if (!$sent) {
-            $this->lastError = 'mail() failed';
-            error_log('EmailService::send - mail() failed for ' . $to);
-        }
-
-        return $sent;
+      $this->lastError = 'SMTP not configured';
+      error_log('EmailService::send - SMTP not configured for ' . $to);
+      return false;
     }
 
     private function sendViaSmtp(string $to, string $subject, string $textBody, string $htmlBody): bool
@@ -334,6 +349,42 @@ HTML;
       </div>
       <div style="padding:16px 32px 28px;color:#7a7a6e;font-size:12px;line-height:1.6;border-top:1px solid rgba(38,68,20,.08);">
         Thank you for booking with PICKLED.
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+HTML;
+    }
+
+    private function renderContactHtml(string $name, string $email, string $phone, string $message): string
+    {
+        $safeName = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+        $safeEmail = htmlspecialchars($email, ENT_QUOTES, 'UTF-8');
+        $safePhone = htmlspecialchars($phone, ENT_QUOTES, 'UTF-8');
+        $safeMessage = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
+
+        return <<<HTML
+<!doctype html>
+<html lang="en">
+<body style="margin:0;background:#F6EFE1;padding:0;font-family:Arial,Helvetica,sans-serif;color:#264414;">
+  <div style="background:#F6EFE1;padding:32px 16px;">
+    <div style="max-width:720px;margin:0 auto;background:#fff;border:1px solid rgba(38,68,20,.12);border-radius:18px;overflow:hidden;box-shadow:0 16px 48px rgba(0,0,0,.08);">
+      <div style="background:#264414;color:#fff;padding:28px 32px;">
+        <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:700;color:#DDE255;">PICKLED</div>
+        <div style="font-size:30px;line-height:1.1;font-weight:900;margin-top:8px;">New contact inquiry</div>
+      </div>
+      <div style="padding:32px;">
+        <p style="margin:0 0 12px;font-size:16px;line-height:1.7;"><strong>Name:</strong> {$safeName}</p>
+        <p style="margin:0 0 12px;font-size:16px;line-height:1.7;"><strong>Email:</strong> {$safeEmail}</p>
+        <p style="margin:0 0 18px;font-size:16px;line-height:1.7;"><strong>Phone:</strong> {$safePhone}</p>
+        <div style="margin:0 0 24px;padding:16px 18px;border-left:4px solid #F85696;background:#fff9fb;border-radius:12px;">
+          <div style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;font-weight:800;color:#F85696;margin-bottom:6px;">Message</div>
+          <div style="font-size:15px;line-height:1.7;color:#264414;">{$safeMessage}</div>
+        </div>
+      </div>
+      <div style="padding:16px 32px 28px;color:#7a7a6e;font-size:12px;line-height:1.6;border-top:1px solid rgba(38,68,20,.08);">
+        This inquiry was submitted from the Pickled contact page.
       </div>
     </div>
   </div>
