@@ -124,7 +124,7 @@ TEXT;
         }
 
         if (!empty($this->smtp['smtp_host']) && !empty($this->smtp['smtp_username']) && !empty($this->smtp['smtp_password'])) {
-            if ($this->sendViaSmtp($to, $subject, $textBody, $htmlBody)) {
+            if ($this->sendViaSmtp($to, $subject, $textBody, $htmlBody, $replyTo)) {
                 return true;
             }
         return false;
@@ -135,7 +135,7 @@ TEXT;
       return false;
     }
 
-    private function sendViaSmtp(string $to, string $subject, string $textBody, string $htmlBody): bool
+    private function sendViaSmtp(string $to, string $subject, string $textBody, string $htmlBody, ?string $replyTo = null): bool
     {
         $host = (string) $this->smtp['smtp_host'];
         $port = (int) ($this->smtp['smtp_port'] ?? 587);
@@ -172,7 +172,7 @@ TEXT;
             $this->smtpCommand($socket, 'RCPT TO:<' . $to . '>', [250, 251]);
             $this->smtpCommand($socket, 'DATA', [354]);
 
-            $message = $this->smtpMessage($to, $subject, $textBody, $htmlBody);
+            $message = $this->smtpMessage($to, $subject, $textBody, $htmlBody, $replyTo);
             fwrite($socket, $message . "\r\n.\r\n");
             $this->smtpExpect($socket, [250]);
             $this->smtpCommand($socket, 'QUIT', [221]);
@@ -186,7 +186,7 @@ TEXT;
         }
     }
 
-    private function smtpMessage(string $to, string $subject, string $textBody, string $htmlBody): string
+    private function smtpMessage(string $to, string $subject, string $textBody, string $htmlBody, ?string $replyTo = null): string
     {
         $boundary = '=_Pickled_' . bin2hex(random_bytes(12));
         $headers = [
@@ -197,6 +197,10 @@ TEXT;
             'MIME-Version: 1.0',
             'Content-Type: multipart/alternative; boundary="' . $boundary . '"',
         ];
+
+        if ($replyTo && filter_var($replyTo, FILTER_VALIDATE_EMAIL)) {
+            $headers[] = 'Reply-To: ' . $replyTo;
+        }
 
         $text = str_replace(["\r\n", "\r"], "\n", wordwrap($textBody, 78));
         $html = $this->normalizeHtml($htmlBody);
