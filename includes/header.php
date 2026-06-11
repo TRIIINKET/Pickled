@@ -22,7 +22,7 @@ $showInitialLoader = !empty($showInitialLoader);
   <link rel="preload" as="image" href="<?= htmlspecialchars(pickled_asset_url('img/WM-LPink.png')) ?>"/>
   <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/style.css?v=20260610a')) ?>"/>
   <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/global-loader.css?v=20260611a')) ?>"/>
-  <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/navbar.css?v=20260610d')) ?>"/>
+  <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/navbar.css?v=20260611a')) ?>"/>
   <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/footer.css?v=20260610a')) ?>"/>
   <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/privacy.css?v=20260610a')) ?>"/>
   <link rel="stylesheet" href="<?= htmlspecialchars(pickled_asset_url('css/terms.css?v=20260610a')) ?>"/>

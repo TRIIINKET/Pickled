@@ -103,6 +103,7 @@ button {
 .coach-nav svg,
 .coach-top-actions svg,
 .coach-card svg,
+.coach-kpi svg,
 .coach-account svg,
 .coach-top-profile svg,
 .coach-help-card svg,
@@ -112,7 +113,20 @@ button {
     height: 22px;
     fill: none;
     stroke: currentColor;
-    stroke-width: 1.9;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.coach-portal-body svg path,
+.coach-portal-body svg rect,
+.coach-portal-body svg circle,
+.coach-portal-body svg line,
+.coach-portal-body svg polyline,
+.coach-portal-body svg polygon {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: inherit;
     stroke-linecap: round;
     stroke-linejoin: round;
 }
@@ -1502,7 +1516,7 @@ button {
     height: 20px;
     fill: none;
     stroke: currentColor;
-    stroke-width: 1.9;
+    stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
 }
@@ -2158,10 +2172,11 @@ button {
 }
 
 .coach-kpi > svg {
-    width: 64px;
-    height: 64px;
+    width: 58px;
+    height: 58px;
     padding: 16px;
-    border-radius: 16px;
+    border-radius: 50%;
+    stroke-width: 1.8;
 }
 
 .coach-kpi.green > svg { background: #e6f6e3; color: var(--green); }
@@ -2681,6 +2696,76 @@ button {
     font-size: 13px;
     font-weight: 700;
     text-align: center;
+}
+
+/* Match admin typography: keep labels clear without the extra-heavy coach weight. */
+body.coach-portal-body {
+    font-weight: 500;
+}
+
+.coach-brand,
+.coach-topbar h1,
+.coach-welcome h2,
+.coach-card h2,
+.coach-kpi strong,
+.coach-kpi span,
+.next-session-card > strong,
+.announcement-card-body h2,
+.profile-summary-card h2,
+.profile-stats strong {
+    font-weight: 800;
+    letter-spacing: 0;
+}
+
+.coach-nav a,
+.coach-date-pill,
+.coach-top-profile strong,
+.coach-card header > span,
+.coach-card header a,
+.coach-session-item div strong,
+.student-row,
+.coach-student-row,
+.availability-slot,
+.announcement-filters a,
+.profile-form-grid label,
+.password-summary label {
+    font-weight: 650;
+}
+
+.coach-kpi small,
+.coach-welcome p,
+.coach-topbar p,
+.coach-session-item time,
+.coach-session-item div span,
+.student-row.head,
+.coach-student-row.head,
+.profile-widget article span,
+.announcement-card-body p,
+.page-intro p {
+    font-weight: 550;
+}
+
+.session-status,
+.status-pill,
+.skill-badge,
+.court-badge,
+.member-status,
+.coach-nav em,
+.coach-notification em,
+.student-panel-head h2 em,
+.profile-summary-card > em,
+.announcement-feed-card > em,
+.reminder-list em,
+.coach-check-list label {
+    font-weight: 700;
+}
+
+.coach-welcome h2 {
+    font-size: clamp(32px, 3.7vw, 44px);
+}
+
+.coach-kpi strong {
+    font-size: 28px;
 }
 
 @media (max-width: 1360px) {
