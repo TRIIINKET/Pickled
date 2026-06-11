@@ -10,7 +10,8 @@ require_once __DIR__ . '/../database/Database.php';
 pickled_init_csrf();
 
 $adminService = new AdminService();
-$pdo = Database::connection();
+// TODO(database-redesign): reconnect this page to the new reporting queries after schema approval.
+$pdo = Database::enabled() ? Database::connection() : null;
 $stats = $adminService->getDashboardStats();
 $adminName = $_SESSION['user']['name'] ?? 'Admin';
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
@@ -19,7 +20,11 @@ $todayLabel = $today->format('M j, Y (D)');
 $todayBookingLabel = $today->format('l, F j, Y');
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 
-function admin_scalar(PDO $pdo, string $sql, array $params = [], float|int $fallback = 0): float|int {
+function admin_scalar(?PDO $pdo, string $sql, array $params = [], float|int $fallback = 0): float|int {
+    if (!$pdo) {
+        return $fallback;
+    }
+
     try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -31,7 +36,11 @@ function admin_scalar(PDO $pdo, string $sql, array $params = [], float|int $fall
     }
 }
 
-function admin_rows(PDO $pdo, string $sql, array $params = []): array {
+function admin_rows(?PDO $pdo, string $sql, array $params = []): array {
+    if (!$pdo) {
+        return [];
+    }
+
     try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);

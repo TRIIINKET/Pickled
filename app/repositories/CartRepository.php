@@ -2,11 +2,16 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../database/Database.php';
+require_once __DIR__ . '/../support/DatabaseRedesign.php';
 
 final class CartRepository
 {
     public function findForUser(int $userId): ?array
     {
+        if (DatabaseRedesign::active()) {
+            return null;
+        }
+
         $stmt = Database::connection()->prepare('SELECT * FROM carts WHERE user_id = :user_id LIMIT 1');
         $stmt->execute(['user_id' => $userId]);
         $cart = $stmt->fetch();
@@ -15,6 +20,10 @@ final class CartRepository
 
     public function itemsForCart(int $cartId): array
     {
+        if (DatabaseRedesign::active()) {
+            return [];
+        }
+
         $stmt = Database::connection()->prepare(
             'SELECT ci.id AS cart_item_id, ci.quantity, ci.unit_price, s.id AS session_id, s.session_date, s.session_time,
                     v.slug AS variant_id, v.name, v.category, v.duration_label, v.image, v.price AS base_price, c.name AS court
@@ -31,6 +40,10 @@ final class CartRepository
 
     public function saveTimerForUser(int $userId, ?int $startedAt, ?int $expiresAt): int
     {
+        if (DatabaseRedesign::active()) {
+            return 0;
+        }
+
         $pdo = Database::connection();
         $stmt = $pdo->prepare(
             'INSERT INTO carts (user_id, started_at, expires_at)
@@ -47,6 +60,10 @@ final class CartRepository
 
     public function addItem(int $cartId, int $sessionId, int $quantity, float $unitPrice): void
     {
+        if (DatabaseRedesign::active()) {
+            return;
+        }
+
         $stmt = Database::connection()->prepare(
             'INSERT INTO cart_items (cart_id, session_id, quantity, unit_price)
              VALUES (:cart_id, :session_id, :quantity, :unit_price)'
@@ -61,11 +78,19 @@ final class CartRepository
 
     public function removeItem(int $cartItemId): void
     {
+        if (DatabaseRedesign::active()) {
+            return;
+        }
+
         Database::connection()->prepare('DELETE FROM cart_items WHERE id = :id')->execute(['id' => $cartItemId]);
     }
 
     public function clearForUser(int $userId): void
     {
+        if (DatabaseRedesign::active()) {
+            return;
+        }
+
         $cart = $this->findForUser($userId);
         if ($cart) {
             Database::connection()->prepare('DELETE FROM carts WHERE id = :id')->execute(['id' => $cart['id']]);

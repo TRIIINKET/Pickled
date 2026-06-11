@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../app/services/CartService.php';
 require_once __DIR__ . '/../app/repositories/CatalogRepository.php';
+require_once __DIR__ . '/../app/support/DatabaseRedesign.php';
 
 const PICKLED_CART_LIMIT = 3;
 const PICKLED_CART_HOLD_SECONDS = 300;
@@ -161,6 +162,10 @@ function pickled_add_to_cart(string $variantId, int $quantity, string $date, str
         $_SESSION['cart_expires_at'] ?? null,
         (float) $item['member_price']
     );
+    if (DatabaseRedesign::active()) {
+        return $result;
+    }
+
     unset($_SESSION['cart']);
     pickled_restore_cart_for_user();
     return $result;

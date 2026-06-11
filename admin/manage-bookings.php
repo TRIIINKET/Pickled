@@ -9,7 +9,8 @@ require_once __DIR__ . '/../database/Database.php';
 
 pickled_init_csrf();
 
-$pdo = Database::connection();
+// TODO(database-redesign): reconnect booking filters/tables to the new schema.
+$pdo = Database::enabled() ? Database::connection() : null;
 $adminService = new AdminService();
 $adminName = $_SESSION['user']['name'] ?? 'Admin';
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
@@ -27,7 +28,11 @@ $bookingId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $successMsg = '';
 $errorMsg = '';
 
-function booking_rows(PDO $pdo, string $sql, array $params = []): array {
+function booking_rows(?PDO $pdo, string $sql, array $params = []): array {
+    if (!$pdo) {
+        return [];
+    }
+
     try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -38,7 +43,11 @@ function booking_rows(PDO $pdo, string $sql, array $params = []): array {
     }
 }
 
-function booking_scalar(PDO $pdo, string $sql, array $params = [], float|int $fallback = 0): float|int {
+function booking_scalar(?PDO $pdo, string $sql, array $params = [], float|int $fallback = 0): float|int {
+    if (!$pdo) {
+        return $fallback;
+    }
+
     try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);

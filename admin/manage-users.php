@@ -8,10 +8,12 @@ require_once __DIR__ . '/../includes/admin-paths.php';
 require_once __DIR__ . '/../app/services/AdminService.php';
 require_once __DIR__ . '/../app/repositories/UserRepository.php';
 require_once __DIR__ . '/../database/Database.php';
+require_once __DIR__ . '/../app/support/DatabaseRedesign.php';
 
 pickled_init_csrf();
 
-$pdo = Database::connection();
+// TODO(database-redesign): reconnect user analytics to the finalized account schema.
+$pdo = Database::enabled() ? Database::connection() : null;
 $adminService = new AdminService();
 $userRepo = new UserRepository();
 $adminName = $_SESSION['user']['name'] ?? 'Admin';
@@ -24,7 +26,11 @@ $userId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $successMsg = '';
 $errorMsg = '';
 
-function user_rows(PDO $pdo, string $sql, array $params = []): array {
+function user_rows(?PDO $pdo, string $sql, array $params = []): array {
+    if (!$pdo) {
+        return [];
+    }
+
     try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -35,7 +41,11 @@ function user_rows(PDO $pdo, string $sql, array $params = []): array {
     }
 }
 
-function user_scalar(PDO $pdo, string $sql, array $params = [], float|int $fallback = 0): float|int {
+function user_scalar(?PDO $pdo, string $sql, array $params = [], float|int $fallback = 0): float|int {
+    if (!$pdo) {
+        return $fallback;
+    }
+
     try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -154,6 +164,19 @@ $users = user_rows($pdo, "
     LIMIT 10
 ", $params);
 
+if (!$pdo) {
+    $users = array_map(static function (array $user): array {
+        return $user + [
+            'booking_count' => 0,
+            'last_booking_at' => null,
+            'social_count' => 0,
+            'coaching_count' => 0,
+            'rental_count' => 0,
+            'favorite_court' => 'Court Green',
+        ];
+    }, DatabaseRedesign::usersByRole($roleFilter));
+}
+
 $users = array_values(array_filter($users, function ($user) use ($statusFilter) {
     if ($statusFilter === 'all' || $statusFilter === 'premium') {
         return $statusFilter === 'all' || membership_label((int) $user['booking_count']) === 'Premium';
@@ -189,9 +212,9 @@ $recentBookings = $currentUser ? user_rows($pdo, "
     LIMIT 4
 ", [(int) $currentUser['id']]) : [];
 
-$totalUsers = (int) user_scalar($pdo, 'SELECT COUNT(*) FROM users WHERE role = ?', [$roleFilter]);
-$activeThisMonth = (int) user_scalar($pdo, "SELECT COUNT(DISTINCT u.id) FROM users u JOIN bookings b ON b.user_id = u.id WHERE u.role = ? AND b.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)", [$roleFilter]);
-$newThisWeek = (int) user_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)", [$roleFilter]);
+$totalUsers = $pdo ? (int) user_scalar($pdo, 'SELECT COUNT(*) FROM users WHERE role = ?', [$roleFilter]) : count($users);
+$activeThisMonth = $pdo ? (int) user_scalar($pdo, "SELECT COUNT(DISTINCT u.id) FROM users u JOIN bookings b ON b.user_id = u.id WHERE u.role = ? AND b.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)", [$roleFilter]) : count($users);
+$newThisWeek = $pdo ? (int) user_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)", [$roleFilter]) : count(array_filter($users, static fn(array $user): bool => strtotime((string) ($user['created_at'] ?? 'now')) >= strtotime('-7 days')));
 $premiumCount = 0;
 foreach ($users as $user) {
     if (membership_label((int) $user['booking_count']) === 'Premium') $premiumCount++;

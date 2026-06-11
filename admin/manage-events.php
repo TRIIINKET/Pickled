@@ -8,16 +8,22 @@ $bodyClass = 'admin-dashboard-body';
 require_once __DIR__ . '/../includes/admin-header.php';
 require_once __DIR__ . '/../includes/admin-paths.php';
 require_once __DIR__ . '/../database/Database.php';
+require_once __DIR__ . '/../app/support/DatabaseRedesign.php';
 
 pickled_init_csrf();
 
-$pdo = Database::connection();
+// TODO(database-redesign): reconnect court/service management to the new catalog schema.
+$pdo = Database::enabled() ? Database::connection() : null;
 $adminName = $_SESSION['user']['name'] ?? 'Admin';
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
 $todayLabel = $today->format('M j, Y (D)');
 
-function court_rows(PDO $pdo, string $sql, array $params = []): array {
+function court_rows(?PDO $pdo, string $sql, array $params = []): array {
+    if (!$pdo) {
+        return [];
+    }
+
     try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -81,6 +87,18 @@ $socialSessions = court_rows($pdo, "
 ");
 $socialParticipants = array_sum(array_map(fn($row) => (int) ($row['booked_count'] ?? 0), $socialSessions));
 $socialRevenue = array_sum(array_map(fn($row) => (float) ($row['price'] ?? 0) * (int) ($row['booked_count'] ?? 0), $socialSessions));
+
+if (!$pdo) {
+    $court = DatabaseRedesign::courts()[$courtSlug === 'pink' ? 1 : 0] ?? $court;
+    $services = DatabaseRedesign::variantsForCourt($courtSlug);
+    $socialServices = DatabaseRedesign::socialVariants();
+    $socialSessions = [
+        ['session_date' => 'Jun 12, 2026', 'session_time' => '06:00 PM - 08:00 PM', 'name' => 'Open Match-Play', 'court_name' => 'Court Green', 'booked_count' => 0, 'variant_capacity' => 16],
+        ['session_date' => 'Jun 14, 2026', 'session_time' => '09:00 AM - 12:00 PM', 'name' => 'Weekly Tournament', 'court_name' => 'Court Green', 'booked_count' => 0, 'variant_capacity' => 24],
+    ];
+    $socialParticipants = 0;
+    $socialRevenue = 0.0;
+}
 
 $heroImage = $courtSlug === 'pink' ? 'img/court/court pink-1.webp' : 'img/court/court green-1.png';
 $gallery = $courtSlug === 'pink'

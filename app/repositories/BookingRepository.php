@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../database/Database.php';
 require_once __DIR__ . '/CatalogRepository.php';
+require_once __DIR__ . '/../support/DatabaseRedesign.php';
 
 final class BookingRepository
 {
@@ -10,6 +11,10 @@ final class BookingRepository
 
     public function create(int $userId, array $booking): array
     {
+        if (DatabaseRedesign::active()) {
+            return DatabaseRedesign::createBooking($userId, $booking);
+        }
+
         $pdo = Database::connection();
         $pdo->beginTransaction();
         try {
@@ -66,6 +71,10 @@ final class BookingRepository
     // Admin methods
     public function findById(int $id): ?array
     {
+        if (DatabaseRedesign::active()) {
+            return DatabaseRedesign::bookingById($id);
+        }
+
         $stmt = Database::connection()->prepare('SELECT * FROM bookings WHERE id = :id LIMIT 1');
         $stmt->execute(['id' => $id]);
         $booking = $stmt->fetch();
@@ -74,6 +83,10 @@ final class BookingRepository
 
     public function findAll($limit = 50, $offset = 0): array
     {
+        if (DatabaseRedesign::active()) {
+            return array_slice(DatabaseRedesign::bookings(), (int) $offset, (int) $limit);
+        }
+
         $stmt = Database::connection()->prepare('SELECT * FROM bookings ORDER BY created_at DESC LIMIT :limit OFFSET :offset');
         $stmt->execute(['limit' => $limit, 'offset' => $offset]);
         return $stmt->fetchAll() ?: [];
@@ -81,6 +94,10 @@ final class BookingRepository
 
     public function findByStatus(string $status): array
     {
+        if (DatabaseRedesign::active()) {
+            return array_values(array_filter(DatabaseRedesign::bookings(), static fn(array $booking): bool => (string) ($booking['status'] ?? '') === $status));
+        }
+
         $stmt = Database::connection()->prepare('SELECT * FROM bookings WHERE status = :status ORDER BY created_at DESC');
         $stmt->execute(['status' => $status]);
         return $stmt->fetchAll() ?: [];
@@ -88,6 +105,10 @@ final class BookingRepository
 
     public function findByPaymentStatus(string $status): array
     {
+        if (DatabaseRedesign::active()) {
+            return array_values(array_filter(DatabaseRedesign::bookings(), static fn(array $booking): bool => (string) ($booking['payment_status'] ?? '') === $status));
+        }
+
         $stmt = Database::connection()->prepare('SELECT * FROM bookings WHERE payment_status = :status ORDER BY created_at DESC');
         $stmt->execute(['status' => $status]);
         return $stmt->fetchAll() ?: [];
@@ -95,6 +116,10 @@ final class BookingRepository
 
     public function findByUserId(int $userId): array
     {
+        if (DatabaseRedesign::active()) {
+            return DatabaseRedesign::bookings($userId);
+        }
+
         $stmt = Database::connection()->prepare('SELECT * FROM bookings WHERE user_id = :user_id ORDER BY created_at DESC');
         $stmt->execute(['user_id' => $userId]);
         return $stmt->fetchAll() ?: [];
@@ -102,18 +127,36 @@ final class BookingRepository
 
     public function updateStatus(int $id, string $status): bool
     {
+        if (DatabaseRedesign::active()) {
+            if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['redesign_bookings'][$id])) {
+                $_SESSION['redesign_bookings'][$id]['status'] = $status;
+            }
+            return true;
+        }
+
         $stmt = Database::connection()->prepare('UPDATE bookings SET status = :status WHERE id = :id');
         return $stmt->execute(['id' => $id, 'status' => $status]);
     }
 
     public function updatePaymentStatus(int $id, string $status): bool
     {
+        if (DatabaseRedesign::active()) {
+            if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['redesign_bookings'][$id])) {
+                $_SESSION['redesign_bookings'][$id]['payment_status'] = $status;
+            }
+            return true;
+        }
+
         $stmt = Database::connection()->prepare('UPDATE bookings SET payment_status = :status WHERE id = :id');
         return $stmt->execute(['id' => $id, 'status' => $status]);
     }
 
     public function getBookingItems(int $bookingId): array
     {
+        if (DatabaseRedesign::active()) {
+            return DatabaseRedesign::bookingItems($bookingId);
+        }
+
         $stmt = Database::connection()->prepare('SELECT * FROM booking_items WHERE booking_id = :booking_id');
         $stmt->execute(['booking_id' => $bookingId]);
         return $stmt->fetchAll() ?: [];
@@ -121,6 +164,10 @@ final class BookingRepository
 
     public function getTotalCount(): int
     {
+        if (DatabaseRedesign::active()) {
+            return count(DatabaseRedesign::bookings());
+        }
+
         $stmt = Database::connection()->query('SELECT COUNT(*) as count FROM bookings');
         $result = $stmt->fetch();
         return (int) ($result['count'] ?? 0);

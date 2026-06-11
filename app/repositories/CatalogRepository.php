@@ -2,11 +2,16 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../database/Database.php';
+require_once __DIR__ . '/../support/DatabaseRedesign.php';
 
 final class CatalogRepository
 {
     public function findVariantBySlug(string $slug): ?array
     {
+        if (DatabaseRedesign::active()) {
+            return DatabaseRedesign::variantBySlug($slug);
+        }
+
         $stmt = Database::connection()->prepare(
             'SELECT v.*, c.name AS court, c.slug AS court_slug
              FROM booking_variants v JOIN courts c ON c.id = v.court_id
@@ -19,6 +24,10 @@ final class CatalogRepository
 
     public function findOrCreateSession(int $variantId, string $date, string $time, int $capacity): array
     {
+        if (DatabaseRedesign::active()) {
+            return DatabaseRedesign::syntheticSession($variantId, $date, $time, $capacity);
+        }
+
         $pdo = Database::connection();
         $stmt = $pdo->prepare(
             'INSERT INTO sessions (variant_id, session_date, session_time, capacity)
@@ -41,6 +50,10 @@ final class CatalogRepository
 
     public function sessionsForVariantMonth(int $variantId, int $year, int $month): array
     {
+        if (DatabaseRedesign::active()) {
+            return [];
+        }
+
         $stmt = Database::connection()->prepare(
             'SELECT * FROM sessions WHERE variant_id = :variant_id AND session_date LIKE :month_label'
         );
@@ -54,6 +67,10 @@ final class CatalogRepository
 
     public function sessionById(int $sessionId, bool $forUpdate = false): ?array
     {
+        if (DatabaseRedesign::active()) {
+            return null;
+        }
+
         $stmt = Database::connection()->prepare('SELECT * FROM sessions WHERE id = :id' . ($forUpdate ? ' FOR UPDATE' : ''));
         $stmt->execute(['id' => $sessionId]);
         $session = $stmt->fetch();
@@ -62,6 +79,10 @@ final class CatalogRepository
 
     public function incrementBookedCount(int $sessionId, int $quantity): bool
     {
+        if (DatabaseRedesign::active()) {
+            return true;
+        }
+
         $stmt = Database::connection()->prepare(
             'UPDATE sessions SET booked_count = booked_count + :increment_quantity
              WHERE id = :id AND booked_count + :capacity_quantity <= capacity'
