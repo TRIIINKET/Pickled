@@ -191,17 +191,13 @@ $dashboardNav = [
         ['Court Green', 'manage-events.php?court=green', ''],
         ['Court Pink', 'manage-events.php?court=pink', ''],
     ]],
-    ['type' => 'group', 'label' => 'Programs', 'href' => 'manage-events.php', 'key' => 'events', 'icon' => 'target', 'children' => [
+    ['type' => 'group', 'label' => 'Programs & Events', 'href' => 'manage-events.php', 'key' => 'events', 'icon' => 'target', 'children' => [
         ['Social Play', 'manage-events.php?program=social-play', ''],
-        ['Private Sessions', 'manage-events.php?program=private', ''],
+        ['Private Sessions', 'private-sessions.php', ''],
     ]],
-    ['type' => 'group', 'label' => 'Content', 'href' => 'notifications.php', 'key' => 'content', 'icon' => 'image', 'children' => [
-        ['Photos', 'notifications.php?content=photos', ''],
-        ['Catalogs', 'notifications.php?content=catalogs', ''],
-    ]],
-    ['type' => 'single', 'label' => 'Promotions', 'href' => 'notifications.php?type=promotion', 'key' => 'promotions', 'icon' => 'tag'],
-    ['type' => 'single', 'label' => 'Reports', 'href' => 'reports.php', 'key' => 'reports', 'icon' => 'chart'],
-    ['type' => 'single', 'label' => 'Settings', 'href' => 'manage-users.php?id=' . (int) ($_SESSION['user']['id'] ?? 0), 'key' => 'settings', 'icon' => 'gear'],
+['type' => 'single', 'label' => 'Content', 'href' => 'content.php', 'key' => 'content', 'icon' => 'image'],
+['type' => 'single', 'label' => 'Reports', 'href' => 'reports.php', 'key' => 'reports', 'icon' => 'chart'],
+['type' => 'single', 'label' => 'Admin Profile', 'href' => 'admin-profile.php', 'key' => 'admin-profile', 'icon' => 'users'],
 ];
 
 $weekDays = [];
@@ -249,10 +245,7 @@ $calendarLanes = [
                 <?php endif; ?>
             <?php endforeach; ?>
         </nav>
-        <div class="admin-sidebar-user">
-            <div class="admin-avatar"><?php echo htmlspecialchars(strtoupper(substr($adminName, 0, 1))); ?></div>
-            <div><strong><?php echo htmlspecialchars($adminName); ?></strong><span>Super Admin</span></div>
-        </div>
+        <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'sidebar'); ?>
     </aside>
 
     <main class="admin-dashboard-main bookings-main">
@@ -261,19 +254,10 @@ $calendarLanes = [
             <div class="admin-topbar-actions">
                 <button class="admin-date-pill" type="button"><?php echo admin_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button>
                 <a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>" aria-label="Notifications"><?php echo admin_icon($icons, 'bell'); ?><?php if ($pendingPayments > 0): ?><span><?php echo min($pendingPayments, 9); ?></span><?php endif; ?></a>
-                <div class="admin-profile">
-                    <div class="admin-avatar"><?php echo htmlspecialchars(strtoupper(substr($adminName, 0, 1))); ?></div>
-                    <div><strong><?php echo htmlspecialchars($adminName); ?></strong><span>Super Admin</span></div>
-                    <form method="post" action="<?php echo pickled_admin_url('admin-logout.php'); ?>"><input type="hidden" name="csrf_token" value="<?php echo $logoutCsrf; ?>"><button type="submit" aria-label="Logout">⌄</button></form>
-                </div>
             </div>
         </header>
 
-        <section class="bookings-hero">
-            <div>
-                <h2><?php echo $view === 'calendar' ? 'Calendar View' : 'All Bookings'; ?></h2>
-                <p><?php echo $view === 'calendar' ? 'Visualize bookings across all courts.' : 'Manage court reservations, lessons, social play, and private sessions.'; ?></p>
-            </div>
+        <section class="bookings-hero admin-page-actions">
             <div class="bookings-hero-actions">
                 <form class="booking-search" method="get">
                     <input type="hidden" name="view" value="<?php echo htmlspecialchars($view); ?>">
@@ -299,13 +283,17 @@ $calendarLanes = [
 
         <form class="booking-filter-bar" method="get">
             <input type="hidden" name="view" value="<?php echo htmlspecialchars($view); ?>">
-            <label class="filter-search"><?php echo admin_icon($icons, 'search'); ?><input type="search" name="q" value="<?php echo htmlspecialchars($query); ?>" placeholder="Search by reference, user, or email"></label>
-            <select name="court"><option value="all">All Courts</option><?php foreach ($courts as $court): ?><option value="<?php echo htmlspecialchars($court['name']); ?>" <?php echo $courtFilter === $court['name'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($court['name']); ?></option><?php endforeach; ?></select>
-            <select name="program"><option value="all">All Programs</option><?php foreach ($programs as $program): ?><option value="<?php echo htmlspecialchars($program['name']); ?>" <?php echo $programFilter === $program['name'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($program['name']); ?></option><?php endforeach; ?></select>
-            <select name="status"><option value="all">All Statuses</option><?php foreach (['pending', 'confirmed', 'completed', 'cancelled'] as $status): ?><option value="<?php echo $status; ?>" <?php echo $statusFilter === $status ? 'selected' : ''; ?>><?php echo ucfirst($status); ?></option><?php endforeach; ?></select>
-            <input type="date" name="date" value="<?php echo htmlspecialchars($dateFilter); ?>">
-            <button type="submit">Apply</button>
-            <div class="view-toggle"><a class="<?php echo $view === 'table' ? 'active' : ''; ?>" href="<?php echo pickled_admin_url('manage-bookings.php?view=table'); ?>">Table View</a><a class="<?php echo $view === 'calendar' ? 'active' : ''; ?>" href="<?php echo pickled_admin_url('manage-bookings.php?view=calendar'); ?>">Calendar View</a></div>
+            <div class="booking-filter-search-row">
+                <label class="filter-search"><?php echo admin_icon($icons, 'search'); ?><input type="search" name="q" value="<?php echo htmlspecialchars($query); ?>" placeholder="Search by reference, user, or email"></label>
+                <div class="view-toggle"><a class="<?php echo $view === 'table' ? 'active' : ''; ?>" href="<?php echo pickled_admin_url('manage-bookings.php?view=table'); ?>">Table View</a><a class="<?php echo $view === 'calendar' ? 'active' : ''; ?>" href="<?php echo pickled_admin_url('manage-bookings.php?view=calendar'); ?>">Calendar View</a></div>
+            </div>
+            <div class="booking-filter-controls-row">
+                <select name="court"><option value="all">All Courts</option><?php foreach ($courts as $court): ?><option value="<?php echo htmlspecialchars($court['name']); ?>" <?php echo $courtFilter === $court['name'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($court['name']); ?></option><?php endforeach; ?></select>
+                <select name="program"><option value="all">All Programs & Events</option><?php foreach ($programs as $program): ?><option value="<?php echo htmlspecialchars($program['name']); ?>" <?php echo $programFilter === $program['name'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($program['name']); ?></option><?php endforeach; ?></select>
+                <select name="status"><option value="all">All Statuses</option><?php foreach (['pending', 'confirmed', 'completed', 'cancelled'] as $status): ?><option value="<?php echo $status; ?>" <?php echo $statusFilter === $status ? 'selected' : ''; ?>><?php echo ucfirst($status); ?></option><?php endforeach; ?></select>
+                <input type="date" name="date" value="<?php echo htmlspecialchars($dateFilter); ?>">
+                <button type="submit">Apply</button>
+            </div>
         </form>
 
         <?php if ($view === 'table'): ?>
@@ -357,7 +345,7 @@ $calendarLanes = [
                         <div class="calendar-hour"><time><?php echo date('g:00 A', strtotime($hour . ':00')); ?></time><?php foreach ($weekDays as $day): ?><div class="calendar-cell">
                             <?php foreach ($allBookingItems as $item): ?>
                                 <?php if (($item['booking_date'] ?? '') === $day['match'] && str_starts_with((string) $item['booking_time'], date('h:00 A', strtotime($hour . ':00')))): ?>
-                                    <?php $tone = str_contains(strtolower($item['court']), 'pink') ? 'pink' : (str_contains(strtolower($item['name']), 'social') ? 'orange' : 'green'); ?>
+                                    <?php $itemText = strtolower(($item['name'] ?? '') . ' ' . ($item['category'] ?? '') . ' ' . ($item['court'] ?? '')); $tone = (str_contains($itemText, 'private') || str_contains($itemText, 'coach')) ? 'purple' : (str_contains($itemText, 'pink') ? 'pink' : (str_contains($itemText, 'social') ? 'orange' : 'green')); ?>
                                     <a class="calendar-event <?php echo $tone; ?>" href="<?php echo pickled_admin_url('manage-bookings.php?view=calendar&id=' . (int) $item['booking_id']); ?>"><strong><?php echo htmlspecialchars($item['name']); ?></strong><span><?php echo htmlspecialchars($item['booking_time']); ?></span><small><?php echo htmlspecialchars($item['user_name'] ?? 'Guest'); ?></small></a>
                                 <?php endif; ?>
                             <?php endforeach; ?>

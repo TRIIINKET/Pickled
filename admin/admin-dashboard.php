@@ -139,17 +139,13 @@ $dashboardNav = [
         ['Court Green', 'manage-events.php?court=green'],
         ['Court Pink', 'manage-events.php?court=pink'],
     ]],
-    ['type' => 'group', 'label' => 'Programs', 'href' => 'manage-events.php', 'key' => 'events', 'icon' => 'target', 'children' => [
+    ['type' => 'group', 'label' => 'Programs & Events', 'href' => 'manage-events.php', 'key' => 'events', 'icon' => 'target', 'children' => [
         ['Social Play', 'manage-events.php?program=social-play'],
-        ['Private Sessions', 'manage-events.php?program=private'],
+        ['Private Sessions', 'private-sessions.php'],
     ]],
-    ['type' => 'group', 'label' => 'Content', 'href' => 'notifications.php', 'key' => 'content', 'icon' => 'image', 'children' => [
-        ['Photos', 'notifications.php?content=photos'],
-        ['Catalogs', 'notifications.php?content=catalogs'],
-    ]],
-    ['type' => 'single', 'label' => 'Promotions', 'href' => 'notifications.php?type=promotion', 'key' => 'promotions', 'icon' => 'tag'],
-    ['type' => 'single', 'label' => 'Reports', 'href' => 'reports.php', 'key' => 'reports', 'icon' => 'chart'],
-    ['type' => 'single', 'label' => 'Settings', 'href' => 'manage-users.php?id=' . (int) ($_SESSION['user']['id'] ?? 0), 'key' => 'settings', 'icon' => 'gear'],
+['type' => 'single', 'label' => 'Content', 'href' => 'content.php', 'key' => 'content', 'icon' => 'image'],
+['type' => 'single', 'label' => 'Reports', 'href' => 'reports.php', 'key' => 'reports', 'icon' => 'chart'],
+['type' => 'single', 'label' => 'Admin Profile', 'href' => 'admin-profile.php', 'key' => 'admin-profile', 'icon' => 'users'],
 ];
 
 $quickActions = [
@@ -210,13 +206,7 @@ function admin_icon(array $icons, string $name): string {
             <?php endforeach; ?>
         </nav>
 
-        <div class="admin-sidebar-user">
-            <div class="admin-avatar"><?php echo htmlspecialchars(strtoupper(substr($adminName, 0, 1))); ?></div>
-            <div>
-                <strong><?php echo htmlspecialchars($adminName); ?></strong>
-                <span>Super Admin</span>
-            </div>
-        </div>
+        <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'sidebar'); ?>
     </aside>
 
     <main class="admin-dashboard-main">
@@ -233,14 +223,6 @@ function admin_icon(array $icons, string $name): string {
                     <?php echo admin_icon($icons, 'bell'); ?>
                     <?php if ($pendingPayments > 0): ?><span><?php echo min($pendingPayments, 9); ?></span><?php endif; ?>
                 </a>
-                <div class="admin-profile">
-                    <div class="admin-avatar"><?php echo htmlspecialchars(strtoupper(substr($adminName, 0, 1))); ?></div>
-                    <div><strong><?php echo htmlspecialchars($adminName); ?></strong><span>Super Admin</span></div>
-                    <form method="post" action="<?php echo pickled_admin_url('admin-logout.php'); ?>">
-                        <input type="hidden" name="csrf_token" value="<?php echo $logoutCsrf; ?>">
-                        <button type="submit" aria-label="Logout">⌄</button>
-                    </form>
-                </div>
             </div>
         </header>
 
