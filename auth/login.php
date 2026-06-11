@@ -15,7 +15,8 @@ $extraHead = '<link rel="stylesheet" href="' . htmlspecialchars(pickled_asset_ur
 $auth = new AuthService();
 
 if (!empty($_SESSION['user'])) {
-    $destination = ($_SESSION['user']['role'] ?? '') === 'admin' ? 'admin/admin-dashboard.php' : 'index.php';
+    $role = $_SESSION['user']['role'] ?? '';
+    $destination = $role === 'admin' ? 'admin/admin-dashboard.php' : ($role === 'coach' ? 'coach/dashboard.php' : 'index.php');
     header('Location: ' . pickled_frontend_url($destination));
     exit;
 }
@@ -88,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 error_log('Login notification failed for ' . ($_SESSION['user']['email'] ?? 'unknown email'));
               }
 
-                $destination = $selectedRole === 'admin' ? 'admin/admin-dashboard.php' : $redirect;
+                $destination = $selectedRole === 'admin' ? 'admin/admin-dashboard.php' : ($selectedRole === 'coach' ? 'coach/dashboard.php' : $redirect);
                 header('Location: ' . pickled_frontend_url($destination));
                 exit;
             }
@@ -139,7 +140,7 @@ include $frontendPath . '/includes/header.php';
       <button type="submit">Sign up</button>
     </form>
     <?php else: ?>
-    <form class="login-form" action="login.php" method="post">
+    <form class="login-form" action="login.php" method="post" data-loader="auth">
       <input type="hidden" name="action" value="login" />
       <input type="hidden" name="redirect" value="<?= htmlspecialchars($redirect) ?>" />
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />

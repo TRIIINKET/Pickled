@@ -217,7 +217,7 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
     <div class="booking-step booking-step--date is-active">
       <div class="booking-calendar">
         <img src="<?= htmlspecialchars($courtImages['green']['image']) ?>" alt="" />
-        <button class="booking-select" type="button" id="bookingType" tabindex="-1">COURT RENTALS⌄</button>
+        <span class="booking-label" id="bookingType">COURT RENTALS</span>
         <p id="bookingHint">Reserve Court Green for casual or private play.</p>
         <div class="calendar-head">
           <button type="button" aria-label="Previous month">‹</button>
@@ -613,7 +613,7 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
   }
 
   function updateBookingCopy(){
-    document.getElementById('bookingType').textContent = state.label + '⌄';
+    document.getElementById('bookingType').textContent = state.label;
     document.getElementById('bookingHint').innerHTML = dateModeHint();
     document.getElementById('bookingDuration').textContent = state.duration;
     document.getElementById('summaryProduct').textContent = state.label;

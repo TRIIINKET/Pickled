@@ -22,6 +22,9 @@ if ($loggedIn && empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 $logoutCsrf = htmlspecialchars($_SESSION['csrf_token'] ?? '');
+$accountName = trim((string) ($_SESSION['user']['name'] ?? 'Member'));
+$accountEmail = trim((string) ($_SESSION['user']['email'] ?? 'member@pickled.ph'));
+$accountInitial = strtoupper(substr($accountName !== '' ? $accountName : $accountEmail, 0, 1));
 ?>
 
 <div class="promo-bar">Promotion - ₱250 Trial Class</div>
@@ -55,11 +58,54 @@ $logoutCsrf = htmlspecialchars($_SESSION['csrf_token'] ?? '');
         <?php endif; ?>
       </a>
       <?php if ($loggedIn): ?>
-        <span class="nav-user">Welcome, <?= htmlspecialchars($_SESSION['user']['name'] ?? $_SESSION['user']['email'] ?? 'Member') ?></span>
-        <form method="post" action="<?= htmlspecialchars(pickled_frontend_url('auth/logout.php')) ?>" class="nav-logout-form">
-          <input type="hidden" name="csrf_token" value="<?= $logoutCsrf ?>" />
-          <button type="submit" class="btn btn-ghost btn-sm">Logout</button>
-        </form>
+        <details class="nav-account">
+          <summary class="nav-account__trigger">
+            <span class="nav-account__avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="8" r="4"></circle>
+                <path d="M5 20a7 7 0 0 1 14 0"></path>
+              </svg>
+            </span>
+            <span class="nav-account__name"><?= htmlspecialchars($accountName ?: 'Member') ?></span>
+            <svg class="nav-account__chevron" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 9 6 6 6-6"></path>
+            </svg>
+          </summary>
+          <div class="nav-account__menu">
+            <div class="nav-account__header">
+              <span class="nav-account__large-avatar" aria-hidden="true"><?= htmlspecialchars($accountInitial) ?></span>
+              <span>
+                <strong><?= htmlspecialchars($accountName ?: 'Member') ?></strong>
+                <small><?= htmlspecialchars($accountEmail) ?></small>
+              </span>
+            </div>
+            <div class="nav-account__links">
+              <a href="<?= htmlspecialchars(pickled_frontend_url('resident/profile.php')) ?>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M5 20a7 7 0 0 1 14 0"></path></svg>
+                My Profile
+              </a>
+              <a href="<?= htmlspecialchars(pickled_frontend_url('resident/profile.php#bookings')) ?>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg>
+                My Bookings
+              </a>
+              <a href="<?= htmlspecialchars(pickled_frontend_url('resident/profile.php#payments')) ?>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"></rect><path d="M3 10h18M7 15h3"></path></svg>
+                My Payments
+              </a>
+              <a href="<?= htmlspecialchars(pickled_frontend_url('resident/profile.php#settings')) ?>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 7.1 4l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.9 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.7 1Z"></path></svg>
+                Settings
+              </a>
+            </div>
+            <form method="post" action="<?= htmlspecialchars(pickled_frontend_url('auth/logout.php')) ?>" class="nav-account__logout">
+              <input type="hidden" name="csrf_token" value="<?= $logoutCsrf ?>" />
+              <button type="submit">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17 15 12 10 7"></path><path d="M15 12H3"></path><path d="M14 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"></path></svg>
+                Logout
+              </button>
+            </form>
+          </div>
+        </details>
       <?php else: ?>
         <a href="<?= htmlspecialchars(pickled_frontend_url('auth/login.php')) ?>" class="btn btn-ghost btn-sm">Sign In</a>
       <?php endif; ?>

@@ -126,7 +126,7 @@ $dashboardNav = [
 
 <div class="admin-app-shell">
     <aside class="admin-sidebar">
-        <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>"><img src="<?php echo court_asset('img/LM-DGreen.png'); ?>" alt="Pickled"><span>Admin</span></a>
+        <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>"><img src="<?php echo court_asset('img/WM-DGreen.png'); ?>" alt="Pickled"><span>Admin</span></a>
         <nav class="admin-side-nav" aria-label="Admin navigation">
             <?php foreach ($dashboardNav as $item): ?>
                 <?php if ($item['type'] === 'group'): ?>
@@ -136,13 +136,15 @@ $dashboardNav = [
                 <?php endif; ?>
             <?php endforeach; ?>
         </nav>
-        <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'sidebar'); ?>
     </aside>
 
     <main class="admin-dashboard-main court-manager-main">
         <header class="admin-topbar">
             <div><h1><?php echo htmlspecialchars($pageTitle); ?> <span class="court-title-badge">Active</span></h1><p class="court-breadcrumb"><?php echo $isSocialPlay ? 'Programs' : 'Courts'; ?> <?php echo court_icon($icons, 'arrow'); ?> <?php echo htmlspecialchars($pageTitle); ?></p><?php if ($isSocialPlay): ?><p class="program-subtitle">Community-driven pickleball sessions</p><?php endif; ?></div>
-            <div class="admin-topbar-actions"><button class="admin-date-pill" type="button"><?php echo court_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button><a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>"><?php echo court_icon($icons, 'bell'); ?></a></div>
+            <div class="admin-topbar-actions"><button class="admin-date-pill" type="button"><?php echo court_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button><a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>"><?php echo court_icon($icons, 'bell'); ?>
+                </a>
+                <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'topbar'); ?>
+            </div>
         </header>
 
         <?php if ($isSocialPlay): ?>
@@ -166,7 +168,7 @@ $dashboardNav = [
                                 <p><small>Capacity</small><strong><?php echo number_format((int) $service['capacity']); ?> Players</strong></p>
                                 <p><small>Duration</small><strong><?php echo htmlspecialchars($service['duration_label']); ?></strong></p>
                                 <p><small>Status</small><b class="status-pill status-success">Active</b></p>
-                                <div class="service-actions"><button type="button"><?php echo court_icon($icons, 'edit'); ?> Edit</button><button type="button">Archive</button></div>
+                                <div class="service-actions"><button type="button"><?php echo court_icon($icons, 'edit'); ?> Edit</button><button class="icon-button danger" type="button" aria-label="Archive service"><?php echo court_icon($icons, 'trash'); ?></button></div>
                             </article>
                         <?php endforeach; ?>
                     </div>
@@ -218,7 +220,7 @@ $dashboardNav = [
                                 <p><small>Price</small><strong>₱<?php echo number_format((float) $service['price'], 2); ?></strong></p>
                                 <p><small>Duration</small><strong><?php echo htmlspecialchars($service['duration_label']); ?></strong></p>
                                 <p><small>Status</small><em class="status-pill status-success"><?php echo !empty($service['active']) ? 'Active' : 'Inactive'; ?></em></p>
-                                <div class="service-actions"><button type="button"><?php echo court_icon($icons, 'edit'); ?> Edit</button><button type="button">Archive</button></div>
+                                <div class="service-actions"><button type="button"><?php echo court_icon($icons, 'edit'); ?> Edit</button><button class="icon-button danger" type="button" aria-label="Archive service"><?php echo court_icon($icons, 'trash'); ?></button></div>
                             </article>
                         <?php endforeach; ?>
                     </div>

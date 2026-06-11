@@ -222,7 +222,7 @@ $calendarLanes = [
 <div class="admin-app-shell">
     <aside class="admin-sidebar">
         <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>">
-            <img src="<?php echo booking_asset('img/LM-DGreen.png'); ?>" alt="Pickled" />
+            <img src="<?php echo booking_asset('img/WM-DGreen.png'); ?>" alt="Pickled" />
             <span>Admin</span>
         </a>
         <nav class="admin-side-nav" aria-label="Admin navigation">
@@ -245,7 +245,6 @@ $calendarLanes = [
                 <?php endif; ?>
             <?php endforeach; ?>
         </nav>
-        <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'sidebar'); ?>
     </aside>
 
     <main class="admin-dashboard-main bookings-main">
@@ -253,7 +252,9 @@ $calendarLanes = [
             <div><h1><?php echo $view === 'calendar' ? 'Calendar View' : 'All Bookings'; ?></h1></div>
             <div class="admin-topbar-actions">
                 <button class="admin-date-pill" type="button"><?php echo admin_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button>
-                <a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>" aria-label="Notifications"><?php echo admin_icon($icons, 'bell'); ?><?php if ($pendingPayments > 0): ?><span><?php echo min($pendingPayments, 9); ?></span><?php endif; ?></a>
+                <a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>" aria-label="Notifications"><?php echo admin_icon($icons, 'bell'); ?><?php if ($pendingPayments > 0): ?><span><?php echo min($pendingPayments, 9); ?></span><?php endif; ?>
+                </a>
+                <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'topbar'); ?>
             </div>
         </header>
 

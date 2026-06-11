@@ -260,7 +260,7 @@ $dashboardNav = [
 
 <div class="admin-app-shell">
     <aside class="admin-sidebar">
-        <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>"><img src="<?php echo users_asset('img/LM-DGreen.png'); ?>" alt="Pickled"><span>Admin</span></a>
+        <a class="admin-brand" href="<?php echo pickled_admin_url('admin-dashboard.php'); ?>"><img src="<?php echo users_asset('img/WM-DGreen.png'); ?>" alt="Pickled"><span>Admin</span></a>
         <nav class="admin-side-nav" aria-label="Admin navigation">
             <?php foreach ($dashboardNav as $item): ?>
                 <?php if ($item['type'] === 'group'): ?>
@@ -270,13 +270,15 @@ $dashboardNav = [
                 <?php endif; ?>
             <?php endforeach; ?>
         </nav>
-        <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'sidebar'); ?>
     </aside>
 
     <main class="admin-dashboard-main users-main">
         <header class="admin-topbar">
             <div><h1><?php echo htmlspecialchars($pageTitle); ?></h1></div>
-            <div class="admin-topbar-actions"><button class="admin-date-pill" type="button"><?php echo users_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button><a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>"><?php echo users_icon($icons, 'bell'); ?></a></div>
+            <div class="admin-topbar-actions"><button class="admin-date-pill" type="button"><?php echo users_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button><a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>"><?php echo users_icon($icons, 'bell'); ?>
+                </a>
+                <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'topbar'); ?>
+            </div>
         </header>
 
         <section class="users-hero admin-page-actions">
@@ -374,14 +376,14 @@ $dashboardNav = [
                             <?php endforeach; ?>
                         </div></section>
                         <section><div class="profile-section-head"><h3>Weekly Availability</h3><span>May 24 - May 30</span></div><div class="availability-grid"><?php foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $i => $day): ?><article class="<?php echo $i === 0 ? 'active' : ''; ?>"><strong><?php echo $day; ?></strong><span><?php echo $availability[$i]; ?>/6</span><small>slots</small></article><?php endforeach; ?></div></section>
-                        <form class="profile-actions" method="post"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>"><input type="hidden" name="user_id" value="<?php echo (int) $currentUser['id']; ?>"><button type="button"><?php echo users_icon($icons, 'edit'); ?> Edit Coach</button><button type="button"><?php echo users_icon($icons, 'send'); ?> Send Message</button><button type="button" class="danger"><?php echo users_icon($icons, 'users'); ?> Set Inactive</button><button type="button" class="danger"><?php echo users_icon($icons, 'trash'); ?> Archive Coach</button></form>
+                        <form class="profile-actions" method="post"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>"><input type="hidden" name="user_id" value="<?php echo (int) $currentUser['id']; ?>"><button type="button"><?php echo users_icon($icons, 'edit'); ?> Edit Coach</button><button type="button"><?php echo users_icon($icons, 'send'); ?> Send Message</button><button type="button" class="danger"><?php echo users_icon($icons, 'users'); ?> Set Inactive</button><button type="button" class="danger icon-button" aria-label="Archive coach"><?php echo users_icon($icons, 'trash'); ?></button></form>
                     <?php else: ?>
                         <div class="profile-top"><button type="button">×</button><div class="profile-avatar"><?php echo htmlspecialchars(initials($currentUser['name'])); ?></div><h2><?php echo htmlspecialchars($currentUser['name']); ?> <?php echo $membership === 'Premium' ? '★' : ''; ?></h2><em class="membership <?php echo strtolower($membership); ?>"><?php echo $membership; ?> Member</em></div>
                         <section class="profile-card"><p><strong>Email</strong><span><?php echo htmlspecialchars($currentUser['email']); ?></span></p><p><strong>Phone</strong><span>Not provided</span></p><p><strong>Joined Date</strong><span><?php echo date('M j, Y', strtotime($currentUser['created_at'])); ?></span></p><p><strong>Membership ID</strong><span>PKL-MEM-<?php echo str_pad((string) $currentUser['id'], 6, '0', STR_PAD_LEFT); ?></span></p></section>
                         <section><div class="profile-section-head"><h3>Activity Overview</h3><a href="#">View All Activity</a></div><div class="activity-grid"><article><strong><?php echo number_format($bookingCount); ?></strong><span>Total Bookings</span></article><article><strong><?php echo number_format((int) ($currentUser['social_count'] ?? 0)); ?></strong><span>Social Play</span></article><article><strong><?php echo number_format((int) ($currentUser['coaching_count'] ?? 0)); ?></strong><span>Private Coaching</span></article><article><strong><?php echo number_format((int) ($currentUser['rental_count'] ?? 0)); ?></strong><span>Court Rentals</span></article></div></section>
                         <section><h3>Favorite Court</h3><div class="favorite-court"><img src="<?php echo users_asset(str_contains(strtolower((string) ($currentUser['favorite_court'] ?? 'green')), 'pink') ? 'img/court/court pink-1.webp' : 'img/court/court green-1.png'); ?>" alt="Favorite court"><span><strong><?php echo htmlspecialchars($currentUser['favorite_court'] ?: 'Court Green'); ?></strong><small>Most booked</small></span></div></section>
                         <section><div class="profile-section-head"><h3>Recent Bookings</h3><a href="<?php echo pickled_admin_url('manage-bookings.php?q=' . urlencode($currentUser['email'])); ?>">View All</a></div><div class="profile-bookings"><?php foreach ($recentBookings as $booking): ?><a href="<?php echo pickled_admin_url('manage-bookings.php?id=' . (int) $booking['id']); ?>"><span><?php echo users_icon($icons, 'calendar'); ?></span><strong><?php echo htmlspecialchars($booking['name'] ?? 'Booking'); ?><small><?php echo htmlspecialchars(($booking['booking_date'] ?? date('M j, Y', strtotime($booking['created_at']))) . ' • ' . ($booking['booking_time'] ?? '')); ?></small></strong><em class="status-pill status-<?php echo users_status_key($booking['status'] ?? null); ?>"><?php echo htmlspecialchars(pickled_booking_status_label($booking['status'])); ?></em></a><?php endforeach; ?></div></section>
-                        <form class="profile-actions" method="post"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>"><input type="hidden" name="user_id" value="<?php echo (int) $currentUser['id']; ?>"><button type="button"><?php echo users_icon($icons, 'edit'); ?> Edit Profile</button><button type="button"><?php echo users_icon($icons, 'send'); ?> Send Notification</button><button type="button" class="danger"><?php echo users_icon($icons, 'users'); ?> Set Inactive</button><button type="button" class="danger"><?php echo users_icon($icons, 'trash'); ?> Archive Player</button></form>
+                        <form class="profile-actions" method="post"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>"><input type="hidden" name="user_id" value="<?php echo (int) $currentUser['id']; ?>"><button type="button"><?php echo users_icon($icons, 'edit'); ?> Edit Profile</button><button type="button"><?php echo users_icon($icons, 'send'); ?> Send Notification</button><button type="button" class="danger"><?php echo users_icon($icons, 'users'); ?> Set Inactive</button><button type="button" class="danger icon-button" aria-label="Archive player"><?php echo users_icon($icons, 'trash'); ?></button></form>
                     <?php endif; ?>
                 <?php else: ?>
                     <p class="empty-state">Select a member to view profile details.</p>

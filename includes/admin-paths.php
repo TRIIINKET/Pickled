@@ -49,7 +49,9 @@ function pickled_admin_account_menu(string $adminName, string $logoutCsrf, strin
     $initial = htmlspecialchars(strtoupper(substr($adminName, 0, 1)), ENT_QUOTES, 'UTF-8');
     $name = htmlspecialchars($adminName, ENT_QUOTES, 'UTF-8');
     $csrf = htmlspecialchars($logoutCsrf, ENT_QUOTES, 'UTF-8');
-    $class = 'admin-sidebar-user admin-account-menu sidebar-account-menu';
+    $class = $variant === 'topbar'
+        ? 'admin-profile admin-account-menu topbar-account-menu'
+        : 'admin-sidebar-user admin-account-menu sidebar-account-menu';
 
     return '
         <details class="' . $class . '">
