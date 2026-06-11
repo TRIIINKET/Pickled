@@ -10,22 +10,31 @@ $pageTitle = 'Login - Pickled';
 $activePage = 'login.php';
 $frontendPath = __DIR__ . '/..';
 require_once $frontendPath . '/includes/paths.php';
-$extraHead = '<link rel="stylesheet" href="' . htmlspecialchars(pickled_asset_url('css/login.css')) . '"/>';
+$extraHead = '<link rel="stylesheet" href="' . htmlspecialchars(pickled_asset_url('css/login.css?v=20260610b')) . '"/>';
 
 $auth = new AuthService();
 
 if (!empty($_SESSION['user'])) {
-    header('Location: ' . pickled_frontend_url('index.php'));
+    $destination = ($_SESSION['user']['role'] ?? '') === 'admin' ? 'admin/admin-dashboard.php' : 'index.php';
+    header('Location: ' . pickled_frontend_url($destination));
     exit;
 }
 
 $mode = $_GET['mode'] ?? 'login';
 $mode = $mode === 'signup' ? 'signup' : 'login';
+$allowedRoles = ['admin', 'coach', 'player'];
+$selectedRole = $_POST['role'] ?? ($_GET['role'] ?? 'player');
+$selectedRole = in_array($selectedRole, $allowedRoles, true) ? $selectedRole : 'player';
 $redirect = pickled_safe_redirect($_POST['redirect'] ?? ($_GET['redirect'] ?? 'index.php'));
 $bookingNotice = ($_GET['notice'] ?? '') === 'booking' ? 'Please sign up or sign in before booking.' : '';
 $loginError = '';
 $signupError = '';
 $signupSuccess = '';
+$roleLabels = [
+    'admin' => 'Admin',
+    'coach' => 'Coaches',
+    'player' => 'Players',
+];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'login';
@@ -61,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $mode = 'login';
             $user = $email && $password !== '' ? $auth->attempt($email, $password) : null;
-            if ($user) {
+            if ($user && ($user['role'] ?? '') === $selectedRole) {
                 $_SESSION['user'] = [
                     'id' => (int) $user['id'],
                     'email' => $email,
@@ -79,11 +88,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 error_log('Login notification failed for ' . ($_SESSION['user']['email'] ?? 'unknown email'));
               }
 
-                header('Location: ' . pickled_frontend_url($redirect));
+                $destination = $selectedRole === 'admin' ? 'admin/admin-dashboard.php' : $redirect;
+                header('Location: ' . pickled_frontend_url($destination));
                 exit;
             }
 
-            $loginError = 'Invalid email or password.';
+            $loginError = 'Invalid credentials for the selected role.';
         }
     }
 }
@@ -93,6 +103,9 @@ include $frontendPath . '/includes/header.php';
 <main class="login-page">
   <section class="login-panel" aria-labelledby="loginTitle">
     <h1 id="loginTitle"><?= $mode === 'signup' ? 'SIGN UP' : 'LOGIN' ?></h1>
+    <?php if ($mode !== 'signup'): ?>
+      <p class="login-subtitle">Welcome back! Please sign in to continue.</p>
+    <?php endif; ?>
 
     <?php if ($mode === 'signup'): ?>
     <form class="login-form" action="login.php?mode=signup" method="post">
@@ -130,6 +143,28 @@ include $frontendPath . '/includes/header.php';
       <input type="hidden" name="action" value="login" />
       <input type="hidden" name="redirect" value="<?= htmlspecialchars($redirect) ?>" />
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
+      <div class="login-role-tabs" role="radiogroup" aria-label="Account type">
+        <?php foreach ($roleLabels as $roleValue => $roleLabel): ?>
+          <label class="login-role-tab">
+            <input type="radio" name="role" value="<?= htmlspecialchars($roleValue) ?>" <?= $selectedRole === $roleValue ? 'checked' : '' ?> />
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <?php if ($roleValue === 'admin'): ?>
+                <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z"></path>
+                <path d="M4 21a8 8 0 0 1 11.1-7.4"></path>
+                <path d="m18 14 1.1 2.3 2.5.3-1.8 1.8.4 2.5-2.2-1.2-2.2 1.2.4-2.5-1.8-1.8 2.5-.3Z"></path>
+              <?php elseif ($roleValue === 'coach'): ?>
+                <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z"></path>
+                <path d="M4 21a8 8 0 0 1 16 0"></path>
+                <path d="M8 17h8"></path>
+              <?php else: ?>
+                <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z"></path>
+                <path d="M4 21a8 8 0 0 1 16 0"></path>
+              <?php endif; ?>
+            </svg>
+            <span><?= htmlspecialchars($roleLabel) ?></span>
+          </label>
+        <?php endforeach; ?>
+      </div>
       <?php if ($signupSuccess): ?>
         <div class="login-success"><?= htmlspecialchars($signupSuccess) ?></div>
       <?php endif; ?>
@@ -142,23 +177,42 @@ include $frontendPath . '/includes/header.php';
 
       <label>
         <span>Email</span>
-        <input type="email" name="email" placeholder="Email" autocomplete="email" required/>
+        <span class="login-field">
+          <input type="email" name="email" placeholder="Enter your email" autocomplete="email" required/>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 6h16v12H4z"></path>
+            <path d="m4 7 8 6 8-6"></path>
+          </svg>
+        </span>
       </label>
 
       <label>
         <span>Password</span>
-        <input type="password" name="password" placeholder="Password" autocomplete="current-password" required/>
+        <span class="login-field">
+          <input type="password" name="password" placeholder="Enter your password" autocomplete="current-password" required/>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </span>
       </label>
+
+      <div class="login-options">
+        <label class="login-remember">
+          <input type="checkbox" name="remember" checked />
+          <span>Remember me</span>
+        </label>
+        <a href="forgot-password.php">Forgot your password?</a>
+      </div>
 
       <button type="submit">Sign in</button>
     </form>
     <?php endif; ?>
 
     <div class="login-links">
-      <a href="forgot-password.php">Forgot your password?</a>
       <?php if ($mode === 'signup'): ?>
         <p>Already have an account? <a href="login.php">Log in</a></p>
-      <?php else: ?>
+      <?php elseif ($selectedRole !== 'admin'): ?>
         <p>Don't have an account? <a href="login.php?mode=signup">Sign up</a></p>
       <?php endif; ?>
     </div>

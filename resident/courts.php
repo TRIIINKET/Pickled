@@ -4,7 +4,7 @@ pickled_init_csrf();
 $pageTitle  = 'Courts - Pickled';
 $activePage = 'courts.php';
 $basePath   = '../';
-$extraHead  = '<link rel="stylesheet" href="../assets/css/courts.css?v=20260430d"/>';
+$extraHead  = '<link rel="stylesheet" href="../assets/css/courts.css?v=20260610b"/>';
 include __DIR__ . '/../includes/header.php';
 
 $courtImages = [
@@ -86,7 +86,6 @@ $coaches = [
       <div class="court-product__info">
         <p class="court-kicker">PICKLE &amp;</p>
         <h2 id="selectedCourtTitle">COURT GREEN</h2>
-        <div class="member-callout">Join as a member for <strong>Zero Guest Fees and Advanced Booking!</strong></div>
         <p class="court-price"><span id="selectedCourtPrice">₱600.00</span> <small>/ session</small></p>
 
         <div class="rate-list" aria-label="Court rates">
@@ -424,12 +423,10 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
       { variant: 'green-training', label: 'TRAINING', price: 800, duration: '1 hour', court: 'COURT GREEN', title: 'TRAINING ₱800', note: 'Focused skills training for stronger gameplay' },
     ],
     pink: [
-      { variant: 'pink-base-rate', label: 'BASE RATE', price: 400, duration: '1 hour', court: 'COURT PINK', title: 'Base Rate ₱400', note: 'Community court for beginners, families, and future champions' },
-      { variant: 'pink-foundational-ages-6-10', label: 'FOUNDATIONAL AGES 6-10', price: 1200, duration: '4 sessions', court: 'COURT PINK', title: 'Foundational Ages 6-10 ₱1,200', note: 'Comprehensive 4-session course focused on hand-eye coordination and fun' },
-      { variant: 'pink-youth-development-ages-11-17', label: 'YOUTH DEVELOPMENT AGES 11-17', price: 1200, duration: '4 sessions', court: 'COURT PINK', title: 'Youth Development Ages 11-17 ₱1,200', note: '4-session course building technical consistency and match confidence' },
-      { variant: 'pink-adult-beginner-bootcamp', label: 'ADULT BEGINNER BOOTCAMP', price: 1800, duration: '4 sessions', court: 'COURT PINK', title: 'Adult Beginner Bootcamp ₱1,800', note: '4-session program covering essential rules and basic strokes' },
-      { variant: 'pink-introductory-trial-class', label: 'INTRODUCTORY TRIAL CLASS', price: 250, duration: '1 hour', court: 'COURT PINK', title: 'Introductory Trial Class ₱250', note: 'A single-session experience for up to 8 students' },
-      { variant: 'pink-parent-child-trial', label: 'PARENT & CHILD TRIAL', price: 500, duration: '1 hour', court: 'COURT PINK', title: 'Parent & Child Trial ₱500', note: 'A combined session for one adult and one child, ages 6+' },
+      { variant: 'pink-base-rate', label: 'COURT RENTAL', price: 400, duration: '1 hour', court: 'COURT PINK', title: 'Court Rental ₱400', note: 'Reserve Court Pink for casual games, family play, and beginner-friendly sessions.' },
+      { variant: 'pink-kids-pickleball-class-ages-6-10', label: 'KIDS PICKLEBALL CLASS (AGES 6-10)', price: 350, duration: '1 hour', court: 'COURT PINK', title: 'Kids Pickleball Class (Ages 6-10) ₱350', note: 'Fun and engaging introductory session focused on movement, coordination, and basic skills.' },
+      { variant: 'pink-youth-development-class-ages-11-17', label: 'YOUTH DEVELOPMENT CLASS (AGES 11-17)', price: 350, duration: '1 hour', court: 'COURT PINK', title: 'Youth Development Class (Ages 11-17) ₱350', note: 'Guided session designed to build confidence, consistency, and match awareness.' },
+      { variant: 'pink-parent-child-session', label: 'PARENT & CHILD SESSION', price: 500, duration: '1 hour', court: 'COURT PINK', title: 'Parent & Child Session ₱500', note: 'A shared beginner-friendly experience for one parent and one child.' },
     ],
   };
   const modal = document.getElementById('bookingModal');

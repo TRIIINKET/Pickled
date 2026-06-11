@@ -109,12 +109,10 @@ INSERT INTO `booking_variants` (`id`, `court_id`, `slug`, `name`, `category`, `d
 (4, 1, 'green-training', 'Training', 'Training', '1 hour', 800.00, 6, 12, '../assets/img/Hero.jpg', 1),
 (5, 1, 'green-open-match-play', 'Open Match-Play', 'Social Play', '2 hours', 350.00, 8, 16, '../assets/img/Hero.jpg', 1),
 (6, 1, 'green-weekly-tournament', 'Weekly Tournament', 'Social Play', 'This week', 900.00, 1, 16, '../assets/img/Hero.jpg', 1),
-(7, 2, 'pink-base-rate', 'Court Pink Base Rate', 'Court Reservation', '1 hour', 400.00, 6, 10, '../assets/img/Hero.jpg', 1),
-(8, 2, 'pink-foundational-ages-6-10', 'Foundational Ages 6-10', 'Academy', '4 sessions', 1200.00, 8, 10, '../assets/img/Hero.jpg', 1),
-(9, 2, 'pink-youth-development-ages-11-17', 'Youth Development Ages 11-17', 'Academy', '4 sessions', 1200.00, 8, 10, '../assets/img/Hero.jpg', 1),
-(10, 2, 'pink-adult-beginner-bootcamp', 'Adult Beginner Bootcamp', 'Academy', '4 sessions', 1800.00, 8, 10, '../assets/img/Hero.jpg', 1),
-(11, 2, 'pink-introductory-trial-class', 'Introductory Trial Class', 'Academy', '1 hour', 250.00, 8, 10, '../assets/img/Hero.jpg', 1),
-(12, 2, 'pink-parent-child-trial', 'Parent & Child Trial', 'Academy', '1 hour', 500.00, 2, 10, '../assets/img/Hero.jpg', 1);
+(7, 2, 'pink-base-rate', 'Court Rental', 'Court Reservation', '1 hour', 400.00, 6, 10, '../assets/img/Hero.jpg', 1),
+(8, 2, 'pink-kids-pickleball-class-ages-6-10', 'Kids Pickleball Class (Ages 6-10)', 'Academy', '1 hour', 350.00, 8, 10, '../assets/img/Hero.jpg', 1),
+(9, 2, 'pink-youth-development-class-ages-11-17', 'Youth Development Class (Ages 11-17)', 'Academy', '1 hour', 350.00, 8, 10, '../assets/img/Hero.jpg', 1),
+(10, 2, 'pink-parent-child-session', 'Parent & Child Session', 'Academy', '1 hour', 500.00, 2, 10, '../assets/img/Hero.jpg', 1);
 
 -- --------------------------------------------------------
 
@@ -1541,6 +1539,7 @@ CREATE TABLE `users` (
 INSERT INTO `users` (`id`, `name`, `email`, `password_hash`, `role`, `created_at`) VALUES
 (1, 'Player', 'player@example.com', '$2y$12$KNh/CplDSuT71nQMLS7/iOKrsTDtlWIYdMM2XzKcZmojpCznjiUg.', 'player', '2026-05-18 20:17:04'),
 (2, 'Coach', 'coach@example.com', '$2y$12$OtmXd8ca7eatk3JguuO4HuuyBabiXEVcJPZ8/xZ95AfxZPI7wwvZS', 'coach', '2026-05-18 20:17:04'),
+(3, 'Admin', 'admin@example.com', '$2y$12$bHChgoYH/V5MNw5Mtr7/eu2q9geiVID5k1fQ9bqM39XmKf/EqCZja', 'admin', '2026-05-18 20:17:04'),
 (9, 'Shemaiah', 'magpayo.shemaiahezra@gmail.com', '$2y$10$59K3Woxomtif84vBM9HpRu5yI4/B3Dk0RGkrWzO0N9ZLz0CqPAOOC', 'player', '2026-05-18 20:39:42'),
 (10, 'Aya', 'shemaiahezra@gmail.com', '$2y$10$UIMsxYx693tkYCsrpbcoI.YfG9hX2DfhTtHsYSayPPQUjrgLmwM6y', 'player', '2026-05-20 15:14:25');
 
@@ -1636,7 +1635,7 @@ ALTER TABLE `booking_items`
 -- AUTO_INCREMENT for table `booking_variants`
 --
 ALTER TABLE `booking_variants`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `carts`

@@ -18,16 +18,16 @@ include __DIR__ . '/../includes/header.php';
   <section class="private-gallery">
     <div class="private-gallery__grid">
       <article class="private-gallery__large">
-        <img src="https://pickleand.club/cdn/shop/files/rachel_class1.jpg?v=1745813319&width=1500" alt="Private pickleball event group" />
+        <img src="../assets/img/court/private-1.png" alt="Private pickleball event group" />
       </article>
       <article>
-        <img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__205.jpg?v=1744700285&width=900" alt="Group event at Pickle and Club" />
+        <img src="../assets/img/court/private-2.png" alt="Group event at Pickle and Club" />
       </article>
       <article>
-        <img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__215.jpg?v=1744701445&width=900" alt="Players at private pickleball event" />
+        <img src="../assets/img/court/private-3.png" alt="Players at private pickleball event" />
       </article>
       <!-- <article class="private-gallery__wide">
-        <img src="https://pickleand.club/cdn/shop/files/250411_-_Pickle__208_cc44460d-89be-4e85-a4cb-835987f57ee6.jpg?v=1744816152&width=1500" alt="Large private event group photo" />
+        <img src="../assets/img/court/private-2.png" alt="Large private event group photo" />
       </article> -->
     </div>
   </section>

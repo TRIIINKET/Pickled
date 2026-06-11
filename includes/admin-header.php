@@ -12,6 +12,7 @@ if (empty($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
 
 $pageTitle = $pageTitle ?? 'Admin Dashboard';
 $activePage = $activePage ?? 'dashboard';
+$bodyClass = $bodyClass ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -29,4 +30,4 @@ $activePage = $activePage ?? 'dashboard';
     }
     ?>
 </head>
-<body>
+<body<?php echo $bodyClass !== '' ? ' class="' . htmlspecialchars($bodyClass, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>>

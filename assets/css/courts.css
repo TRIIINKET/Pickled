@@ -17,31 +17,6 @@ select {
   font-family: 'DM Sans', sans-serif;
 }
 
-.nav {
-  background: var(--court-deep);
-  border-bottom: 0;
-}
-
-.nav.scrolled {
-  box-shadow: 0 12px 28px rgba(18, 75, 60, .22);
-}
-
-.nav-link,
-.nav-right .btn-ghost {
-  color: #ffd5e6;
-}
-
-.nav-link:hover,
-.nav-link.active {
-  color: #fff;
-  background: rgba(255, 255, 255, .12);
-}
-
-.nav-right .btn-green {
-  background: var(--court-lime);
-  color: var(--court-ink);
-}
-
 .courts-page {
   display: flex;
   flex-direction: column;
@@ -218,15 +193,6 @@ select {
 .court-product__info h2 {
   font-size: clamp(30px, 3vw, 42px);
   margin-bottom: 28px;
-}
-
-.member-callout {
-  background: #c0ffac;
-  padding: 15px 16px;
-  border-radius: 5px;
-  font-size: 17px;
-  line-height: 1.35;
-  margin-bottom: 26px;
 }
 
 .court-price {

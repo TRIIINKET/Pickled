@@ -1,67 +1,65 @@
 document.addEventListener('DOMContentLoaded', function () {
-  var rules = Array.prototype.slice.call(document.querySelectorAll('.home-rule'));
-  if (!rules.length) return;
-
   var section = document.querySelector('.home-rules');
   var list = document.querySelector('.home-rules__list');
-  if (!section || !list) return;
+  var rules = Array.prototype.slice.call(document.querySelectorAll('.home-rule'));
+  if (!section || !list || !rules.length) return;
+
+  var desktopQuery = window.matchMedia('(min-width: 981px)');
   var activeIndex = 0;
-  var wheelLocked = false;
-  var currentLabel = document.querySelector('[data-rule-current]');
-  var prevButton = document.querySelector('[data-rule-prev]');
-  var nextButton = document.querySelector('[data-rule-next]');
-  var startButton = document.querySelector('[data-tutorial-start]');
+  var step = 360;
+  var ticking = false;
 
-  function updateActiveRule() {
-    rules.forEach(function (rule, index) {
-      rule.classList.toggle('is-active', index === activeIndex);
-      rule.classList.toggle('is-prev', index < activeIndex);
-      rule.classList.toggle('is-next', index > activeIndex);
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function setActive(index) {
+    activeIndex = clamp(index, 0, rules.length - 1);
+    rules.forEach(function (rule, ruleIndex) {
+      rule.classList.toggle('is-active', ruleIndex === activeIndex);
+      rule.classList.toggle('is-prev', ruleIndex < activeIndex);
+      rule.classList.toggle('is-next', ruleIndex > activeIndex);
     });
-    if (currentLabel) currentLabel.textContent = String(activeIndex + 1);
   }
 
-  function moveRule(direction) {
-    activeIndex += direction;
-    activeIndex = Math.max(0, Math.min(rules.length - 1, activeIndex));
-    updateActiveRule();
+  function configure() {
+    if (!desktopQuery.matches) {
+      section.classList.remove('is-js-stack');
+      section.style.removeProperty('--rules-stack-height');
+      rules.forEach(function (rule) {
+        rule.classList.remove('is-active', 'is-prev', 'is-next');
+      });
+      return;
+    }
+
+    step = clamp(window.innerHeight * 0.42, 260, 430);
+    section.style.setProperty('--rules-stack-height', Math.round(window.innerHeight + (rules.length - 1) * step + 220) + 'px');
+    section.classList.add('is-js-stack');
+    updateFromScroll();
   }
 
-  function sectionCanTakeWheel(deltaY) {
+  function updateFromScroll() {
+    if (!desktopQuery.matches) return;
+    var topOffset = 96;
     var rect = section.getBoundingClientRect();
-    var inFocus = rect.top <= 110 && rect.bottom >= window.innerHeight * 0.72;
-    var atFirst = activeIndex <= 0;
-    var atLast = activeIndex >= rules.length - 1;
-
-    if (!inFocus) return false;
-    if (deltaY < 0 && atFirst) return false;
-    if (deltaY > 0 && atLast) return false;
-    return true;
+    var progress = (-rect.top + topOffset) / step;
+    setActive(Math.round(progress));
   }
 
-  window.addEventListener('wheel', function (event) {
-    if (!sectionCanTakeWheel(event.deltaY)) return;
-    event.preventDefault();
-    if (wheelLocked) return;
-
-    moveRule(event.deltaY > 0 ? 1 : -1);
-
-    wheelLocked = true;
-    window.setTimeout(function () {
-      wheelLocked = false;
-    }, 420);
-  }, { passive: false });
-
-  if (prevButton) prevButton.addEventListener('click', function () { moveRule(-1); });
-  if (nextButton) nextButton.addEventListener('click', function () { moveRule(1); });
-  if (startButton) {
-    startButton.addEventListener('click', function () {
-      activeIndex = 0;
-      updateActiveRule();
+  function requestUpdate() {
+    if (ticking) return;
+    ticking = true;
+    window.requestAnimationFrame(function () {
+      updateFromScroll();
+      ticking = false;
     });
   }
 
-  updateActiveRule();
-  window.addEventListener('resize', updateActiveRule);
-  window.addEventListener('load', updateActiveRule);
+  configure();
+  window.addEventListener('scroll', requestUpdate, { passive: true });
+  window.addEventListener('resize', configure);
+  window.addEventListener('load', configure);
+  if (desktopQuery.addEventListener) {
+    desktopQuery.addEventListener('change', configure);
+  }
 });
