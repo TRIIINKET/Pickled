@@ -1552,7 +1552,8 @@ body.admin-dashboard-body {
     display: grid;
     place-items: center;
     border-radius: 50%;
-    background: conic-gradient(#41a53c 0 var(--green-seg), var(--pink) var(--green-seg) var(--pink-seg), #8a55c2 var(--pink-seg) 90%, var(--orange) 90% 100%);
+    background: #e6f6e3;
+    border: 18px solid var(--green);
     position: relative;
     text-align: center;
 }
@@ -4809,7 +4810,7 @@ details.private-preview-card[open] summary::after {
 .reports-topbar h1 {
     margin-bottom: 10px;
     color: var(--green);
-    font-size: clamp(30px, 3vw, 40px);
+    font-size: clamp(26px, 2.4vw, 34px);
 }
 
 .reports-topbar p {
@@ -4821,6 +4822,11 @@ details.private-preview-card[open] summary::after {
 
 .reports-range {
     min-width: 260px;
+}
+
+.reports-topbar .admin-topbar-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .reports-export {
@@ -5037,7 +5043,8 @@ details.private-preview-card[open] summary::after {
     width: 220px;
     aspect-ratio: 1;
     border-radius: 50%;
-    background: conic-gradient(var(--green) 0 44%, var(--pink) 44% 69%, var(--orange) 69% 86%, #9b5de5 86% 100%);
+    background: #e6f6e3;
+    border: 26px solid var(--green);
     position: relative;
 }
 
@@ -5581,7 +5588,7 @@ details.private-preview-card[open] summary::after {
     gap: 5px;
     padding: 14px;
     border-radius: 12px;
-    background: linear-gradient(180deg, var(--swatch), color-mix(in srgb, var(--swatch), #fff 72%));
+    background: var(--swatch);
     color: #111827;
 }
 
