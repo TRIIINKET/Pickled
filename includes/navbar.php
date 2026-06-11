@@ -58,8 +58,8 @@ $accountInitial = strtoupper(substr($accountName !== '' ? $accountName : $accoun
         <?php endif; ?>
       </a>
       <?php if ($loggedIn): ?>
-        <details class="nav-account">
-          <summary class="nav-account__trigger">
+        <details class="nav-account" data-account-menu>
+          <summary class="nav-account__trigger" aria-label="Open account menu">
             <span class="nav-account__avatar" aria-hidden="true">
               <svg viewBox="0 0 24 24">
                 <circle cx="12" cy="8" r="4"></circle>
@@ -80,11 +80,11 @@ $accountInitial = strtoupper(substr($accountName !== '' ? $accountName : $accoun
               </span>
             </div>
             <div class="nav-account__links">
-              <a href="<?= htmlspecialchars(pickled_frontend_url('resident/profile.php')) ?>">
+              <a href="<?= htmlspecialchars(pickled_frontend_url('resident/profile.php')) ?>"<?= $activePage === 'profile.php' ? ' aria-current="page"' : '' ?>>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M5 20a7 7 0 0 1 14 0"></path></svg>
                 My Profile
               </a>
-              <a href="<?= htmlspecialchars(pickled_frontend_url('resident/profile.php#bookings')) ?>">
+              <a href="<?= htmlspecialchars(pickled_frontend_url('resident/booking.php')) ?>"<?= $activePage === 'booking.php' ? ' aria-current="page"' : '' ?>>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg>
                 My Bookings
               </a>
@@ -117,6 +117,28 @@ $accountInitial = strtoupper(substr($accountName !== '' ? $accountName : $accoun
 (function(){
   var nav = document.getElementById('mainNav');
   var promo = document.querySelector('.promo-bar');
+  var account = document.querySelector('[data-account-menu]');
+
+  if (account) {
+    document.addEventListener('click', function(event){
+      if (!account.contains(event.target)) {
+        account.removeAttribute('open');
+      }
+    });
+
+    document.addEventListener('keydown', function(event){
+      if (event.key === 'Escape') {
+        account.removeAttribute('open');
+      }
+    });
+
+    account.querySelectorAll('.nav-account__links a').forEach(function(link){
+      link.addEventListener('click', function(){
+        account.removeAttribute('open');
+      });
+    });
+  }
+
   window.addEventListener('scroll', function(){
     var hidden = window.scrollY > 24;
     nav.classList.toggle('scrolled', window.scrollY > 30);

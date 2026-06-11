@@ -55,6 +55,8 @@ function pickled_safe_redirect(string $redirect): string {
         'index.php',
         'login.php',
         'cart.php',
+        'booking.php',
+        'profile.php',
         'courts.php',
         'social-play.php',
         'private.php',

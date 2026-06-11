@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/security.php';
+require_once __DIR__ . '/../includes/booking-system.php';
 
 pickled_start_secure_session();
 pickled_init_csrf();
