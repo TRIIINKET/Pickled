@@ -63,10 +63,10 @@ function admin_asset(string $path): string {
     return htmlspecialchars(pickled_admin_asset_url($path), ENT_QUOTES, 'UTF-8');
 }
 
-$totalUsers = (int) ($stats['total_users'] ?? 0);
-$totalBookings = (int) ($stats['total_bookings'] ?? 0);
-$totalRevenue = (float) ($stats['total_revenue'] ?? 0);
-$pendingPayments = (int) ($stats['pending_payments'] ?? 0);
+$totalUsers = (int) admin_scalar($pdo, 'SELECT COUNT(*) FROM users', [], (int) ($stats['total_users'] ?? 0));
+$totalBookings = (int) admin_scalar($pdo, 'SELECT COUNT(*) FROM bookings', [], (int) ($stats['total_bookings'] ?? 0));
+$totalRevenue = (float) admin_scalar($pdo, "SELECT COALESCE(SUM(total), 0) FROM bookings WHERE LOWER(payment_status) IN ('completed', 'paid') OR LOWER(payment_status) = 'pay on site'", [], (float) ($stats['total_revenue'] ?? 0));
+$pendingPayments = (int) admin_scalar($pdo, "SELECT COUNT(*) FROM bookings WHERE LOWER(payment_status) LIKE '%pending%' OR LOWER(payment_status) = 'pay on site'", [], (int) ($stats['pending_payments'] ?? 0));
 $activePlayers = (int) admin_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = 'player'");
 $coachCount = (int) admin_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = 'coach'");
 $todayBookings = (int) admin_scalar($pdo, 'SELECT COUNT(*) FROM bookings WHERE DATE(created_at) = ?', [$todaySql]);
@@ -84,7 +84,7 @@ $recentBookings = admin_rows($pdo, "
     SELECT b.*, u.name AS user_name, u.email AS user_email,
            GROUP_CONCAT(DISTINCT bi.name ORDER BY bi.id SEPARATOR ', ') AS program_names,
            GROUP_CONCAT(DISTINCT bi.court ORDER BY bi.id SEPARATOR ', ') AS courts,
-           MIN(bi.booking_date) AS booking_date
+           MIN(DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y')) AS booking_date
     FROM bookings b
     LEFT JOIN users u ON u.id = b.user_id
     LEFT JOIN booking_items bi ON bi.booking_id = b.id
@@ -94,7 +94,11 @@ $recentBookings = admin_rows($pdo, "
 ");
 
 $scheduleRows = admin_rows($pdo, "
-    SELECT bi.*, b.reference, b.status, b.payment_status, u.name AS user_name
+    SELECT bi.*,
+           bi.booking_date AS booking_date_sql,
+           DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y') AS booking_date,
+           CONCAT(TIME_FORMAT(bi.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(bi.end_time, '%h:%i %p')) AS booking_time,
+           b.reference, b.status, b.payment_status, u.name AS user_name
     FROM booking_items bi
     JOIN bookings b ON b.id = bi.booking_id
     LEFT JOIN users u ON u.id = b.user_id
@@ -102,7 +106,7 @@ $scheduleRows = admin_rows($pdo, "
     LIMIT 12
 ");
 
-$todaySchedule = array_values(array_filter($scheduleRows, fn($item) => ($item['booking_date'] ?? '') === $todayBookingLabel));
+$todaySchedule = array_values(array_filter($scheduleRows, fn($item) => ($item['booking_date_sql'] ?? '') === $todaySql));
 $schedule = $todaySchedule ?: array_slice($scheduleRows, 0, 4);
 $scheduleTitle = $todaySchedule ? "Today's Schedule" : 'Latest Schedule';
 
@@ -125,7 +129,7 @@ $courtRows = admin_rows($pdo, "
     LEFT JOIN booking_items bi ON bi.session_id = s.id
     GROUP BY c.id, c.name, c.slug
     ORDER BY c.id ASC
-", [$todayBookingLabel]);
+", [$todaySql]);
 
 if (!$courtRows) {
     $courtRows = [

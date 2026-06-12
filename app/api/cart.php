@@ -5,6 +5,11 @@ require_once __DIR__ . '/../../includes/security.php';
 pickled_start_secure_session();
 require_once __DIR__ . '/../../includes/booking-system.php';
 
+if (pickled_is_logged_in()) {
+    pickled_restore_cart_for_user();
+    pickled_expire_cart_if_needed();
+}
+
 header('Content-Type: application/json');
 echo json_encode([
     'count' => pickled_cart_count(),

@@ -45,6 +45,13 @@ if (isset($_GET['full'])) {
   $message = 'That session is already full. Please choose another schedule.';
   $messageType = 'warning';
 }
+if (isset($_GET['invalid'])) {
+  $message = 'That cart action could not be completed. Please choose a valid schedule.';
+  $messageType = 'warning';
+}
+if (isset($_GET['updated'])) {
+  $message = 'Cart item updated.';
+}
 if (isset($_GET['booked']) && !empty($_SESSION['last_booking'])) {
   $message = 'Booking confirmed. Reference: ' . $_SESSION['last_booking']['reference'];
 }
@@ -60,20 +67,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'remove') {
       $cartId = (int) ($_POST['cart_id'] ?? 0);
       (new CartService())->removeForUser((int) $_SESSION['user']['id'], $cartId);
-      unset($_SESSION['cart'][(string) $cartId]);
+      pickled_restore_cart_for_user();
       if (empty($_SESSION['cart'])) {
+        (new CartService())->clearForUser((int) $_SESSION['user']['id']);
+        $_SESSION['cart'] = [];
         pickled_clear_cart_timer();
       }
-      pickled_persist_cart_for_user();
       header('Location: cart.php');
       exit;
     }
 
+    if ($action === 'update_quantity') {
+      $cartId = (int) ($_POST['cart_id'] ?? 0);
+      $quantity = max(1, (int) ($_POST['quantity'] ?? 1));
+      $result = pickled_update_cart_quantity($cartId, $quantity);
+      header('Location: cart.php?' . ($result['ok'] ? 'updated=1' : $result['code'] . '=1'));
+      exit;
+    }
+
     if ($action === 'clear') {
-      $_SESSION['cart'] = [];
       (new CartService())->clearForUser((int) $_SESSION['user']['id']);
+      $_SESSION['cart'] = [];
       pickled_clear_cart_timer();
-      pickled_persist_cart_for_user();
       header('Location: cart.php');
       exit;
     }
@@ -122,10 +137,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
 
       if ($messageType !== 'warning') {
-        $_SESSION['cart'] = [];
         (new CartService())->clearForUser((int) $_SESSION['user']['id']);
+        $_SESSION['cart'] = [];
         pickled_clear_cart_timer();
-        pickled_persist_cart_for_user();
         header('Location: cart.php?booked=1');
         exit;
       }
@@ -189,6 +203,16 @@ include __DIR__ . '/../includes/header.php';
                     <p class="cart-expire">Reservation will expire in <span data-cart-time>--:--</span></p>
                   <?php endif; ?>
                   <form method="post">
+                    <input type="hidden" name="action" value="update_quantity" />
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
+                    <input type="hidden" name="cart_id" value="<?= htmlspecialchars($item['id']) ?>" />
+                    <label>
+                      Participants
+                      <input type="number" name="quantity" min="1" max="<?= htmlspecialchars((string) pickled_cart_limit()) ?>" value="<?= htmlspecialchars((string) $item['quantity']) ?>" />
+                    </label>
+                    <button class="cart-remove" type="submit">Update</button>
+                  </form>
+                  <form method="post">
                     <input type="hidden" name="action" value="remove" />
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
                     <input type="hidden" name="cart_id" value="<?= htmlspecialchars($item['id']) ?>" />
@@ -231,6 +255,13 @@ include __DIR__ . '/../includes/header.php';
             <span><small>Subtotal</small><strong>₱<?= number_format($cartTotal, 2) ?></strong></span>
           </div>
           <a href="cart.php?checkout=1" class="<?= empty($cartItems) ? 'is-disabled' : '' ?>" <?= empty($cartItems) ? 'aria-disabled="true"' : '' ?>>Checkout</a>
+          <?php if (!empty($cartItems)): ?>
+            <form method="post">
+              <input type="hidden" name="action" value="clear" />
+              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
+              <button class="cart-remove" type="submit">Clear cart</button>
+            </form>
+          <?php endif; ?>
         </div>
         <?php else: ?>
         <form method="post" class="checkout-card">

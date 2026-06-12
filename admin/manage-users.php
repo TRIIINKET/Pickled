@@ -204,7 +204,9 @@ if (!$currentUser && $userId) {
 }
 
 $recentBookings = $currentUser ? user_rows($pdo, "
-    SELECT b.*, bi.name, bi.court, bi.booking_date, bi.booking_time
+    SELECT b.*, bi.name, bi.court,
+           DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y') AS booking_date,
+           CONCAT(TIME_FORMAT(bi.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(bi.end_time, '%h:%i %p')) AS booking_time
     FROM bookings b
     LEFT JOIN booking_items bi ON bi.booking_id = b.id
     WHERE b.user_id = ?
@@ -223,7 +225,10 @@ foreach ($users as $user) {
 $coachSchedule = [];
 if ($roleFilter === 'coach') {
     $coachSchedule = user_rows($pdo, "
-        SELECT b.status, bi.name, bi.court, bi.booking_date, bi.booking_time, bi.category
+        SELECT b.status, bi.name, bi.court,
+               DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y') AS booking_date,
+               CONCAT(TIME_FORMAT(bi.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(bi.end_time, '%h:%i %p')) AS booking_time,
+               bi.category
         FROM booking_items bi
         LEFT JOIN bookings b ON b.id = bi.booking_id
         WHERE bi.category IN ('Coaching', 'Academy', 'Social Play')
@@ -231,7 +236,7 @@ if ($roleFilter === 'coach') {
            OR bi.name LIKE '%Kids%'
            OR bi.name LIKE '%Lessons%'
            OR bi.name LIKE '%Social%'
-        ORDER BY COALESCE(b.created_at, NOW()) DESC, bi.booking_time ASC
+        ORDER BY COALESCE(b.created_at, NOW()) DESC, bi.start_time ASC
         LIMIT 4
     ");
 }

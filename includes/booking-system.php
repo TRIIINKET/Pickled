@@ -2,7 +2,6 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../app/services/CartService.php';
 require_once __DIR__ . '/../app/repositories/CatalogRepository.php';
-require_once __DIR__ . '/../app/support/DatabaseRedesign.php';
 
 const PICKLED_CART_LIMIT = 3;
 const PICKLED_CART_HOLD_SECONDS = 300;
@@ -49,7 +48,7 @@ function pickled_require_login(string $redirect): void {
 
 function pickled_restore_cart_for_user(): void {
     $userId = (int) ($_SESSION['user']['id'] ?? 0);
-    if ($userId <= 0 || !empty($_SESSION['cart'])) {
+    if ($userId <= 0) {
         return;
     }
 
@@ -84,7 +83,6 @@ function pickled_start_cart_timer(): void {
 
 function pickled_clear_cart_timer(): void {
     unset($_SESSION['cart_started_at'], $_SESSION['cart_expires_at']);
-    pickled_persist_cart_for_user();
 }
 
 function pickled_expire_cart_if_needed(): bool {
@@ -92,7 +90,6 @@ function pickled_expire_cart_if_needed(): bool {
         $_SESSION['cart'] = [];
         (new CartService())->clearForUser((int) ($_SESSION['user']['id'] ?? 0));
         pickled_clear_cart_timer();
-        pickled_persist_cart_for_user();
         return true;
     }
 
@@ -142,6 +139,9 @@ function pickled_cart_item_id(array $item, string $date, string $time): string {
 
 function pickled_add_to_cart(string $variantId, int $quantity, string $date, string $time): array {
     $_SESSION['cart'] = $_SESSION['cart'] ?? [];
+    if ($variantId === '' || $date === '' || $time === '') {
+        return ['ok' => false, 'code' => 'invalid'];
+    }
     if (pickled_cart_count() + $quantity > pickled_cart_limit()) {
         return ['ok' => false, 'code' => 'limit'];
     }
@@ -152,20 +152,45 @@ function pickled_add_to_cart(string $variantId, int $quantity, string $date, str
     }
 
     pickled_start_cart_timer();
-    $result = (new CartService())->addVariantForUser(
-        (int) ($_SESSION['user']['id'] ?? 0),
-        $variantId,
-        $quantity,
-        $date,
-        $time,
-        $_SESSION['cart_started_at'] ?? null,
-        $_SESSION['cart_expires_at'] ?? null,
-        (float) $item['member_price']
-    );
-    if (DatabaseRedesign::active()) {
-        return $result;
+    try {
+        $result = (new CartService())->addVariantForUser(
+            (int) ($_SESSION['user']['id'] ?? 0),
+            $variantId,
+            $quantity,
+            $date,
+            $time,
+            $_SESSION['cart_started_at'] ?? null,
+            $_SESSION['cart_expires_at'] ?? null,
+            (float) $item['member_price']
+        );
+    } catch (RuntimeException) {
+        $result = ['ok' => false, 'code' => 'invalid'];
     }
 
+    unset($_SESSION['cart']);
+    pickled_restore_cart_for_user();
+    return $result;
+}
+
+function pickled_update_cart_quantity(int $cartItemId, int $quantity): array {
+    $userId = (int) ($_SESSION['user']['id'] ?? 0);
+    if ($userId <= 0 || $cartItemId <= 0) {
+        return ['ok' => false, 'code' => 'invalid'];
+    }
+
+    pickled_restore_cart_for_user();
+    $cart = $_SESSION['cart'] ?? [];
+    if (!isset($cart[(string) $cartItemId])) {
+        return ['ok' => false, 'code' => 'invalid'];
+    }
+
+    $quantity = max(1, $quantity);
+    $currentQuantity = (int) ($cart[(string) $cartItemId]['quantity'] ?? 0);
+    if (pickled_cart_count() - $currentQuantity + $quantity > pickled_cart_limit()) {
+        return ['ok' => false, 'code' => 'limit'];
+    }
+
+    $result = (new CartService())->updateQuantityForUser($userId, $cartItemId, $quantity);
     unset($_SESSION['cart']);
     pickled_restore_cart_for_user();
     return $result;

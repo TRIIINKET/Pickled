@@ -107,7 +107,10 @@ class AdminService {
     }
 
     public function approvePayment(int $bookingId, int $adminId) {
-        $result = $this->bookingRepo->updatePaymentStatus($bookingId, 'Completed');
+        $result = $this->bookingRepo->updatePaymentStatus($bookingId, 'paid');
+        if ($result) {
+            $this->bookingRepo->updateStatus($bookingId, 'confirmed');
+        }
         if ($result && $this->adminRepo && $this->notificationRepo) {
             $this->adminRepo->logAction($adminId, 'payment_approved', 'booking', $bookingId);
             $booking = $this->bookingRepo->findById($bookingId);
@@ -122,7 +125,7 @@ class AdminService {
     }
 
     public function rejectPayment(int $bookingId, string $reason, int $adminId) {
-        $result = $this->bookingRepo->updatePaymentStatus($bookingId, 'Rejected');
+        $result = $this->bookingRepo->updatePaymentStatus($bookingId, 'rejected');
         if ($result && $this->adminRepo && $this->notificationRepo) {
             $this->adminRepo->logAction($adminId, 'payment_rejected', 'booking', $bookingId, ['reason' => $reason]);
             $booking = $this->bookingRepo->findById($bookingId);

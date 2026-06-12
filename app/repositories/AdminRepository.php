@@ -62,12 +62,12 @@ class AdminRepository {
             $stats['total_bookings'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
             
             // Revenue
-            $stmt = $this->connection->query("SELECT SUM(total) as total FROM bookings WHERE payment_status = 'Completed'");
+            $stmt = $this->connection->query("SELECT SUM(total) as total FROM bookings WHERE LOWER(payment_status) IN ('completed', 'paid')");
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
             $stats['total_revenue'] = $result['total'] ?? 0;
             
             // Pending payments
-            $stmt = $this->connection->query("SELECT COUNT(*) as count FROM bookings WHERE payment_status = 'Pending'");
+            $stmt = $this->connection->query("SELECT COUNT(*) as count FROM bookings WHERE LOWER(payment_status) LIKE '%pending%' OR LOWER(payment_status) = 'pay on site'");
             $stats['pending_payments'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
             
             // Total events
@@ -108,7 +108,7 @@ class AdminRepository {
             $stmt = $this->connection->prepare("
                 SELECT DATE_FORMAT(created_at, ?) as period, SUM(total) as revenue, COUNT(*) as bookings
                 FROM bookings
-                WHERE payment_status = 'Completed'
+                WHERE LOWER(payment_status) IN ('completed', 'paid')
                 GROUP BY DATE_FORMAT(created_at, ?)
                 ORDER BY period DESC
                 LIMIT 30

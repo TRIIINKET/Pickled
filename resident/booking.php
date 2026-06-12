@@ -66,6 +66,7 @@ include __DIR__ . '/../includes/header.php';
             <div class="booking-card__header">
               <div>
                 <strong>Reference:</strong> <?= htmlspecialchars($booking['reference']) ?>
+                <a href="booking-details.php?id=<?= (int) $booking['id'] ?>">View details</a>
               </div>
               <div class="booking-card__status booking-card__status--<?= htmlspecialchars($normStatus) ?>"><?= htmlspecialchars(ucfirst($normStatus)) ?></div>
             </div>

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
 require_once __DIR__ . '/../app/services/SchedulingService.php';
+require_once __DIR__ . '/../app/repositories/BookingRepository.php';
 
 pickled_start_secure_session();
 pickled_init_csrf();
@@ -21,6 +22,7 @@ $todayLabel = $today->format('M j, Y (D)');
 $scheduleDateLabel = $today->format('l, F j, Y');
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $schedulingService = new SchedulingService();
+$bookingRepository = new BookingRepository();
 
 function coach_icon(array $icons, string $name): string {
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['calendar']) . '</svg>';
@@ -53,6 +55,8 @@ $navItems = [
 ];
 
 $coachSessions = $coachId ? $schedulingService->sessionsBetween($coachId, $today->format('Y-m-d'), $today->modify('+7 days')->format('Y-m-d')) : [];
+$coachBookingItems = $coachId ? $bookingRepository->getItemsForCoach($coachId, $today->format('Y-m-d'), $today->modify('+30 days')->format('Y-m-d')) : [];
+$activeStudentCount = array_sum(array_map(static fn(array $item): int => (int) $item['quantity'], $coachBookingItems));
 $todaySessions = array_values(array_filter($coachSessions, fn(array $session): bool => $session['session_date'] === $todayDate));
 $sessions = array_map(static function (array $session): array {
     $tone = str_contains(strtolower((string) $session['court']), 'pink') ? 'pink' : 'green';
@@ -69,11 +73,20 @@ $sessions = array_map(static function (array $session): array {
     ];
 }, $todaySessions ?: array_slice($coachSessions, 0, 4));
 
-$students = [
-    ['MR', 'Mia Reyes', 'Kids Class (6-10)', 'Jun 10, 2026', '92%', 'pink'],
-    ['JD', 'Juan Dela Cruz', 'Youth Development', 'Jun 9, 2026', '88%', 'green'],
-    ['AS', 'Alyssa Santos', 'Private Coaching', 'Jun 10, 2026', '95%', 'purple'],
-];
+$students = array_map(static function (array $item): array {
+    $name = (string) ($item['user_name'] ?? 'Player');
+    $parts = preg_split('/\s+/', trim($name));
+    $initials = strtoupper(substr($parts[0] ?? 'P', 0, 1) . substr($parts[1] ?? '', 0, 1));
+    $tone = str_contains(strtolower((string) ($item['court'] ?? '')), 'pink') ? 'pink' : 'green';
+    return [
+        $initials,
+        $name,
+        (string) ($item['name'] ?? 'Booked session'),
+        date('M j, Y', strtotime((string) ($item['booking_date_raw'] ?? 'now'))),
+        ucfirst((string) ($item['booking_status'] ?? 'confirmed')),
+        $tone,
+    ];
+}, array_slice($coachBookingItems, 0, 5));
 
 $availabilityRows = $coachId ? $schedulingService->availabilityForCoach($coachId, true) : [];
 $availability = array_map(static fn(array $row): array => [
@@ -152,7 +165,7 @@ $nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No court',
         <section class="coach-kpi-grid" aria-label="Coach overview">
             <article class="coach-kpi green"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Today's Sessions</span><strong><?php echo number_format(count($todaySessions)); ?></strong><small>From MySQL</small></div></article>
             <article class="coach-kpi pink"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Upcoming This Week</span><strong><?php echo number_format(count($coachSessions)); ?></strong><small>Sessions</small></div></article>
-            <article class="coach-kpi orange"><?php echo coach_icon($icons, 'students'); ?><div><span>Active Students</span><strong>38</strong><small>This month</small></div></article>
+            <article class="coach-kpi orange"><?php echo coach_icon($icons, 'students'); ?><div><span>Active Students</span><strong><?php echo number_format($activeStudentCount); ?></strong><small>From bookings</small></div></article>
             <article class="coach-kpi purple"><?php echo coach_icon($icons, 'stopwatch'); ?><div><span>Hours Coached</span><strong>24</strong><small>This week</small></div></article>
         </section>
 
@@ -176,10 +189,11 @@ $nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No court',
                     <article class="coach-card students-card" id="students">
                         <header><h2>Active Students</h2><a href="#students">View all</a></header>
                         <div class="student-table">
-                            <div class="student-row head"><span>Student</span><span>Program</span><span>Last Session</span><span>Attendance</span></div>
-                            <?php foreach ($students as [$initials, $name, $program, $lastSession, $attendance, $tone]): ?>
-                                <div class="student-row"><span><b class="<?php echo $tone; ?>"><?php echo htmlspecialchars($initials); ?></b><?php echo htmlspecialchars($name); ?></span><span><?php echo htmlspecialchars($program); ?></span><span><?php echo htmlspecialchars($lastSession); ?></span><strong><?php echo htmlspecialchars($attendance); ?></strong></div>
+                            <div class="student-row head"><span>Student</span><span>Program</span><span>Session Date</span><span>Status</span></div>
+                            <?php foreach ($students as [$initials, $name, $program, $lastSession, $status, $tone]): ?>
+                                <div class="student-row"><span><b class="<?php echo $tone; ?>"><?php echo htmlspecialchars($initials); ?></b><?php echo htmlspecialchars($name); ?></span><span><?php echo htmlspecialchars($program); ?></span><span><?php echo htmlspecialchars($lastSession); ?></span><strong><?php echo htmlspecialchars($status); ?></strong></div>
                             <?php endforeach; ?>
+                            <?php if (!$students): ?><div class="student-row"><span>No booked students yet.</span><span></span><span></span><strong></strong></div><?php endif; ?>
                         </div>
                         <a class="coach-card-link" href="#students">See all students <?php echo coach_icon($icons, 'arrow'); ?></a>
                     </article>

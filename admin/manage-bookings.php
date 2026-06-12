@@ -9,7 +9,7 @@ require_once __DIR__ . '/../database/Database.php';
 
 pickled_init_csrf();
 
-// TODO(database-redesign): reconnect booking filters/tables to the new schema.
+// Booking queries use the approved booking_items snapshots and compute display labels from DATE/TIME columns.
 $pdo = Database::enabled() ? Database::connection() : null;
 $adminService = new AdminService();
 $adminName = $_SESSION['user']['name'] ?? 'Admin';
@@ -121,8 +121,7 @@ if ($programFilter !== 'all') {
     $params['program'] = $programFilter;
 }
 if ($dateFilter !== '') {
-    $where[] = "(bi.booking_date LIKE :date_filter OR DATE(b.created_at) = :date_filter_exact)";
-    $params['date_filter'] = '%' . date('F j, Y', strtotime($dateFilter)) . '%';
+    $where[] = "(bi.booking_date = :date_filter_exact OR DATE(b.created_at) = :date_filter_exact)";
     $params['date_filter_exact'] = $dateFilter;
 }
 $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
@@ -132,8 +131,8 @@ $bookings = booking_rows($pdo, "
            GROUP_CONCAT(DISTINCT bi.name ORDER BY bi.id SEPARATOR ', ') AS program_names,
            GROUP_CONCAT(DISTINCT bi.court ORDER BY bi.id SEPARATOR ', ') AS courts,
            SUM(bi.quantity) AS players,
-           MIN(bi.booking_date) AS booking_date,
-           MIN(bi.booking_time) AS booking_time
+           MIN(DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y')) AS booking_date,
+           MIN(CONCAT(TIME_FORMAT(bi.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(bi.end_time, '%h:%i %p'))) AS booking_time
     FROM bookings b
     LEFT JOIN users u ON u.id = b.user_id
     LEFT JOIN booking_items bi ON bi.booking_id = b.id
@@ -144,7 +143,11 @@ $bookings = booking_rows($pdo, "
 ", $params);
 
 $allBookingItems = booking_rows($pdo, "
-    SELECT bi.*, b.id AS booking_id, b.reference, b.status, b.payment_status, b.total, u.name AS user_name, u.email AS user_email
+    SELECT bi.*,
+           bi.booking_date AS booking_date_sql,
+           DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y') AS booking_date,
+           CONCAT(TIME_FORMAT(bi.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(bi.end_time, '%h:%i %p')) AS booking_time,
+           b.id AS booking_id, b.reference, b.status, b.payment_status, b.total, u.name AS user_name, u.email AS user_email
     FROM booking_items bi
     JOIN bookings b ON b.id = bi.booking_id
     LEFT JOIN users u ON u.id = b.user_id
@@ -157,7 +160,7 @@ $currentBooking = $bookingId ? $adminService->getBookingDetail($bookingId) : nul
 $totalBookings = (int) booking_scalar($pdo, 'SELECT COUNT(*) FROM bookings');
 $weekBookings = (int) booking_scalar($pdo, 'SELECT COUNT(*) FROM bookings WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)');
 $pendingPayments = (int) booking_scalar($pdo, "SELECT COUNT(*) FROM bookings WHERE LOWER(payment_status) LIKE '%pending%' OR LOWER(payment_status) = 'pay on site'");
-$todaySessions = (int) booking_scalar($pdo, 'SELECT COUNT(*) FROM booking_items WHERE booking_date = ?', [$todayBookingLabel]);
+$todaySessions = (int) booking_scalar($pdo, 'SELECT COUNT(*) FROM booking_items WHERE booking_date = ?', [$todaySql]);
 $monthlyRevenue = (float) booking_scalar($pdo, "SELECT COALESCE(SUM(total), 0) FROM bookings WHERE MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE()) AND (LOWER(payment_status) IN ('completed', 'paid') OR LOWER(payment_status) = 'pay on site')");
 $courts = booking_rows($pdo, 'SELECT name FROM courts ORDER BY id ASC');
 $programs = booking_rows($pdo, 'SELECT DISTINCT name FROM booking_items ORDER BY name ASC');
@@ -217,6 +220,7 @@ for ($i = 0; $i < 7; $i++) {
         'label' => strtoupper($day->format('D')),
         'date' => $day->format('M j'),
         'match' => $day->format('l, F j, Y'),
+        'match_sql' => $day->format('Y-m-d'),
         'today' => $day->format('Y-m-d') === $todaySql,
     ];
 }
@@ -354,7 +358,7 @@ $calendarLanes = [
                     <?php foreach (range(8, 21) as $hour): ?>
                         <div class="calendar-hour"><time><?php echo date('g:00 A', strtotime($hour . ':00')); ?></time><?php foreach ($weekDays as $day): ?><div class="calendar-cell">
                             <?php foreach ($allBookingItems as $item): ?>
-                                <?php if (($item['booking_date'] ?? '') === $day['match'] && str_starts_with((string) $item['booking_time'], date('h:00 A', strtotime($hour . ':00')))): ?>
+                                <?php if (($item['booking_date_sql'] ?? '') === $day['match_sql'] && str_starts_with((string) $item['booking_time'], date('h:00 A', strtotime($hour . ':00')))): ?>
                                     <?php $itemText = strtolower(($item['name'] ?? '') . ' ' . ($item['category'] ?? '') . ' ' . ($item['court'] ?? '')); $tone = (str_contains($itemText, 'private') || str_contains($itemText, 'coach')) ? 'purple' : (str_contains($itemText, 'pink') ? 'pink' : (str_contains($itemText, 'social') ? 'orange' : 'green')); ?>
                                     <a class="calendar-event <?php echo $tone; ?>" href="<?php echo pickled_admin_url('manage-bookings.php?view=calendar&id=' . (int) $item['booking_id']); ?>"><strong><?php echo htmlspecialchars($item['name']); ?></strong><span><?php echo htmlspecialchars($item['booking_time']); ?></span><small><?php echo htmlspecialchars($item['user_name'] ?? 'Guest'); ?></small></a>
                                 <?php endif; ?>
