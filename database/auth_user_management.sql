@@ -1,0 +1,101 @@
+CREATE DATABASE IF NOT EXISTS pickled
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE pickled;
+
+CREATE TABLE IF NOT EXISTS users (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(160) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role VARCHAR(20) NOT NULL DEFAULT 'player',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_users_email (email),
+  KEY idx_users_role (role),
+  CONSTRAINT chk_users_role CHECK (role IN ('player', 'coach', 'admin'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS user_profiles (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id INT UNSIGNED NOT NULL,
+  phone VARCHAR(40) NULL,
+  city VARCHAR(120) NULL,
+  province VARCHAR(120) NULL,
+  avatar VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_user_profiles_user_id (user_id),
+  CONSTRAINT fk_user_profiles_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS coach_profiles (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id INT UNSIGNED NOT NULL,
+  specialization VARCHAR(160) NULL,
+  bio TEXT NULL,
+  experience VARCHAR(160) NULL,
+  status VARCHAR(40) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_coach_profiles_user_id (user_id),
+  KEY idx_coach_profiles_status (status),
+  CONSTRAINT fk_coach_profiles_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS password_resets (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id INT UNSIGNED NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_password_resets_token_hash (token_hash),
+  KEY idx_password_resets_user_id (user_id),
+  KEY idx_password_resets_expires_at (expires_at),
+  CONSTRAINT fk_password_resets_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO users (name, email, password_hash, role)
+VALUES
+  ('Admin Demo', 'admin@example.com', '$2y$12$ibR8MUreHNnonxJI.OPxNeSj6FXqyrcSDCHJs94MFMUxDXD5JgXZO', 'admin'),
+  ('Coach Demo', 'coach@example.com', '$2y$12$ibR8MUreHNnonxJI.OPxNeSj6FXqyrcSDCHJs94MFMUxDXD5JgXZO', 'coach'),
+  ('Player Demo', 'player@example.com', '$2y$12$ibR8MUreHNnonxJI.OPxNeSj6FXqyrcSDCHJs94MFMUxDXD5JgXZO', 'player')
+ON DUPLICATE KEY UPDATE
+  name = VALUES(name),
+  password_hash = VALUES(password_hash),
+  role = VALUES(role);
+
+INSERT INTO user_profiles (user_id, phone, city, province, avatar)
+SELECT id, '09171234567', 'Makati', 'Metro Manila', 'avatars/player-demo.png'
+FROM users
+WHERE email = 'player@example.com'
+ON DUPLICATE KEY UPDATE
+  phone = VALUES(phone),
+  city = VALUES(city),
+  province = VALUES(province),
+  avatar = VALUES(avatar);
+
+INSERT INTO coach_profiles (user_id, specialization, bio, experience, status)
+SELECT id, 'Private Coaching', 'Certified pickleball coach for beginner and intermediate players.', '3 years coaching experience', 'active'
+FROM users
+WHERE email = 'coach@example.com'
+ON DUPLICATE KEY UPDATE
+  specialization = VALUES(specialization),
+  bio = VALUES(bio),
+  experience = VALUES(experience),
+  status = VALUES(status);

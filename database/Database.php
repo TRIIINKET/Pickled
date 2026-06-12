@@ -1,20 +1,20 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../app/support/DatabaseRedesign.php';
-
 final class Database
 {
     private static ?PDO $pdo = null;
 
     public static function enabled(): bool
     {
-        return !DatabaseRedesign::active();
+        $config = require __DIR__ . '/../includes/config.php';
+        return !empty($config['database']['enabled']);
     }
 
     public static function redesignMode(): bool
     {
-        return DatabaseRedesign::active();
+        $config = require __DIR__ . '/../includes/config.php';
+        return !empty($config['database']['redesign_mode']);
     }
 
     public static function connection(): PDO

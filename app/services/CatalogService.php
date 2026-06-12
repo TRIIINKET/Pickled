@@ -1,0 +1,141 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../repositories/CatalogRepository.php';
+
+final class CatalogService
+{
+    public function __construct(private readonly CatalogRepository $catalog = new CatalogRepository()) {}
+
+    public function courts(bool $includeInactive = false): array
+    {
+        return $this->catalog->courts($includeInactive);
+    }
+
+    public function courtBySlug(string $slug, bool $includeInactive = false): ?array
+    {
+        return $this->catalog->findCourtBySlug($slug, $includeInactive);
+    }
+
+    public function createCourt(array $input): int
+    {
+        return $this->catalog->createCourt($this->courtData($input));
+    }
+
+    public function updateCourt(int $id, array $input): bool
+    {
+        if ($id <= 0) {
+            throw new RuntimeException('Court is required.');
+        }
+
+        return $this->catalog->updateCourt($id, $this->courtData($input));
+    }
+
+    public function setCourtStatus(int $id, string $status): bool
+    {
+        if ($id <= 0) {
+            throw new RuntimeException('Court is required.');
+        }
+
+        $status = $this->status($status);
+        return $this->catalog->setCourtStatus($id, $status);
+    }
+
+    public function variantsForCourtSlug(string $courtSlug, bool $includeInactive = false): array
+    {
+        return $this->catalog->variantsForCourtSlug($courtSlug, $includeInactive);
+    }
+
+    public function socialVariants(bool $includeInactive = false): array
+    {
+        return $this->catalog->socialVariants($includeInactive);
+    }
+
+    public function variants(bool $includeInactive = false): array
+    {
+        return $this->catalog->variants($includeInactive);
+    }
+
+    public function createVariant(array $input): int
+    {
+        return $this->catalog->createVariant($this->variantData($input));
+    }
+
+    public function updateVariant(int $id, array $input): bool
+    {
+        if ($id <= 0) {
+            throw new RuntimeException('Booking variant is required.');
+        }
+
+        return $this->catalog->updateVariant($id, $this->variantData($input));
+    }
+
+    public function setVariantActive(int $id, bool $active): bool
+    {
+        if ($id <= 0) {
+            throw new RuntimeException('Booking variant is required.');
+        }
+
+        return $this->catalog->setVariantActive($id, $active);
+    }
+
+    private function courtData(array $input): array
+    {
+        $name = trim((string) ($input['name'] ?? ''));
+        $slug = $this->slug((string) ($input['slug'] ?? $name));
+        if ($name === '' || $slug === '') {
+            throw new RuntimeException('Court name and slug are required.');
+        }
+
+        return [
+            'name' => $name,
+            'slug' => $slug,
+            'status' => $this->status((string) ($input['status'] ?? 'active')),
+        ];
+    }
+
+    private function variantData(array $input): array
+    {
+        $name = trim((string) ($input['name'] ?? ''));
+        $slug = $this->slug((string) ($input['slug'] ?? $name));
+        $category = trim((string) ($input['category'] ?? ''));
+        $duration = trim((string) ($input['duration_label'] ?? ''));
+        $price = (float) ($input['price'] ?? -1);
+        $participants = (int) ($input['participants_limit'] ?? 0);
+        $capacity = (int) ($input['capacity'] ?? 0);
+        $courtId = (int) ($input['court_id'] ?? 0);
+
+        if ($courtId <= 0 || $name === '' || $slug === '' || $category === '' || $duration === '') {
+            throw new RuntimeException('Court, service name, slug, category, and duration are required.');
+        }
+        if ($price < 0 || $participants <= 0 || $capacity <= 0) {
+            throw new RuntimeException('Price must be zero or greater. Participants and capacity must be greater than zero.');
+        }
+
+        return [
+            'court_id' => $courtId,
+            'slug' => $slug,
+            'name' => $name,
+            'category' => $category,
+            'duration_label' => $duration,
+            'price' => $price,
+            'participants_limit' => $participants,
+            'capacity' => $capacity,
+            'image' => trim((string) ($input['image'] ?? '')) ?: null,
+            'active' => !empty($input['active']),
+        ];
+    }
+
+    private function slug(string $value): string
+    {
+        $value = strtolower(trim($value));
+        $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
+        return trim($value, '-');
+    }
+
+    private function status(string $status): string
+    {
+        $status = strtolower(trim($status));
+        return in_array($status, ['active', 'inactive', 'maintenance'], true) ? $status : 'active';
+    }
+}

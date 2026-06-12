@@ -25,14 +25,17 @@ final class CartRepository
         }
 
         $stmt = Database::connection()->prepare(
-            'SELECT ci.id AS cart_item_id, ci.quantity, ci.unit_price, s.id AS session_id, s.session_date, s.session_time,
+            "SELECT ci.id AS cart_item_id, ci.quantity, ci.unit_price,
+                    s.id AS session_id,
+                    DATE_FORMAT(s.session_date, '%W, %M %e, %Y') AS session_date,
+                    CONCAT(TIME_FORMAT(s.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(s.end_time, '%h:%i %p')) AS session_time,
                     v.slug AS variant_id, v.name, v.category, v.duration_label, v.image, v.price AS base_price, c.name AS court
              FROM cart_items ci
              JOIN sessions s ON s.id = ci.session_id
              JOIN booking_variants v ON v.id = s.variant_id
              JOIN courts c ON c.id = v.court_id
              WHERE ci.cart_id = :cart_id
-             ORDER BY ci.created_at ASC'
+             ORDER BY ci.created_at ASC"
         );
         $stmt->execute(['cart_id' => $cartId]);
         return $stmt->fetchAll();

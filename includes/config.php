@@ -9,8 +9,7 @@ return [
         'item_limit' => 3,
     ],
     'database' => [
-        // TODO(database-redesign): set enabled back to true after the new schema is finalized.
-        'enabled' => false,
+        'enabled' => true,
         'redesign_mode' => true,
     ],
     'mail' => [

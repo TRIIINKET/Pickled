@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
+require_once __DIR__ . '/../app/services/SchedulingService.php';
 
 pickled_start_secure_session();
 pickled_init_csrf();
@@ -11,12 +12,15 @@ if (empty($_SESSION['user']) || ($_SESSION['user']['role'] ?? '') !== 'coach') {
 }
 
 $coach = $_SESSION['user'];
+$coachId = (int) ($coach['id'] ?? 0);
 $coachName = $coach['name'] ?? 'Coach Mia';
 $firstName = trim(explode(' ', $coachName)[0] ?? 'Coach');
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
+$todayDate = $today->format('Y-m-d');
 $todayLabel = $today->format('M j, Y (D)');
 $scheduleDateLabel = $today->format('l, F j, Y');
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
+$schedulingService = new SchedulingService();
 
 function coach_icon(array $icons, string $name): string {
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['calendar']) . '</svg>';
@@ -48,12 +52,22 @@ $navItems = [
     ['Profile', pickled_frontend_url('coach/profile.php'), 'profile', false],
 ];
 
-$sessions = [
-    ['09:00 AM', '10:00 AM', 'Kids Class (Ages 6-10)', 'Court Pink', '8 students', 'Confirmed', 'pink', 'students'],
-    ['10:00 AM', '11:00 AM', 'Youth Development (Ages 11-17)', 'Court Pink', '10 students', 'Confirmed', 'pink', 'students'],
-    ['02:00 PM', '03:00 PM', 'Private Coaching', 'Court Green', 'Shemaiah', 'Confirmed', 'green', 'profile'],
-    ['04:00 PM', '06:00 PM', 'Open Match Play', 'Court Green', '16 participants', 'Pending', 'orange', 'trophy'],
-];
+$coachSessions = $coachId ? $schedulingService->sessionsBetween($coachId, $today->format('Y-m-d'), $today->modify('+7 days')->format('Y-m-d')) : [];
+$todaySessions = array_values(array_filter($coachSessions, fn(array $session): bool => $session['session_date'] === $todayDate));
+$sessions = array_map(static function (array $session): array {
+    $tone = str_contains(strtolower((string) $session['court']), 'pink') ? 'pink' : 'green';
+    $icon = str_contains(strtolower((string) $session['category']), 'private') ? 'profile' : 'students';
+    return [
+        (new DateTimeImmutable('1970-01-01 ' . $session['start_time']))->format('h:i A'),
+        (new DateTimeImmutable('1970-01-01 ' . $session['end_time']))->format('h:i A'),
+        $session['name'],
+        $session['court'],
+        (int) $session['booked_count'] . ' / ' . (int) $session['capacity'] . ' players',
+        ucfirst((string) $session['status']),
+        $tone,
+        $icon,
+    ];
+}, $todaySessions ?: array_slice($coachSessions, 0, 4));
 
 $students = [
     ['MR', 'Mia Reyes', 'Kids Class (6-10)', 'Jun 10, 2026', '92%', 'pink'],
@@ -61,13 +75,13 @@ $students = [
     ['AS', 'Alyssa Santos', 'Private Coaching', 'Jun 10, 2026', '95%', 'purple'],
 ];
 
-$availability = [
-    ['WED', 'Jun 11', '8:00 AM - 6:00 PM', 'Available'],
-    ['THU', 'Jun 12', '8:00 AM - 6:00 PM', 'Available'],
-    ['FRI', 'Jun 13', '8:00 AM - 5:00 PM', 'Available'],
-    ['SAT', 'Jun 14', '10:00 AM - 2:00 PM', 'Available'],
-    ['SUN', 'Jun 15', 'Day Off', 'Unavailable'],
-];
+$availabilityRows = $coachId ? $schedulingService->availabilityForCoach($coachId, true) : [];
+$availability = array_map(static fn(array $row): array => [
+    strtoupper((string) $row['day_label']),
+    $row['day_label'],
+    $row['time_range'],
+    ucfirst((string) $row['status']),
+], $availabilityRows);
 
 $announcements = [
     ['Tournament Moved', 'The Pickled Inter-Coach Tournament is moved to June 20, 2026.', 'pink', 'calendar'],
@@ -75,7 +89,7 @@ $announcements = [
     ['Holiday Hours', 'Please check the adjusted operating hours on June 12.', 'orange', 'clock'],
 ];
 
-$nextSession = $sessions[1];
+$nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No court', '0 players', 'Open', 'green', 'calendar'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -136,8 +150,8 @@ $nextSession = $sessions[1];
         </section>
 
         <section class="coach-kpi-grid" aria-label="Coach overview">
-            <article class="coach-kpi green"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Today's Sessions</span><strong>4</strong><small>Confirmed</small></div></article>
-            <article class="coach-kpi pink"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Upcoming This Week</span><strong>12</strong><small>Sessions</small></div></article>
+            <article class="coach-kpi green"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Today's Sessions</span><strong><?php echo number_format(count($todaySessions)); ?></strong><small>From MySQL</small></div></article>
+            <article class="coach-kpi pink"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Upcoming This Week</span><strong><?php echo number_format(count($coachSessions)); ?></strong><small>Sessions</small></div></article>
             <article class="coach-kpi orange"><?php echo coach_icon($icons, 'students'); ?><div><span>Active Students</span><strong>38</strong><small>This month</small></div></article>
             <article class="coach-kpi purple"><?php echo coach_icon($icons, 'stopwatch'); ?><div><span>Hours Coached</span><strong>24</strong><small>This week</small></div></article>
         </section>
@@ -186,8 +200,8 @@ $nextSession = $sessions[1];
                     <header><h2>Next Session</h2><em>In 1 hour</em></header>
                     <strong><?php echo htmlspecialchars($nextSession[0]); ?></strong>
                     <h3><?php echo htmlspecialchars($nextSession[2]); ?></h3>
-                    <span class="court-badge">Court Pink</span>
-                    <div><p><?php echo coach_icon($icons, 'students'); ?><b>10</b><small>Students</small></p><p><?php echo coach_icon($icons, 'clock'); ?><b>1 hour</b><small>Duration</small></p></div>
+                    <span class="court-badge"><?php echo htmlspecialchars($nextSession[3]); ?></span>
+                    <div><p><?php echo coach_icon($icons, 'students'); ?><b><?php echo htmlspecialchars($nextSession[4]); ?></b><small>Booked</small></p><p><?php echo coach_icon($icons, 'clock'); ?><b><?php echo htmlspecialchars($nextSession[0] . ' - ' . $nextSession[1]); ?></b><small>Time</small></p></div>
                 </article>
 
                 <article class="coach-card announcements-card" id="announcements">

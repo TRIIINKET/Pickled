@@ -1,13 +1,89 @@
 <?php
 require_once __DIR__ . '/../includes/security.php';
+require_once __DIR__ . '/../app/services/CatalogService.php';
+require_once __DIR__ . '/../app/services/SchedulingService.php';
 pickled_init_csrf();
 $pageTitle  = 'Courts - Pickled';
 $activePage = 'courts.php';
 $basePath   = '../';
 $extraHead  = '<link rel="stylesheet" href="../assets/css/courts.css?v=20260610b"/>';
-include __DIR__ . '/../includes/header.php';
 
-$courtImages = [
+function pickled_catalog_note(array $variant): string
+{
+  $category = trim((string) ($variant['category'] ?? 'Service'));
+  $duration = trim((string) ($variant['duration_label'] ?? ''));
+  $limit = (int) ($variant['participants_limit'] ?? 0);
+  $note = trim($category . ($duration !== '' ? ' - ' . $duration : ''));
+  if ($limit > 1) {
+    $note .= ' for up to ' . $limit . ' players';
+  }
+  return $note !== '' ? $note : 'Available booking service.';
+}
+
+function pickled_catalog_option(array $variant): array
+{
+  $name = (string) ($variant['name'] ?? 'Booking Service');
+  $price = (float) ($variant['price'] ?? 0);
+  $slug = (string) ($variant['slug'] ?? '');
+  $lower = strtolower($slug . ' ' . $name);
+  $option = [
+    'variant' => $slug,
+    'label' => strtoupper($name),
+    'price' => $price,
+    'duration' => (string) ($variant['duration_label'] ?? '1 hour'),
+    'court' => strtoupper((string) ($variant['court'] ?? 'Court')),
+    'title' => strtoupper($name) . ' ₱' . number_format($price, 0),
+    'note' => pickled_catalog_note($variant),
+  ];
+  if (str_contains($lower, 'coach') || str_contains($lower, 'private')) {
+    $option['dateMode'] = 'coach';
+  }
+  return $option;
+}
+
+function pickled_public_time_range(string $start, string $end): string
+{
+  return (new DateTimeImmutable('1970-01-01 ' . $start))->format('h:i A')
+    . ' - '
+    . (new DateTimeImmutable('1970-01-01 ' . $end))->format('h:i A');
+}
+
+function pickled_public_coach_schedule(array $availability): array
+{
+  $dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  $days = [];
+  $slots = [];
+  foreach ($availability as $row) {
+    if (($row['status'] ?? '') !== 'available') {
+      continue;
+    }
+    $days[] = (string) $row['day_of_week'];
+    $slots[] = pickled_public_time_range((string) $row['start_time'], (string) $row['end_time']);
+  }
+  $days = array_values(array_unique($days));
+  $slots = array_values(array_unique($slots));
+  $dayText = $days ? implode(', ', array_map(static fn(string $day): string => $dayLabels[(int) $day] ?? 'Day', $days)) : 'No availability';
+  $slotText = $slots ? implode(', ', $slots) : 'No active slots';
+  return [$dayText . ' · ' . $slotText, implode(',', $days), implode('|', $slots)];
+}
+
+$catalogService = new CatalogService();
+$schedulingService = new SchedulingService();
+$catalogCourts = [];
+$courtRateCatalog = [];
+$coachRows = [];
+
+try {
+  $catalogCourts = $catalogService->courts(false);
+  foreach ($catalogCourts as $catalogCourt) {
+    $courtRateCatalog[(string) $catalogCourt['slug']] = array_map('pickled_catalog_option', $catalogService->variantsForCourtSlug((string) $catalogCourt['slug'], false));
+  }
+  $coachRows = $schedulingService->coaches();
+} catch (Throwable $e) {
+  error_log('Court catalog load failed: ' . $e->getMessage());
+}
+
+$courtAssetDefaults = [
   'green' => [
     'title' => 'COURT GREEN',
     'tag' => "EVERYONE'S GAME",
@@ -30,13 +106,48 @@ $courtImages = [
   ],
 ];
 
-$bookingOptions = [
-  ['label' => 'FOUNDATIONAL AGES 6-10', 'note' => 'Comprehensive 4-session course focused on hand-eye coordination and fun.', 'price' => 1200, 'duration' => '4 sessions', 'court' => 'COURT PINK'],
-  ['label' => 'YOUTH DEVELOPMENT AGES 11-17', 'note' => '4-session course building technical consistency and match confidence.', 'price' => 1200, 'duration' => '4 sessions', 'court' => 'COURT PINK'],
-  ['label' => 'ADULT BEGINNER BOOTCAMP', 'note' => '4-session program covering essential rules and basic strokes.', 'price' => 1800, 'duration' => '4 sessions', 'court' => 'COURT PINK'],
-  ['label' => 'INTRODUCTORY TRIAL CLASS', 'note' => 'A single-session experience for up to 8 students.', 'price' => 250, 'duration' => '1 hour', 'court' => 'COURT PINK'],
-  ['label' => 'PARENT & CHILD TRIAL', 'note' => 'A combined session for one adult and one child, ages 6+.', 'price' => 500, 'duration' => '1 hour', 'court' => 'COURT PINK'],
+$courtImages = [];
+foreach ($catalogCourts as $catalogCourt) {
+  $slug = (string) $catalogCourt['slug'];
+  $assets = $courtAssetDefaults[$slug] ?? $courtAssetDefaults['green'];
+  $assets['title'] = strtoupper((string) $catalogCourt['name']);
+  $assets['tag'] = $assets['tag'] ?? 'BOOK NOW';
+  $courtImages[$slug] = $assets;
+}
+
+$defaultCourtKey = isset($courtImages['green']) ? 'green' : (array_key_first($courtImages) ?: 'green');
+$defaultCourtAssets = $courtImages[$defaultCourtKey] ?? $courtAssetDefaults['green'];
+$defaultRate = $courtRateCatalog[$defaultCourtKey][0] ?? [
+  'variant' => '',
+  'label' => 'COURT BOOKING',
+  'price' => 0,
+  'duration' => '1 hour',
+  'court' => $defaultCourtAssets['title'],
+  'title' => 'COURT BOOKING',
+  'note' => 'No active booking services are available yet.',
 ];
+$privateCoachRate = $defaultRate;
+foreach ($courtRateCatalog as $rates) {
+  foreach ($rates as $rate) {
+    $search = strtolower(($rate['variant'] ?? '') . ' ' . ($rate['label'] ?? ''));
+    if (str_contains($search, 'coach') || str_contains($search, 'private')) {
+      $privateCoachRate = $rate;
+      break 2;
+    }
+  }
+}
+$courtGalleryCatalog = [];
+foreach ($courtImages as $key => $courtImage) {
+  $courtGalleryCatalog[$key] = [
+    'title' => $courtImage['title'],
+    'image' => $courtImage['image'],
+    'alt' => $courtImage['title'] . ' main view',
+    'thumbAlt' => $courtImage['title'] . ' view',
+    'thumbs' => $courtImage['thumbs'],
+  ];
+}
+
+include __DIR__ . '/../includes/header.php';
 
 $coaches = [
   ['01', 'Coach Martina', 'pink', 'Technical fundamentals and youth development coach focused on biomechanics and injury prevention.', 'women', 'Mon, Wed, Fri · 9:00 AM - 12:00 PM', '1,3,5', '09:00 AM - 10:00 AM|10:00 AM - 11:00 AM|11:00 AM - 12:00 PM', 'https://i.pinimg.com/1200x/b2/41/a4/b241a487eac25d97256b8b9820c7fc3a.jpg'],
@@ -45,6 +156,22 @@ $coaches = [
   ['04', 'Coach Kenji', 'green', 'Power hitting and offensive doubles coach specializing in third-shot drops.', 'mens', 'Mon, Thu · 1:00 PM - 4:00 PM', '1,4', '01:00 PM - 02:00 PM|02:00 PM - 03:00 PM|03:00 PM - 04:00 PM', 'https://i.pinimg.com/736x/73/49/a7/7349a7512c81363fb8045bb46b19c28b.jpg'],
   ['05', 'Coach Sophia', 'pink', 'Social play and women’s clinic coach focused on group dynamics and community.', 'women', 'Wed, Sun · 3:00 PM - 6:00 PM', '3,0', '03:00 PM - 04:00 PM|04:00 PM - 05:00 PM|05:00 PM - 06:00 PM', 'https://i.pinimg.com/1200x/54/e4/c8/54e4c8c91b1594d3b960154e980f40dd.jpg'],
 ];
+$coaches = [];
+foreach ($coachRows as $index => $coachRow) {
+  $availability = $schedulingService->availabilityForCoach((int) $coachRow['id'], true);
+  [$scheduleLabel, $daysLabel, $slotsLabel] = pickled_public_coach_schedule($availability);
+  $coaches[] = [
+    str_pad((string) $coachRow['id'], 2, '0', STR_PAD_LEFT),
+    $coachRow['name'],
+    $index % 2 ? 'green' : 'pink',
+    $coachRow['bio'] ?: (($coachRow['specialization'] ?? 'Pickleball') . ' coach available for PICKLED sessions.'),
+    'all',
+    $scheduleLabel,
+    $daysLabel,
+    $slotsLabel,
+    '../assets/img/court/academy.png',
+  ];
+}
 ?>
 
 <main class="courts-page">
@@ -72,39 +199,30 @@ $coaches = [
     <div class="court-wrap court-product">
       <div class="court-gallery">
         <div class="court-thumbs" aria-label="Court gallery thumbnails">
-          <?php foreach ($courtImages['green']['thumbs'] as $index => $thumb): ?>
+          <?php foreach ($defaultCourtAssets['thumbs'] as $index => $thumb): ?>
             <button class="court-thumb <?= $index === 0 ? 'is-active' : '' ?>" type="button" data-gallery-src="<?= htmlspecialchars($thumb) ?>">
-              <img src="<?= htmlspecialchars($thumb) ?>" alt="Court Green view <?= $index + 1 ?>" />
+              <img src="<?= htmlspecialchars($thumb) ?>" alt="<?= htmlspecialchars($defaultCourtAssets['title']) ?> view <?= $index + 1 ?>" />
             </button>
           <?php endforeach; ?>
         </div>
         <div class="court-gallery__main">
-          <img id="courtMainImage" src="<?= htmlspecialchars($courtImages['green']['image']) ?>" alt="Court Green main view" />
+          <img id="courtMainImage" src="<?= htmlspecialchars($defaultCourtAssets['image']) ?>" alt="<?= htmlspecialchars($defaultCourtAssets['title']) ?> main view" />
         </div>
       </div>
 
       <div class="court-product__info">
         <p class="court-kicker">PICKLE &amp;</p>
-        <h2 id="selectedCourtTitle">COURT GREEN</h2>
-        <p class="court-price"><span id="selectedCourtPrice">₱600.00</span> <small>/ session</small></p>
+        <h2 id="selectedCourtTitle"><?= htmlspecialchars($defaultRate['court']) ?></h2>
+        <p class="court-price"><span id="selectedCourtPrice">₱<?= number_format((float) $defaultRate['price'], 2) ?></span> <small>/ session</small></p>
 
         <div class="rate-list" aria-label="Court rates">
-          <button class="rate-option is-selected" type="button" data-variant="green-court-rentals" data-label="COURT RENTALS" data-price="600" data-duration="1 hour" data-court="COURT GREEN">
-            <strong>COURT RENTALS ₱600</strong>
-            <span>Reserve Court Green for casual or private play</span>
-          </button>
-          <button class="rate-option" type="button" data-variant="green-lessons" data-label="LESSONS" data-price="500" data-duration="1 hour" data-court="COURT GREEN">
-            <strong>LESSONS ₱500</strong>
-            <span>Beginner-friendly drills and guided class sessions</span>
-          </button>
-          <button class="rate-option" type="button" data-variant="green-private-coaching" data-label="PRIVATE COACHING" data-price="1200" data-duration="1 hour" data-court="COURT GREEN" data-date-mode="coach">
-            <strong>PRIVATE COACHING ₱1,200</strong>
-            <span>1-on-1 session with a certified coach</span>
-          </button>
-          <button class="rate-option" type="button" data-variant="green-training" data-label="TRAINING" data-price="800" data-duration="1 hour" data-court="COURT GREEN">
-            <strong>TRAINING ₱800</strong>
-            <span>Focused skills training for stronger gameplay</span>
-          </button>
+          <?php foreach (($courtRateCatalog[$defaultCourtKey] ?? []) as $index => $rate): ?>
+            <button class="rate-option <?= $index === 0 ? 'is-selected' : '' ?>" type="button" data-variant="<?= htmlspecialchars($rate['variant']) ?>" data-label="<?= htmlspecialchars($rate['label']) ?>" data-note="<?= htmlspecialchars($rate['note']) ?>" data-price="<?= htmlspecialchars((string) $rate['price']) ?>" data-duration="<?= htmlspecialchars($rate['duration']) ?>" data-court="<?= htmlspecialchars($rate['court']) ?>" <?= !empty($rate['dateMode']) ? 'data-date-mode="' . htmlspecialchars($rate['dateMode']) . '"' : '' ?>>
+              <strong><?= htmlspecialchars($rate['title']) ?></strong>
+              <span><?= htmlspecialchars($rate['note']) ?></span>
+            </button>
+          <?php endforeach; ?>
+          <?php if (empty($courtRateCatalog[$defaultCourtKey])): ?><p>No active court services available yet.</p><?php endif; ?>
         </div>
 
         <div class="court-booking-actions">
@@ -112,7 +230,7 @@ $coaches = [
           <form method="post" action="cart.php" class="court-cart-form" id="courtCartForm">
             <input type="hidden" name="action" value="add_booking" />
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
-            <input type="hidden" name="variant_id" value="green-court-rentals" />
+            <input type="hidden" name="variant_id" value="<?= htmlspecialchars($defaultRate['variant']) ?>" />
             <input type="hidden" name="date" value="Thursday, May 7, 2026" />
             <input type="hidden" name="time" value="Selected schedule" />
             <input type="hidden" name="quantity" value="1" />
@@ -142,7 +260,7 @@ $coaches = [
               <p>Pickled Classes</p>
               <h3>PRIVATE AND SEMI-PRIVATE LESSON</h3>
               <span>Up to 6 players with an internationally certified coach</span>
-              <button class="book-trigger" type="button" data-tooltip="Order now" data-booking-label="PRIVATE COACHING" data-booking-price="1200" data-booking-duration="1 hour" data-booking-court="PRIVATE COACHING" data-date-mode="coach">Book now</button>
+              <button class="book-trigger" type="button" data-tooltip="Order now" data-booking-variant="<?= htmlspecialchars($privateCoachRate['variant']) ?>" data-booking-label="<?= htmlspecialchars($privateCoachRate['label']) ?>" data-booking-note="<?= htmlspecialchars($privateCoachRate['note']) ?>" data-booking-price="<?= htmlspecialchars((string) $privateCoachRate['price']) ?>" data-booking-duration="<?= htmlspecialchars($privateCoachRate['duration']) ?>" data-booking-court="<?= htmlspecialchars($privateCoachRate['court']) ?>" data-date-mode="<?= htmlspecialchars($privateCoachRate['dateMode'] ?? 'coach') ?>">Book now</button>
             </div>
           </article>
           <article class="class-slide" data-class-slide hidden>
@@ -182,7 +300,7 @@ $coaches = [
         <p>Pickle &amp;</p>
         <h2>COACHES</h2>
         <span>Our team is a diverse group of internationally certified coaches united by a common goal, working together harmoniously to achieve success.</span>
-        <button class="book-trigger coaches-book" type="button" data-tooltip="Order now" data-booking-label="PRIVATE COACHING" data-booking-price="1200" data-booking-duration="1 hour" data-booking-court="PRIVATE COACHING" data-date-mode="coach">BOOK NOW ›</button>
+        <button class="book-trigger coaches-book" type="button" data-tooltip="Order now" data-booking-variant="<?= htmlspecialchars($privateCoachRate['variant']) ?>" data-booking-label="<?= htmlspecialchars($privateCoachRate['label']) ?>" data-booking-note="<?= htmlspecialchars($privateCoachRate['note']) ?>" data-booking-price="<?= htmlspecialchars((string) $privateCoachRate['price']) ?>" data-booking-duration="<?= htmlspecialchars($privateCoachRate['duration']) ?>" data-booking-court="<?= htmlspecialchars($privateCoachRate['court']) ?>" data-date-mode="<?= htmlspecialchars($privateCoachRate['dateMode'] ?? 'coach') ?>">BOOK NOW ›</button>
         <div class="coach-filter">
           <button class="is-active" type="button" data-coach-filter="all">All</button>
           <button type="button" data-coach-filter="mens">Men</button>
@@ -209,6 +327,7 @@ $coaches = [
 
 <?php
 $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
+$defaultCoach = $coaches[0] ?? ['00', 'Coach', 'green', '', 'all', '', '', '', '../assets/img/court/academy.png'];
 ?>
 
 <div class="booking-modal" id="bookingModal" aria-hidden="true">
@@ -216,9 +335,9 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
     <button class="booking-close" type="button" aria-label="Close booking">×</button>
     <div class="booking-step booking-step--date is-active">
       <div class="booking-calendar">
-        <img src="<?= htmlspecialchars($courtImages['green']['image']) ?>" alt="" />
-        <span class="booking-label" id="bookingType">COURT RENTALS</span>
-        <p id="bookingHint">Reserve Court Green for casual or private play.</p>
+        <img src="<?= htmlspecialchars($defaultCourtAssets['image']) ?>" alt="" />
+        <span class="booking-label" id="bookingType"><?= htmlspecialchars($defaultRate['label']) ?></span>
+        <p id="bookingHint"><?= htmlspecialchars($defaultRate['note']) ?></p>
         <div class="calendar-head">
           <button type="button" aria-label="Previous month">‹</button>
           <strong>May 2026</strong>
@@ -393,42 +512,30 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
   const availabilityEndpoint = '../app/api/availability.php';
   let availability = { dates: {} };
   const loginUrl = '../auth/login.php?notice=booking&redirect=resident/courts.php%23court-detail';
+  const defaultCourtKey = <?= json_encode($defaultCourtKey) ?>;
   const state = {
-    variant: 'green-court-rentals',
-    label: 'COURT RENTALS',
-    note: 'Reserve Court Green for casual or private play.',
-    price: 600,
-    duration: '1 hour',
-    court: 'COURT GREEN',
+    variant: <?= json_encode($defaultRate['variant'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+    label: <?= json_encode($defaultRate['label'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+    note: <?= json_encode($defaultRate['note'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+    price: <?= json_encode((float) $defaultRate['price']) ?>,
+    duration: <?= json_encode($defaultRate['duration'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+    court: <?= json_encode($defaultRate['court'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
     date: 'Thursday, May 7, 2026',
     selectedTimes: ['07:00 AM - 08:00 AM', '08:00 AM - 09:00 AM'],
     qty: 1,
     feeRate: 0,
     paymentMethod: 'Pay at Club',
-    dateMode: 'daily',
-    coach: 'Coach Martina',
-    coachSchedule: 'Mon, Wed, Fri · 9:00 AM - 12:00 PM',
-    coachDays: '1,3,5',
-    coachSlots: '09:00 AM - 10:00 AM|10:00 AM - 11:00 AM|11:00 AM - 12:00 PM',
+    dateMode: <?= json_encode($defaultRate['dateMode'] ?? 'daily') ?>,
+    coach: <?= json_encode($defaultCoach[1], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+    coachSchedule: <?= json_encode($defaultCoach[5], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+    coachDays: <?= json_encode($defaultCoach[6], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+    coachSlots: <?= json_encode($defaultCoach[7], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
     timeFormat: '12',
     name: '',
     email: ''
   };
   const money = value => '₱' + Number(value).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const courtRateCatalog = {
-    green: [
-      { variant: 'green-court-rentals', label: 'COURT RENTALS', price: 600, duration: '1 hour', court: 'COURT GREEN', title: 'COURT RENTALS ₱600', note: 'Reserve Court Green for casual or private play' },
-      { variant: 'green-lessons', label: 'LESSONS', price: 500, duration: '1 hour', court: 'COURT GREEN', title: 'LESSONS ₱500', note: 'Beginner-friendly drills and guided class sessions' },
-      { variant: 'green-private-coaching', label: 'PRIVATE COACHING', price: 1200, duration: '1 hour', court: 'COURT GREEN', title: 'PRIVATE COACHING ₱1,200', note: '1-on-1 session with a certified coach', dateMode: 'coach' },
-      { variant: 'green-training', label: 'TRAINING', price: 800, duration: '1 hour', court: 'COURT GREEN', title: 'TRAINING ₱800', note: 'Focused skills training for stronger gameplay' },
-    ],
-    pink: [
-      { variant: 'pink-base-rate', label: 'COURT RENTAL', price: 400, duration: '1 hour', court: 'COURT PINK', title: 'Court Rental ₱400', note: 'Reserve Court Pink for casual games, family play, and beginner-friendly sessions.' },
-      { variant: 'pink-kids-pickleball-class-ages-6-10', label: 'KIDS PICKLEBALL CLASS (AGES 6-10)', price: 350, duration: '1 hour', court: 'COURT PINK', title: 'Kids Pickleball Class (Ages 6-10) ₱350', note: 'Fun and engaging introductory session focused on movement, coordination, and basic skills.' },
-      { variant: 'pink-youth-development-class-ages-11-17', label: 'YOUTH DEVELOPMENT CLASS (AGES 11-17)', price: 350, duration: '1 hour', court: 'COURT PINK', title: 'Youth Development Class (Ages 11-17) ₱350', note: 'Guided session designed to build confidence, consistency, and match awareness.' },
-      { variant: 'pink-parent-child-session', label: 'PARENT & CHILD SESSION', price: 500, duration: '1 hour', court: 'COURT PINK', title: 'Parent & Child Session ₱500', note: 'A shared beginner-friendly experience for one parent and one child.' },
-    ],
-  };
+  const courtRateCatalog = <?= json_encode($courtRateCatalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
   const modal = document.getElementById('bookingModal');
   const dateStep = modal.querySelector('.booking-step--date');
   const detailsStep = modal.querySelector('.booking-step--details');
@@ -440,20 +547,7 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
   const rateList = document.querySelector('.rate-list');
   const courtThumbs = document.querySelector('.court-thumbs');
   const courtMainImage = document.getElementById('courtMainImage');
-  const courtGalleryCatalog = <?= json_encode([
-    'green' => [
-      'image' => $courtImages['green']['image'],
-      'alt' => 'Court Green main view',
-      'thumbAlt' => 'Court Green view',
-      'thumbs' => $courtImages['green']['thumbs'],
-    ],
-    'pink' => [
-      'image' => $courtImages['pink']['image'],
-      'alt' => 'Court Pink main view',
-      'thumbAlt' => 'Court Pink view',
-      'thumbs' => $courtImages['pink']['thumbs'],
-    ],
-  ], JSON_UNESCAPED_SLASHES) ?>;
+  const courtGalleryCatalog = <?= json_encode($courtGalleryCatalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
   const coachRow = document.getElementById('coachRow');
   const coachSelect = document.getElementById('coachSelect');
   const coachSchedule = document.getElementById('coachSchedule');
@@ -654,16 +748,17 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
   function applyBookingDataset(button){
     if (!button.dataset.bookingLabel) return;
     state.label = button.dataset.bookingLabel;
-    state.variant = button.dataset.bookingVariant || 'green-private-coaching';
-    state.note = button.dataset.bookingNote || 'Private coaching with your preferred certified coach.';
-    state.price = Number(button.dataset.bookingPrice);
-    state.duration = button.dataset.bookingDuration;
-    state.court = button.dataset.bookingCourt;
+    state.variant = button.dataset.bookingVariant || state.variant;
+    state.note = button.dataset.bookingNote || state.note;
+    state.price = Number(button.dataset.bookingPrice || state.price);
+    state.duration = button.dataset.bookingDuration || state.duration;
+    state.court = button.dataset.bookingCourt || state.court;
     state.dateMode = button.dataset.dateMode || 'daily';
     document.getElementById('selectedCourtPrice').textContent = money(state.price);
   }
 
   function applyRateOption(button){
+    if (!button) return;
     rateList.querySelectorAll('.rate-option').forEach(item => item.classList.remove('is-selected'));
     button.classList.add('is-selected');
     state.label = button.dataset.label;
@@ -678,8 +773,14 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
   }
 
   function renderRateOptions(courtKey){
-    const options = courtRateCatalog[courtKey] || courtRateCatalog.green;
+    const options = courtRateCatalog[courtKey] || courtRateCatalog[defaultCourtKey] || [];
     rateList.replaceChildren();
+    if (!options.length) {
+      const empty = document.createElement('p');
+      empty.textContent = 'No active court services available yet.';
+      rateList.appendChild(empty);
+      return;
+    }
     options.forEach((option, index) => {
       const button = document.createElement('button');
       button.className = 'rate-option' + (index === 0 ? ' is-selected' : '');
@@ -703,7 +804,8 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
   }
 
   function renderCourtGallery(courtKey){
-    const gallery = courtGalleryCatalog[courtKey] || courtGalleryCatalog.green;
+    const gallery = courtGalleryCatalog[courtKey] || courtGalleryCatalog[defaultCourtKey];
+    if (!gallery) return;
     courtMainImage.src = gallery.image;
     courtMainImage.alt = gallery.alt;
     courtThumbs.replaceChildren();
@@ -732,15 +834,11 @@ $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes
   document.querySelectorAll('[data-jump-court]').forEach(button => {
     button.addEventListener('click', () => {
       document.getElementById('court-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      if (button.dataset.jumpCourt === 'pink') {
-        document.getElementById('selectedCourtTitle').textContent = 'COURT PINK';
-        renderCourtGallery('pink');
-        renderRateOptions('pink');
-      } else {
-        document.getElementById('selectedCourtTitle').textContent = 'COURT GREEN';
-        renderCourtGallery('green');
-        renderRateOptions('green');
-      }
+      const courtKey = button.dataset.jumpCourt || defaultCourtKey;
+      const gallery = courtGalleryCatalog[courtKey] || courtGalleryCatalog[defaultCourtKey];
+      document.getElementById('selectedCourtTitle').textContent = gallery ? gallery.title : state.court;
+      renderCourtGallery(courtKey);
+      renderRateOptions(courtKey);
     });
   });
 

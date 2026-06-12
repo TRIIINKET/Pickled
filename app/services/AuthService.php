@@ -11,13 +11,13 @@ final class AuthService
         private readonly PasswordResetRepository $resets = new PasswordResetRepository()
     ) {}
 
-    public function register(string $name, string $email, string $password): array
+    public function register(string $name, string $email, string $password, array $profile = []): array
     {
         if ($this->users->findByEmail($email)) {
             throw new RuntimeException('Email is already registered. Please log in.');
         }
 
-        return $this->users->create($name, $email, password_hash($password, PASSWORD_DEFAULT));
+        return $this->users->create($name, $email, password_hash($password, PASSWORD_DEFAULT), $profile);
     }
 
     public function attempt(string $email, string $password): ?array
@@ -38,7 +38,10 @@ final class AuthService
         }
 
         $token = bin2hex(random_bytes(32));
-        $this->resets->create((int) $user['id'], hash('sha256', $token), new DateTimeImmutable('+30 minutes'));
+        $config = require __DIR__ . '/../../includes/config.php';
+        $timezone = new DateTimeZone((string) ($config['timezone'] ?? 'Asia/Manila'));
+        $expiresAt = (new DateTimeImmutable('now', $timezone))->modify('+30 minutes');
+        $this->resets->create((int) $user['id'], hash('sha256', $token), $expiresAt);
         return $token;
     }
 

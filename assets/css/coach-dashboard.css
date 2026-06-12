@@ -12,6 +12,114 @@
     --font: 'DM Sans', sans-serif;
 }
 
+.alert {
+    margin: 0 0 16px;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-weight: 800;
+}
+
+.alert-success {
+    background: #eef9e8;
+    color: #1f4f17;
+    border: 1px solid rgba(31, 79, 23, 0.18);
+}
+
+.alert-error {
+    background: #fff0f3;
+    color: #9a2438;
+    border: 1px solid rgba(154, 36, 56, 0.18);
+}
+
+.catalog-admin-form {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(140px, 1fr)) auto;
+    gap: 12px;
+    padding: 14px 0;
+    align-items: end;
+}
+
+.catalog-admin-form label {
+    display: grid;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #506050;
+    text-transform: uppercase;
+}
+
+.catalog-admin-form input,
+.catalog-admin-form select {
+    width: 100%;
+    border: 1px solid rgba(38, 68, 20, 0.14);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font: inherit;
+    background: #fbfdf8;
+    color: #173d15;
+}
+
+.catalog-admin-form button,
+.catalog-status-form button {
+    border: 0;
+    border-radius: 8px;
+    padding: 11px 16px;
+    background: #264414;
+    color: #fff;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.catalog-admin-list {
+    display: grid;
+    gap: 10px;
+}
+
+.catalog-admin-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid rgba(38, 68, 20, 0.1);
+    border-radius: 8px;
+    background: #fbfdf8;
+}
+
+.catalog-inline-form {
+    padding: 0;
+}
+
+.catalog-status-form {
+    display: flex;
+    align-items: end;
+}
+
+.catalog-status-form .danger,
+.catalog-status-form button.danger {
+    background: #bb3a4d;
+}
+
+.catalog-empty-state {
+    color: #6f7a6f;
+    font-weight: 700;
+}
+
+@media (max-width: 1000px) {
+    .catalog-admin-form {
+        grid-template-columns: repeat(2, minmax(140px, 1fr));
+    }
+
+    .catalog-admin-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .catalog-admin-form {
+        grid-template-columns: 1fr;
+    }
+}
+
 * {
     box-sizing: border-box;
 }

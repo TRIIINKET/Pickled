@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
+require_once __DIR__ . '/../app/services/SchedulingService.php';
 
 pickled_start_secure_session();
 pickled_init_csrf();
@@ -11,13 +12,45 @@ if (empty($_SESSION['user']) || ($_SESSION['user']['role'] ?? '') !== 'coach') {
 }
 
 $coach = $_SESSION['user'];
+$coachId = (int) ($coach['id'] ?? 0);
 $coachName = $coach['name'] ?? 'Coach Mia';
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
 $todayLabel = $today->format('M j, Y (D)');
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
+$schedulingService = new SchedulingService();
+$successMsg = '';
+$errorMsg = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? null)) {
+        $errorMsg = 'Invalid form submission. Please try again.';
+    } else {
+        try {
+            $action = (string) ($_POST['action'] ?? '');
+            $payload = $_POST + ['coach_user_id' => $coachId];
+            if ($action === 'create_availability') {
+                $schedulingService->createAvailability($payload);
+                $successMsg = 'Availability slot added.';
+            } elseif ($action === 'update_availability') {
+                $schedulingService->updateAvailability((int) ($_POST['availability_id'] ?? 0), $payload);
+                $successMsg = 'Availability slot updated.';
+            } elseif ($action === 'disable_availability') {
+                $schedulingService->setAvailabilityStatus((int) ($_POST['availability_id'] ?? 0), 'unavailable');
+                $successMsg = 'Availability slot disabled.';
+            }
+        } catch (Throwable $e) {
+            error_log('Coach availability action failed: ' . $e->getMessage());
+            $errorMsg = $e instanceof RuntimeException ? $e->getMessage() : 'Unable to save availability.';
+        }
+    }
+}
 
 function availability_icon(array $icons, string $name): string {
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['clock']) . '</svg>';
+}
+
+function availability_h(mixed $value): string {
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
 $icons = [
@@ -48,25 +81,32 @@ $navItems = [
     ['Profile', pickled_frontend_url('coach/profile.php'), 'profile', false],
 ];
 
+$availabilityRows = $coachId ? $schedulingService->availabilityForCoach($coachId, true) : [];
+$weekStart = $today->modify('monday this week');
 $times = ['7 AM', '8 AM', '9 AM', '10 AM', '11 AM', '12 PM', '1 PM', '2 PM', '3 PM', '4 PM', '5 PM', '6 PM', '7 PM', '8 PM'];
-$days = [
-    ['mon', 'MON', 'JUN 9'],
-    ['tue', 'TUE', 'JUN 10'],
-    ['wed', 'WED', 'JUN 11'],
-    ['thu', 'THU', 'JUN 12'],
-    ['fri', 'FRI', 'JUN 13'],
-    ['sat', 'SAT', 'JUN 14'],
-    ['sun', 'SUN', 'JUN 15'],
-];
-$slotMap = [
-    'mon' => ['available','available','available','available','partial','available','available','available','available','partial','full','available','available','unavailable'],
-    'tue' => ['available','available','full','full','full','partial','available','available','available','full','full','full','available','unavailable'],
-    'wed' => ['available','available','available','available','available','available','available','partial','available','available','partial','available','available','unavailable'],
-    'thu' => ['available','available','available','available','available','available','partial','partial','available','available','full','available','available','unavailable'],
-    'fri' => ['available','available','available','available','available','available','available','available','available','partial','full','available','available','unavailable'],
-    'sat' => ['available','available','available','partial','partial','available','available','available','available','partial','partial','available','unavailable','unavailable'],
-    'sun' => array_fill(0, 14, 'unavailable'),
-];
+$days = [];
+$dayNumbers = [1, 2, 3, 4, 5, 6, 0];
+$dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+foreach ($dayNumbers as $index => $dayNumber) {
+    $date = $weekStart->modify('+' . $index . ' days');
+    $days[] = [$dayKeys[$index], strtoupper($date->format('D')), strtoupper($date->format('M j')), $dayNumber];
+}
+$slotMap = array_fill_keys($dayKeys, array_fill(0, count($times), 'unavailable'));
+foreach ($availabilityRows as $row) {
+    $dayIndex = array_search((int) $row['day_of_week'], $dayNumbers, true);
+    if ($dayIndex === false) {
+        continue;
+    }
+    $key = $dayKeys[$dayIndex];
+    $startHour = (int) substr((string) $row['start_time'], 0, 2);
+    $endHour = (int) substr((string) $row['end_time'], 0, 2);
+    for ($hour = $startHour; $hour < $endHour; $hour++) {
+        $slotIndex = $hour - 7;
+        if (isset($slotMap[$key][$slotIndex])) {
+            $slotMap[$key][$slotIndex] = $row['status'] === 'available' ? 'available' : 'unavailable';
+        }
+    }
+}
 
 $slotLabels = [
     'available' => 'Available',
@@ -84,11 +124,18 @@ $rules = [
     ['Min Notice for Booking', '2 hours', 'clock'],
 ];
 
-$upcomingSessions = [
-    ['4:00 PM', '5:00 PM', 'Private Coaching', 'Court Green', '1 Student'],
-    ['6:00 PM', '7:00 PM', 'Youth Development', 'Court Pink', '10 Students'],
-    ['10:00 AM', '11:00 AM', 'Kids Class (6-10)', 'Court Pink', '8 Students'],
-];
+$coachSessions = $coachId ? $schedulingService->sessionsBetween($coachId, $today->format('Y-m-d'), $today->modify('+30 days')->format('Y-m-d')) : [];
+$upcomingSessions = array_map(static fn(array $session): array => [
+    (new DateTimeImmutable('1970-01-01 ' . $session['start_time']))->format('g:i A'),
+    (new DateTimeImmutable('1970-01-01 ' . $session['end_time']))->format('g:i A'),
+    $session['name'],
+    $session['court'],
+    (int) $session['booked_count'] . ' / ' . (int) $session['capacity'] . ' Players',
+], array_slice($coachSessions, 0, 4));
+$availableDays = count(array_unique(array_map(static fn(array $row): int => (int) $row['day_of_week'], array_filter($availabilityRows, static fn(array $row): bool => $row['status'] === 'available'))));
+$availableSlots = count(array_filter($availabilityRows, static fn(array $row): bool => $row['status'] === 'available'));
+$bookedSessions = count($coachSessions);
+$nextSessionLabel = $upcomingSessions[0][0] ?? 'None';
 
 $templates = [
     ['Morning Coach', '8:00 AM - 12:00 PM', 'Mon - Fri', 'sun', 'orange'],
@@ -143,11 +190,47 @@ $notifications = [
             </div>
         </header>
 
+        <?php if ($successMsg): ?><div class="alert alert-success"><?php echo availability_h($successMsg); ?></div><?php endif; ?>
+        <?php if ($errorMsg): ?><div class="alert alert-error"><?php echo availability_h($errorMsg); ?></div><?php endif; ?>
+
         <section class="coach-kpi-grid availability-kpis page-first-section">
-            <article class="coach-kpi green"><?php echo availability_icon($icons, 'calendar'); ?><div><span>Available Days</span><strong>5 Days</strong><small>This Week</small></div></article>
-            <article class="coach-kpi blue"><?php echo availability_icon($icons, 'clock'); ?><div><span>Available Slots</span><strong>24 Slots</strong><small>Remaining</small></div></article>
-            <article class="coach-kpi orange"><?php echo availability_icon($icons, 'students'); ?><div><span>Booked Sessions</span><strong>8 Sessions</strong><small>This Week</small></div></article>
-            <article class="coach-kpi purple"><?php echo availability_icon($icons, 'timer'); ?><div><span>Upcoming Session</span><strong>Today 4:00 PM</strong><small>Private Coaching</small></div></article>
+            <article class="coach-kpi green"><?php echo availability_icon($icons, 'calendar'); ?><div><span>Available Days</span><strong><?php echo number_format($availableDays); ?> Days</strong><small>This Week</small></div></article>
+            <article class="coach-kpi blue"><?php echo availability_icon($icons, 'clock'); ?><div><span>Available Slots</span><strong><?php echo number_format($availableSlots); ?> Slots</strong><small>Configured</small></div></article>
+            <article class="coach-kpi orange"><?php echo availability_icon($icons, 'students'); ?><div><span>Booked Sessions</span><strong><?php echo number_format($bookedSessions); ?> Sessions</strong><small>Next 30 Days</small></div></article>
+            <article class="coach-kpi purple"><?php echo availability_icon($icons, 'timer'); ?><div><span>Upcoming Session</span><strong><?php echo availability_h($nextSessionLabel); ?></strong><small>From MySQL</small></div></article>
+        </section>
+
+        <section class="coach-card availability-template-card">
+            <header><h2><?php echo availability_icon($icons, 'clock'); ?>Manage Availability</h2></header>
+            <form class="catalog-admin-form catalog-admin-form-wide" method="post">
+                <input type="hidden" name="csrf_token" value="<?php echo availability_h(pickled_csrf_token()); ?>">
+                <label><span>Day</span><select name="day_of_week"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select></label>
+                <label><span>Start</span><input type="time" name="start_time" value="09:00" required></label>
+                <label><span>End</span><input type="time" name="end_time" value="10:00" required></label>
+                <label><span>Status</span><select name="status"><option value="available">Available</option><option value="unavailable">Unavailable</option><option value="leave">Leave</option></select></label>
+                <button type="submit" name="action" value="create_availability">Add Slot</button>
+            </form>
+            <div class="catalog-admin-list">
+                <?php foreach ($availabilityRows as $row): ?>
+                    <article class="catalog-admin-row">
+                        <form class="catalog-admin-form catalog-inline-form" method="post">
+                            <input type="hidden" name="csrf_token" value="<?php echo availability_h(pickled_csrf_token()); ?>">
+                            <input type="hidden" name="availability_id" value="<?php echo (int) $row['id']; ?>">
+                            <label><span>Day</span><select name="day_of_week"><?php foreach ([0 => 'Sunday', 1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday'] as $number => $label): ?><option value="<?php echo $number; ?>" <?php echo (int) $row['day_of_week'] === $number ? 'selected' : ''; ?>><?php echo availability_h($label); ?></option><?php endforeach; ?></select></label>
+                            <label><span>Start</span><input type="time" name="start_time" value="<?php echo availability_h(substr((string) $row['start_time'], 0, 5)); ?>" required></label>
+                            <label><span>End</span><input type="time" name="end_time" value="<?php echo availability_h(substr((string) $row['end_time'], 0, 5)); ?>" required></label>
+                            <label><span>Status</span><select name="status"><option value="available" <?php echo $row['status'] === 'available' ? 'selected' : ''; ?>>Available</option><option value="unavailable" <?php echo $row['status'] === 'unavailable' ? 'selected' : ''; ?>>Unavailable</option><option value="leave" <?php echo $row['status'] === 'leave' ? 'selected' : ''; ?>>Leave</option></select></label>
+                            <button type="submit" name="action" value="update_availability">Save</button>
+                        </form>
+                        <form class="catalog-status-form" method="post">
+                            <input type="hidden" name="csrf_token" value="<?php echo availability_h(pickled_csrf_token()); ?>">
+                            <input type="hidden" name="availability_id" value="<?php echo (int) $row['id']; ?>">
+                            <button class="danger" type="submit" name="action" value="disable_availability">Disable</button>
+                        </form>
+                    </article>
+                <?php endforeach; ?>
+                <?php if (!$availabilityRows): ?><p class="catalog-empty-state">No availability slots yet.</p><?php endif; ?>
+            </div>
         </section>
 
         <section class="availability-workspace">

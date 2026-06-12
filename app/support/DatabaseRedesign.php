@@ -6,7 +6,7 @@ final class DatabaseRedesign
     public static function active(): bool
     {
         $config = require __DIR__ . '/../../includes/config.php';
-        return empty($config['database']['enabled']);
+        return !empty($config['database']['redesign_mode']);
     }
 
     public static function demoPassword(): string
