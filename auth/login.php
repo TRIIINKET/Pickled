@@ -15,9 +15,7 @@ $extraHead = '<link rel="stylesheet" href="' . htmlspecialchars(pickled_asset_ur
 $auth = new AuthService();
 
 if (!empty($_SESSION['user'])) {
-    $role = $_SESSION['user']['role'] ?? '';
-    $destination = $role === 'admin' ? 'admin/admin-dashboard.php' : ($role === 'coach' ? 'coach/dashboard.php' : 'index.php');
-    header('Location: ' . pickled_frontend_url($destination));
+    header('Location: ' . pickled_frontend_url(pickled_login_redirect_for_role($_SESSION['user']['role'] ?? null)));
     exit;
 }
 
@@ -26,7 +24,7 @@ $mode = $mode === 'signup' ? 'signup' : 'login';
 $allowedRoles = ['admin', 'coach', 'player'];
 $selectedRole = $_POST['role'] ?? ($_GET['role'] ?? 'player');
 $selectedRole = in_array($selectedRole, $allowedRoles, true) ? $selectedRole : 'player';
-$redirect = pickled_safe_redirect($_POST['redirect'] ?? ($_GET['redirect'] ?? 'index.php'));
+$redirect = pickled_safe_redirect($_POST['redirect'] ?? ($_GET['redirect'] ?? 'resident/index.php'));
 $bookingNotice = ($_GET['notice'] ?? '') === 'booking' ? 'Please sign up or sign in before booking.' : '';
 $loginError = '';
 $signupError = '';
@@ -71,30 +69,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $mode = 'login';
             $user = $email && $password !== '' ? $auth->attempt($email, $password) : null;
-            if ($user && ($user['role'] ?? '') === $selectedRole) {
-                $_SESSION['user'] = [
-                    'id' => (int) $user['id'],
-                    'email' => $email,
-                    'name'  => $user['name'],
-                    'role' => $user['role'],
-                ];
+            if ($user) {
                 session_regenerate_id(true);
+                $_SESSION['user'] = pickled_session_user($user);
+                $_SESSION['user_id'] = $_SESSION['user']['id'];
                 pickled_restore_cart_for_user();
-              $emailService = new EmailService();
-              if (!$emailService->sendLoginNotification($_SESSION['user'])) {
-                $_SESSION['flash'] = [
-                  'type' => 'warning',
-                  'message' => 'Logged in, but the notification email could not be sent.'
-                ];
-                error_log('Login notification failed for ' . ($_SESSION['user']['email'] ?? 'unknown email'));
-              }
+                $emailService = new EmailService();
+                if (!$emailService->sendLoginNotification($_SESSION['user'])) {
+                    $_SESSION['flash'] = [
+                        'type' => 'warning',
+                        'message' => 'Logged in, but the notification email could not be sent.',
+                    ];
+                    error_log('Login notification failed for ' . ($_SESSION['user']['email'] ?? 'unknown email'));
+                }
 
-                $destination = $selectedRole === 'admin' ? 'admin/admin-dashboard.php' : ($selectedRole === 'coach' ? 'coach/dashboard.php' : $redirect);
-                header('Location: ' . pickled_frontend_url($destination));
+                header('Location: ' . pickled_frontend_url(pickled_login_redirect_for_role($_SESSION['user']['role'], $redirect)));
                 exit;
             }
 
-            $loginError = 'Invalid credentials for the selected role.';
+            $loginError = 'Invalid email or password.';
         }
     }
 }

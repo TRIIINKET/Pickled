@@ -50,6 +50,28 @@ function pickled_validate_csrf_token(?string $value): bool {
     return is_string($value) && hash_equals($_SESSION['csrf_token'], $value);
 }
 
+function pickled_normalize_role(?string $role): string {
+    $role = strtolower(trim((string) $role));
+    return in_array($role, ['admin', 'coach', 'player'], true) ? $role : 'player';
+}
+
+function pickled_session_user(array $user): array {
+    return [
+        'id' => (int) ($user['id'] ?? 0),
+        'email' => strtolower(trim((string) ($user['email'] ?? ''))),
+        'name' => trim((string) ($user['name'] ?? '')),
+        'role' => pickled_normalize_role($user['role'] ?? null),
+    ];
+}
+
+function pickled_default_redirect_for_role(?string $role): string {
+    return match (pickled_normalize_role($role)) {
+        'admin' => 'admin/admin-dashboard.php',
+        'coach' => 'coach/dashboard.php',
+        default => 'resident/index.php',
+    };
+}
+
 function pickled_safe_redirect(string $redirect): string {
     $allowedPages = [
         'index.php',
@@ -67,7 +89,7 @@ function pickled_safe_redirect(string $redirect): string {
 
     $redirect = trim($redirect);
     if ($redirect === '') {
-        return 'index.php';
+        return 'resident/index.php';
     }
 
     $parts = parse_url($redirect);
@@ -90,7 +112,18 @@ function pickled_safe_redirect(string $redirect): string {
         return $path . $query . $fragment;
     }
 
-    return 'index.php';
+    return 'resident/index.php';
+}
+
+function pickled_login_redirect_for_role(?string $role, string $requestedRedirect = ''): string {
+    $role = pickled_normalize_role($role);
+
+    if ($role === 'admin' || $role === 'coach') {
+        return pickled_default_redirect_for_role($role);
+    }
+
+    $redirect = pickled_safe_redirect($requestedRedirect);
+    return $redirect === 'index.php' ? pickled_default_redirect_for_role('player') : $redirect;
 }
 
 // Admin security functions

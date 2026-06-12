@@ -2,11 +2,12 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/security.php';
-require_once __DIR__ . '/../app/repositories/UserRepository.php';
+require_once __DIR__ . '/../includes/paths.php';
+require_once __DIR__ . '/../app/services/AuthService.php';
 
 pickled_start_secure_session();
 
-$userRepo = new UserRepository();
+$auth = new AuthService();
 $errorMsg = '';
 $successMsg = '';
 
@@ -21,19 +22,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (empty($email) || empty($password)) {
         $errorMsg = 'Email and password are required.';
     } else {
-        // Find user by email
-        $user = $userRepo->findByEmail($email);
+        $user = $auth->attempt($email, $password);
         
-        if ($user && password_verify($password, $user['password_hash'])) {
+        if ($user) {
             // Check if user is admin
             if ($user['role'] !== 'admin') {
                 $errorMsg = 'Unauthorized. This account is not an admin.';
             } else {
                 // Login successful
                 session_regenerate_id(true);
-                $_SESSION['user'] = $user;
-                $_SESSION['user_id'] = $user['id'];
-                header('Location: admin-dashboard.php');
+                $_SESSION['user'] = pickled_session_user($user);
+                $_SESSION['user_id'] = $_SESSION['user']['id'];
+                header('Location: ' . pickled_frontend_url(pickled_default_redirect_for_role('admin')));
                 exit;
             }
         } else {
