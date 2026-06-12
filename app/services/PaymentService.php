@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/BookingRepository.php';
 require_once __DIR__ . '/../repositories/PaymentRepository.php';
+require_once __DIR__ . '/BookingExpiryService.php';
 require_once __DIR__ . '/../../database/Database.php';
 
 final class PaymentService
@@ -22,6 +23,8 @@ final class PaymentService
 
     public function uploadReceipt(int $userId, int $bookingId, array $file, string $referenceNumber): array
     {
+        (new BookingExpiryService())->processExpiredPendingBookings();
+
         $booking = $this->bookings->findByIdForUser($bookingId, $userId);
         if (!$booking) {
             throw new RuntimeException('Booking not found.');
@@ -111,6 +114,14 @@ final class PaymentService
 
             $remarks = trim($remarks);
             $bookingId = (int) $payment['booking_id'];
+            $booking = $this->bookings->findById($bookingId);
+            if ($status === 'approved' && (!$booking || ($booking['status'] ?? '') === 'cancelled')) {
+                if ($startedTransaction) {
+                    $pdo->commit();
+                }
+                return false;
+            }
+
             $updated = $this->payments->updateReview($paymentId, $status, $adminId, $remarks ?: null);
             if (!$updated) {
                 if ($startedTransaction && $pdo->inTransaction()) {

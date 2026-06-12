@@ -16,6 +16,7 @@ $pageTitle = 'Booking Details - Pickled';
 $activePage = 'booking.php';
 $userId = (int) ($_SESSION['user']['id'] ?? 0);
 $bookingId = (int) ($_GET['id'] ?? 0);
+pickled_process_pending_booking_expiry();
 $bookingRepo = new BookingRepository();
 $paymentService = new PaymentService();
 $message = '';

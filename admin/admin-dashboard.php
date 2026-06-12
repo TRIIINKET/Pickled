@@ -5,11 +5,13 @@ $bodyClass = 'admin-dashboard-body';
 require_once __DIR__ . '/../includes/admin-header.php';
 require_once __DIR__ . '/../includes/admin-paths.php';
 require_once __DIR__ . '/../app/services/AdminService.php';
+require_once __DIR__ . '/../app/services/BookingExpiryService.php';
 require_once __DIR__ . '/../database/Database.php';
 
 pickled_init_csrf();
 
 $adminService = new AdminService();
+(new BookingExpiryService())->processExpiredPendingBookings();
 // TODO(database-redesign): reconnect this page to the new reporting queries after schema approval.
 $pdo = Database::enabled() ? Database::connection() : null;
 $stats = $adminService->getDashboardStats();
@@ -53,7 +55,7 @@ function admin_rows(?PDO $pdo, string $sql, array $params = []): array {
 
 function admin_status_key(string $status): string {
     $status = strtolower(trim($status));
-    if (str_contains($status, 'reject') || str_contains($status, 'cancel')) return 'danger';
+    if (str_contains($status, 'reject') || str_contains($status, 'cancel') || str_contains($status, 'expire')) return 'danger';
     if (str_contains($status, 'pending') || str_contains($status, 'pay on site')) return 'warning';
     if (str_contains($status, 'complete') || str_contains($status, 'confirm') || str_contains($status, 'paid')) return 'success';
     return 'neutral';

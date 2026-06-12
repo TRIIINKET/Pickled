@@ -13,6 +13,7 @@ if (!pickled_is_logged_in()) {
 $pageTitle = 'Booking Status - Pickled';
 $activePage = 'booking.php';
 $userId = (int) ($_SESSION['user']['id'] ?? 0);
+pickled_process_pending_booking_expiry();
 $bookingRepo = new BookingRepository();
 $bookings = $userId > 0 ? $bookingRepo->findByUserId($userId) : [];
 $hasBookings = !empty($bookings);

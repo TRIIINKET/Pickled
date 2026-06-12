@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../app/services/CartService.php';
+require_once __DIR__ . '/../app/services/BookingExpiryService.php';
 require_once __DIR__ . '/../app/repositories/CatalogRepository.php';
 
 const PICKLED_CART_LIMIT = 3;
@@ -94,6 +95,15 @@ function pickled_expire_cart_if_needed(): bool {
     }
 
     return false;
+}
+
+function pickled_process_pending_booking_expiry(): int {
+    try {
+        return (new BookingExpiryService())->processExpiredPendingBookings();
+    } catch (Throwable $e) {
+        error_log('Pending booking expiry failed: ' . $e->getMessage());
+        return 0;
+    }
 }
 
 function pickled_is_member(): bool {

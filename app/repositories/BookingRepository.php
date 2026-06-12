@@ -151,6 +151,101 @@ final class BookingRepository
         return $stmt->fetchAll() ?: [];
     }
 
+    public function findExpiredPendingIds(DateTimeInterface $cutoff, int $limit = 100): array
+    {
+        $stmt = Database::connection()->prepare(
+            "SELECT id
+             FROM bookings
+             WHERE status = 'pending'
+               AND LOWER(payment_status) <> 'paid'
+               AND created_at <= :cutoff
+             ORDER BY created_at ASC, id ASC
+             LIMIT :limit_count"
+        );
+        $stmt->bindValue(':cutoff', $cutoff->format('Y-m-d H:i:s'));
+        $stmt->bindValue(':limit_count', max(1, min($limit, 500)), PDO::PARAM_INT);
+        $stmt->execute();
+
+        return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+    }
+
+    public function expirePendingBooking(int $id, DateTimeInterface $cutoff, string $reason = 'Expired pending payment'): bool
+    {
+        $pdo = Database::connection();
+        $startedTransaction = !$pdo->inTransaction();
+        if ($startedTransaction) {
+            $pdo->beginTransaction();
+        }
+
+        try {
+            $stmt = $pdo->prepare('SELECT status, payment_status, created_at FROM bookings WHERE id = :id LIMIT 1 FOR UPDATE');
+            $stmt->execute(['id' => $id]);
+            $booking = $stmt->fetch();
+            if (!$booking || $booking['status'] !== 'pending' || strtolower((string) $booking['payment_status']) === 'paid' || (string) $booking['created_at'] > $cutoff->format('Y-m-d H:i:s')) {
+                if ($startedTransaction) {
+                    $pdo->commit();
+                }
+                return false;
+            }
+
+            if (!$this->updateStatus($id, 'cancelled')) {
+                if ($startedTransaction && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                return false;
+            }
+
+            $note = 'Booking expired automatically because payment was not completed before the pending window ended.';
+            $update = $pdo->prepare(
+                "UPDATE bookings
+                 SET payment_status = 'expired',
+                     cancellation_label = :reason,
+                     notes = CASE
+                        WHEN notes IS NULL OR notes = '' THEN :note_first
+                        WHEN notes LIKE :note_match THEN notes
+                        ELSE CONCAT(notes, CHAR(10), :note_append)
+                     END
+                 WHERE id = :id"
+            );
+            $update->execute([
+                'id' => $id,
+                'reason' => $reason,
+                'note_first' => $note,
+                'note_match' => '%' . $note . '%',
+                'note_append' => $note,
+            ]);
+
+            $rejectPendingPayments = $pdo->prepare(
+                "UPDATE payments
+                 SET status = 'rejected',
+                     reviewed_at = COALESCE(reviewed_at, NOW()),
+                     remarks = CASE
+                        WHEN remarks IS NULL OR remarks = '' THEN :remarks_first
+                        WHEN remarks LIKE :remarks_match THEN remarks
+                        ELSE CONCAT(remarks, CHAR(10), :remarks_append)
+                     END
+                 WHERE booking_id = :booking_id
+                   AND status = 'pending'"
+            );
+            $rejectPendingPayments->execute([
+                'booking_id' => $id,
+                'remarks_first' => $reason,
+                'remarks_match' => '%' . $reason . '%',
+                'remarks_append' => $reason,
+            ]);
+
+            if ($startedTransaction) {
+                $pdo->commit();
+            }
+            return true;
+        } catch (Throwable $e) {
+            if ($startedTransaction && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
     public function updateStatus(int $id, string $status): bool
     {
         $newStatus = $this->normalizeBookingStatus($status);

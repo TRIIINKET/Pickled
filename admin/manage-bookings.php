@@ -5,6 +5,7 @@ $bodyClass = 'admin-dashboard-body';
 require_once __DIR__ . '/../includes/admin-header.php';
 require_once __DIR__ . '/../includes/admin-paths.php';
 require_once __DIR__ . '/../app/services/AdminService.php';
+require_once __DIR__ . '/../app/services/BookingExpiryService.php';
 require_once __DIR__ . '/../database/Database.php';
 
 pickled_init_csrf();
@@ -12,6 +13,7 @@ pickled_init_csrf();
 // Booking queries use the approved booking_items snapshots and compute display labels from DATE/TIME columns.
 $pdo = Database::enabled() ? Database::connection() : null;
 $adminService = new AdminService();
+(new BookingExpiryService())->processExpiredPendingBookings();
 $adminName = $_SESSION['user']['name'] ?? 'Admin';
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
@@ -70,7 +72,7 @@ function booking_status_key(string $status): string {
 
 function booking_payment_key(string $status): string {
     $status = strtolower(trim($status));
-    if (str_contains($status, 'reject') || str_contains($status, 'refund')) return 'danger';
+    if (str_contains($status, 'reject') || str_contains($status, 'refund') || str_contains($status, 'expire')) return 'danger';
     if (str_contains($status, 'pending')) return 'warning';
     if (str_contains($status, 'site') || str_contains($status, 'bank')) return 'purple';
     if (str_contains($status, 'complete') || str_contains($status, 'paid') || str_contains($status, 'approved')) return 'success';
@@ -117,7 +119,9 @@ if ($query !== '') {
     $where[] = "(b.reference LIKE :q OR u.name LIKE :q OR u.email LIKE :q)";
     $params['q'] = '%' . $query . '%';
 }
-if ($statusFilter !== 'all') {
+if ($statusFilter === 'expired') {
+    $where[] = "b.status = 'cancelled' AND LOWER(b.cancellation_label) LIKE '%expired%'";
+} elseif ($statusFilter !== 'all') {
     $where[] = "LOWER(b.status) LIKE :status";
     $params['status'] = '%' . strtolower($statusFilter) . '%';
 }
@@ -175,6 +179,7 @@ $currentBooking = $bookingId ? $adminService->getBookingDetail($bookingId) : nul
 $totalBookings = (int) booking_scalar($pdo, 'SELECT COUNT(*) FROM bookings');
 $weekBookings = (int) booking_scalar($pdo, 'SELECT COUNT(*) FROM bookings WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)');
 $pendingPayments = (int) booking_scalar($pdo, "SELECT COUNT(*) FROM payments WHERE status = 'pending'");
+$expiredBookings = (int) booking_scalar($pdo, "SELECT COUNT(*) FROM bookings WHERE status = 'cancelled' AND LOWER(cancellation_label) LIKE '%expired%'");
 $todaySessions = (int) booking_scalar($pdo, 'SELECT COUNT(*) FROM booking_items WHERE booking_date = ?', [$todaySql]);
 $monthlyRevenue = (float) booking_scalar($pdo, "SELECT COALESCE(SUM(total), 0) FROM bookings WHERE MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE()) AND LOWER(payment_status) IN ('completed', 'paid')");
 $courts = booking_rows($pdo, 'SELECT name FROM courts ORDER BY id ASC');
@@ -305,6 +310,7 @@ $calendarLanes = [
             <section class="booking-summary-grid">
                 <article><span>Total Bookings</span><strong><?php echo number_format($totalBookings); ?></strong><small>+<?php echo number_format($weekBookings); ?> this week</small></article>
                 <article><span>Pending Payments</span><strong><?php echo number_format($pendingPayments); ?></strong><small>Need Review</small></article>
+                <article><span>Expired Bookings</span><strong><?php echo number_format($expiredBookings); ?></strong><small>Capacity released</small></article>
                 <article><span>Today's Sessions</span><strong><?php echo number_format($todaySessions); ?></strong><small>Across all courts</small></article>
                 <article><span>Revenue</span><strong>₱<?php echo number_format($monthlyRevenue, 0); ?></strong><small>This Month</small></article>
             </section>
@@ -319,7 +325,7 @@ $calendarLanes = [
             <div class="booking-filter-controls-row">
                 <select name="court"><option value="all">All Courts</option><?php foreach ($courts as $court): ?><option value="<?php echo htmlspecialchars($court['name']); ?>" <?php echo $courtFilter === $court['name'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($court['name']); ?></option><?php endforeach; ?></select>
                 <select name="program"><option value="all">All Programs & Events</option><?php foreach ($programs as $program): ?><option value="<?php echo htmlspecialchars($program['name']); ?>" <?php echo $programFilter === $program['name'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($program['name']); ?></option><?php endforeach; ?></select>
-                <select name="status"><option value="all">All Statuses</option><?php foreach (['pending', 'confirmed', 'completed', 'cancelled'] as $status): ?><option value="<?php echo $status; ?>" <?php echo $statusFilter === $status ? 'selected' : ''; ?>><?php echo ucfirst($status); ?></option><?php endforeach; ?></select>
+                <select name="status"><option value="all">All Statuses</option><?php foreach (['pending', 'confirmed', 'completed', 'cancelled', 'expired'] as $status): ?><option value="<?php echo $status; ?>" <?php echo $statusFilter === $status ? 'selected' : ''; ?>><?php echo ucfirst($status); ?></option><?php endforeach; ?></select>
                 <input type="date" name="date" value="<?php echo htmlspecialchars($dateFilter); ?>">
                 <button type="submit">Apply</button>
             </div>
@@ -332,6 +338,8 @@ $calendarLanes = [
                     <?php foreach ($bookings as $booking): ?>
                         <?php
                             $statusKey = booking_status_key((string) $booking['status']);
+                            $isExpiredBooking = strtolower((string) $booking['status']) === 'cancelled' && str_contains(strtolower((string) ($booking['cancellation_label'] ?? '')), 'expired');
+                            $bookingStatusLabel = $isExpiredBooking ? 'Expired' : pickled_booking_status_label($booking['status']);
                             $displayPaymentStatus = (string) ($booking['latest_payment_status'] ?: $booking['payment_status']);
                             $paymentKey = booking_payment_key($displayPaymentStatus);
                             $canReviewPayment = $displayPaymentStatus === 'pending' && !empty($booking['latest_payment_id']);
@@ -344,7 +352,7 @@ $calendarLanes = [
                             <span><?php echo htmlspecialchars($booking['booking_date'] ?: date('M j, Y', strtotime($booking['created_at']))); ?></span>
                             <span><?php echo htmlspecialchars($booking['booking_time'] ?: '-'); ?></span>
                             <span><?php echo (int) ($booking['players'] ?? 1); ?></span>
-                            <span><em class="status-pill status-<?php echo $statusKey; ?>"><?php echo htmlspecialchars(pickled_booking_status_label($booking['status'])); ?></em></span>
+                            <span><em class="status-pill status-<?php echo $statusKey; ?>"><?php echo htmlspecialchars($bookingStatusLabel); ?></em><?php if ($isExpiredBooking): ?><small><?php echo htmlspecialchars($booking['cancellation_label']); ?></small><?php endif; ?></span>
                             <span><em class="status-pill payment-<?php echo $paymentKey; ?>"><?php echo htmlspecialchars($displayPaymentStatus); ?></em><?php if (!empty($booking['latest_payment_reference'])): ?><small><?php echo htmlspecialchars($booking['latest_payment_reference']); ?></small><?php endif; ?></span>
                             <span>₱<?php echo number_format((float) $booking['total'], 2); ?></span>
                             <span class="row-actions">
@@ -400,7 +408,7 @@ $calendarLanes = [
         <section><h3>Customer Information</h3><p><strong>Name</strong><?php echo htmlspecialchars($currentBooking['user']['name'] ?? 'Guest'); ?></p><p><strong>Email</strong><?php echo htmlspecialchars($currentBooking['user']['email'] ?? '-'); ?></p><p><strong>Membership</strong>Standard</p></section>
         <section><h3>Uploaded Receipt</h3><?php if ($latestPayment): ?><p><strong>Status</strong><em class="status-pill payment-<?php echo booking_payment_key($latestPayment['status']); ?>"><?php echo htmlspecialchars($latestPayment['status']); ?></em></p><p><strong>Reference No.</strong><?php echo htmlspecialchars($latestPayment['reference_number']); ?></p><p><strong>Amount</strong>&#8369;<?php echo number_format((float) $latestPayment['amount'], 2); ?></p><p><a href="<?php echo booking_public_url($latestPayment['proof_image']); ?>" target="_blank" rel="noopener">View uploaded receipt</a></p><img src="<?php echo booking_public_url($latestPayment['proof_image']); ?>" alt="Payment receipt" style="max-width:100%;border-radius:8px;margin-top:10px;"><?php else: ?><p>No uploaded receipt yet.</p><?php endif; ?></section>
         <?php if ($paymentRows): ?><section><h3>Receipt History</h3><?php foreach ($paymentRows as $payment): ?><p><strong><?php echo htmlspecialchars(ucfirst((string) $payment['status'])); ?></strong> <?php echo htmlspecialchars($payment['reference_number']); ?> - &#8369;<?php echo number_format((float) $payment['amount'], 2); ?><?php if (!empty($payment['remarks'])): ?><br><small><?php echo htmlspecialchars($payment['remarks']); ?></small><?php endif; ?></p><?php endforeach; ?></section><?php endif; ?>
-        <section><h3>Payment Information</h3><p><strong>Amount</strong>₱<?php echo number_format((float) $currentBooking['total'], 2); ?></p><p><strong>Method</strong><?php echo htmlspecialchars($currentBooking['payment_method']); ?></p><p><strong>Status</strong><em class="status-pill payment-<?php echo booking_payment_key($currentBooking['payment_status']); ?>"><?php echo htmlspecialchars($currentBooking['payment_status']); ?></em></p></section>
+        <section><h3>Payment Information</h3><p><strong>Amount</strong>₱<?php echo number_format((float) $currentBooking['total'], 2); ?></p><p><strong>Method</strong><?php echo htmlspecialchars($currentBooking['payment_method']); ?></p><p><strong>Status</strong><em class="status-pill payment-<?php echo booking_payment_key($currentBooking['payment_status']); ?>"><?php echo htmlspecialchars($currentBooking['payment_status']); ?></em></p><?php if (!empty($currentBooking['cancellation_label']) && strtolower((string) $currentBooking['status']) === 'cancelled'): ?><p><strong>Cancellation</strong><?php echo htmlspecialchars($currentBooking['cancellation_label']); ?></p><?php endif; ?></section>
         <form class="drawer-actions" method="post">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>">
             <input type="hidden" name="booking_id" value="<?php echo (int) $currentBooking['id']; ?>">

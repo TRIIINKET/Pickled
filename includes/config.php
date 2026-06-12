@@ -8,6 +8,9 @@ return [
         'hold_seconds' => 300,
         'item_limit' => 3,
     ],
+    'booking' => [
+        'pending_expiry_hours' => 24,
+    ],
     'database' => [
         'enabled' => true,
         'redesign_mode' => true,

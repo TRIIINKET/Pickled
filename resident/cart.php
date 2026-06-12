@@ -10,6 +10,7 @@ pickled_init_csrf();
 $csrfToken = pickled_csrf_token();
 
 pickled_require_login('resident/cart.php');
+pickled_process_pending_booking_expiry();
 pickled_restore_cart_for_user();
 
 if (pickled_expire_cart_if_needed()) {
