@@ -5,6 +5,7 @@ require_once __DIR__ . '/../repositories/UserRepository.php';
 require_once __DIR__ . '/../repositories/BookingRepository.php';
 require_once __DIR__ . '/../repositories/EventRepository.php';
 require_once __DIR__ . '/../repositories/NotificationRepository.php';
+require_once __DIR__ . '/PaymentService.php';
 require_once __DIR__ . '/../../database/Database.php';
 require_once __DIR__ . '/../repositories/AdminRepository.php';
 require_once __DIR__ . '/../support/DatabaseRedesign.php';
@@ -15,11 +16,13 @@ class AdminService {
     private $eventRepo;
     private $notificationRepo;
     private $adminRepo;
+    private $paymentService;
 
     public function __construct() {
         if (DatabaseRedesign::active()) {
             $this->userRepo = new UserRepository();
             $this->bookingRepo = new BookingRepository();
+            $this->paymentService = new PaymentService();
             $this->eventRepo = null;
             $this->notificationRepo = null;
             $this->adminRepo = null;
@@ -30,6 +33,7 @@ class AdminService {
 
         $this->userRepo = new UserRepository();
         $this->bookingRepo = new BookingRepository();
+        $this->paymentService = new PaymentService();
         $this->eventRepo = new EventRepository($connection);
         $this->notificationRepo = new NotificationRepository($connection);
         $this->adminRepo = new AdminRepository($connection);
@@ -102,15 +106,16 @@ class AdminService {
         if ($booking) {
             $booking['items'] = $this->bookingRepo->getBookingItems($bookingId);
             $booking['user'] = $this->userRepo->findById($booking['user_id']);
+            $booking['payments'] = $this->paymentService->paymentsForBooking($bookingId);
+            $booking['latest_payment'] = $this->paymentService->latestForBooking($bookingId);
         }
         return $booking;
     }
 
-    public function approvePayment(int $bookingId, int $adminId) {
-        $result = $this->bookingRepo->updatePaymentStatus($bookingId, 'paid');
-        if ($result) {
-            $this->bookingRepo->updateStatus($bookingId, 'confirmed');
-        }
+    public function approvePayment(int $bookingId, int $adminId, ?int $paymentId = null, string $remarks = '') {
+        $result = $paymentId
+            ? $this->paymentService->approve($paymentId, $adminId, $remarks)
+            : $this->paymentService->approveLatestForBooking($bookingId, $adminId, $remarks);
         if ($result && $this->adminRepo && $this->notificationRepo) {
             $this->adminRepo->logAction($adminId, 'payment_approved', 'booking', $bookingId);
             $booking = $this->bookingRepo->findById($bookingId);
@@ -124,8 +129,10 @@ class AdminService {
         return $result;
     }
 
-    public function rejectPayment(int $bookingId, string $reason, int $adminId) {
-        $result = $this->bookingRepo->updatePaymentStatus($bookingId, 'rejected');
+    public function rejectPayment(int $bookingId, string $reason, int $adminId, ?int $paymentId = null) {
+        $result = $paymentId
+            ? $this->paymentService->reject($paymentId, $adminId, $reason)
+            : $this->paymentService->rejectLatestForBooking($bookingId, $adminId, $reason);
         if ($result && $this->adminRepo && $this->notificationRepo) {
             $this->adminRepo->logAction($adminId, 'payment_rejected', 'booking', $bookingId, ['reason' => $reason]);
             $booking = $this->bookingRepo->findById($bookingId);

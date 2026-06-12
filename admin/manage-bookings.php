@@ -73,12 +73,19 @@ function booking_payment_key(string $status): string {
     if (str_contains($status, 'reject') || str_contains($status, 'refund')) return 'danger';
     if (str_contains($status, 'pending')) return 'warning';
     if (str_contains($status, 'site') || str_contains($status, 'bank')) return 'purple';
-    if (str_contains($status, 'complete') || str_contains($status, 'paid')) return 'success';
+    if (str_contains($status, 'complete') || str_contains($status, 'paid') || str_contains($status, 'approved')) return 'success';
     return 'neutral';
 }
 
 function booking_asset(string $path): string {
     return htmlspecialchars(pickled_admin_asset_url($path), ENT_QUOTES, 'UTF-8');
+}
+
+function booking_public_url(string $path): string {
+    $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/admin/manage-bookings.php');
+    $position = strpos($script, '/admin/');
+    $base = $position === false ? rtrim(dirname($script), '/') . '/' : substr($script, 0, $position + 1);
+    return htmlspecialchars($base . ltrim($path, '/'), ENT_QUOTES, 'UTF-8');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -87,11 +94,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $action = $_POST['action'] ?? '';
         $id = (int) ($_POST['booking_id'] ?? 0);
+        $paymentId = (int) ($_POST['payment_id'] ?? 0);
+        $remarks = trim((string) ($_POST['remarks'] ?? ''));
         if ($action === 'approve_payment' && $id) {
-            $successMsg = $adminService->approvePayment($id, (int) $_SESSION['user']['id']) ? 'Payment approved.' : 'Failed to approve payment.';
+            $successMsg = $adminService->approvePayment($id, (int) $_SESSION['user']['id'], $paymentId ?: null, $remarks) ? 'Payment approved.' : 'Failed to approve payment.';
         } elseif ($action === 'reject_payment' && $id) {
-            $reason = trim((string) ($_POST['reason'] ?? 'Payment rejected by admin'));
-            $successMsg = $adminService->rejectPayment($id, $reason, (int) $_SESSION['user']['id']) ? 'Payment rejected.' : '';
+            $reason = $remarks !== '' ? $remarks : trim((string) ($_POST['reason'] ?? 'Payment rejected by admin'));
+            $successMsg = $adminService->rejectPayment($id, $reason, (int) $_SESSION['user']['id'], $paymentId ?: null) ? 'Payment rejected.' : '';
             $errorMsg = $successMsg ? '' : 'Failed to reject payment.';
         } elseif ($action === 'update_status' && $id) {
             $status = trim((string) ($_POST['status'] ?? ''));
@@ -132,10 +141,16 @@ $bookings = booking_rows($pdo, "
            GROUP_CONCAT(DISTINCT bi.court ORDER BY bi.id SEPARATOR ', ') AS courts,
            SUM(bi.quantity) AS players,
            MIN(DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y')) AS booking_date,
-           MIN(CONCAT(TIME_FORMAT(bi.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(bi.end_time, '%h:%i %p'))) AS booking_time
+           MIN(CONCAT(TIME_FORMAT(bi.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(bi.end_time, '%h:%i %p'))) AS booking_time,
+            lp.id AS latest_payment_id,
+            lp.status AS latest_payment_status,
+            lp.reference_number AS latest_payment_reference
     FROM bookings b
     LEFT JOIN users u ON u.id = b.user_id
     LEFT JOIN booking_items bi ON bi.booking_id = b.id
+    LEFT JOIN payments lp ON lp.id = (
+        SELECT p2.id FROM payments p2 WHERE p2.booking_id = b.id ORDER BY p2.created_at DESC, p2.id DESC LIMIT 1
+    )
     $whereSql
     GROUP BY b.id
     ORDER BY b.created_at DESC
@@ -159,9 +174,9 @@ $currentBooking = $bookingId ? $adminService->getBookingDetail($bookingId) : nul
 
 $totalBookings = (int) booking_scalar($pdo, 'SELECT COUNT(*) FROM bookings');
 $weekBookings = (int) booking_scalar($pdo, 'SELECT COUNT(*) FROM bookings WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)');
-$pendingPayments = (int) booking_scalar($pdo, "SELECT COUNT(*) FROM bookings WHERE LOWER(payment_status) LIKE '%pending%' OR LOWER(payment_status) = 'pay on site'");
+$pendingPayments = (int) booking_scalar($pdo, "SELECT COUNT(*) FROM payments WHERE status = 'pending'");
 $todaySessions = (int) booking_scalar($pdo, 'SELECT COUNT(*) FROM booking_items WHERE booking_date = ?', [$todaySql]);
-$monthlyRevenue = (float) booking_scalar($pdo, "SELECT COALESCE(SUM(total), 0) FROM bookings WHERE MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE()) AND (LOWER(payment_status) IN ('completed', 'paid') OR LOWER(payment_status) = 'pay on site')");
+$monthlyRevenue = (float) booking_scalar($pdo, "SELECT COALESCE(SUM(total), 0) FROM bookings WHERE MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE()) AND LOWER(payment_status) IN ('completed', 'paid')");
 $courts = booking_rows($pdo, 'SELECT name FROM courts ORDER BY id ASC');
 $programs = booking_rows($pdo, 'SELECT DISTINCT name FROM booking_items ORDER BY name ASC');
 
@@ -315,7 +330,12 @@ $calendarLanes = [
                 <div class="booking-management-table">
                     <div class="booking-management-row booking-management-head"><span>Reference</span><span>Player</span><span>Program</span><span>Court</span><span>Date</span><span>Time</span><span>Players</span><span>Status</span><span>Payment</span><span>Amount</span><span>Actions</span></div>
                     <?php foreach ($bookings as $booking): ?>
-                        <?php $statusKey = booking_status_key((string) $booking['status']); $paymentKey = booking_payment_key((string) $booking['payment_status']); ?>
+                        <?php
+                            $statusKey = booking_status_key((string) $booking['status']);
+                            $displayPaymentStatus = (string) ($booking['latest_payment_status'] ?: $booking['payment_status']);
+                            $paymentKey = booking_payment_key($displayPaymentStatus);
+                            $canReviewPayment = $displayPaymentStatus === 'pending' && !empty($booking['latest_payment_id']);
+                        ?>
                         <div class="booking-management-row">
                             <span class="booking-ref"><?php echo htmlspecialchars($booking['reference']); ?></span>
                             <span><strong><?php echo htmlspecialchars($booking['user_name'] ?? 'Guest'); ?></strong><small><?php echo htmlspecialchars($booking['user_email'] ?? ''); ?></small></span>
@@ -325,7 +345,7 @@ $calendarLanes = [
                             <span><?php echo htmlspecialchars($booking['booking_time'] ?: '-'); ?></span>
                             <span><?php echo (int) ($booking['players'] ?? 1); ?></span>
                             <span><em class="status-pill status-<?php echo $statusKey; ?>"><?php echo htmlspecialchars(pickled_booking_status_label($booking['status'])); ?></em></span>
-                            <span><em class="status-pill payment-<?php echo $paymentKey; ?>"><?php echo htmlspecialchars($booking['payment_status']); ?></em></span>
+                            <span><em class="status-pill payment-<?php echo $paymentKey; ?>"><?php echo htmlspecialchars($displayPaymentStatus); ?></em><?php if (!empty($booking['latest_payment_reference'])): ?><small><?php echo htmlspecialchars($booking['latest_payment_reference']); ?></small><?php endif; ?></span>
                             <span>₱<?php echo number_format((float) $booking['total'], 2); ?></span>
                             <span class="row-actions">
                                 <a href="<?php echo pickled_admin_url('manage-bookings.php?view=table&id=' . (int) $booking['id']); ?>"><?php echo admin_icon($icons, 'eye'); ?> View</a>
@@ -333,8 +353,8 @@ $calendarLanes = [
                                     <summary aria-label="More actions"><?php echo admin_icon($icons, 'more'); ?></summary>
                                     <div>
                                         <a href="<?php echo pickled_admin_url('manage-bookings.php?view=table&id=' . (int) $booking['id']); ?>">View Details</a>
-                                        <form method="post"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>"><input type="hidden" name="booking_id" value="<?php echo (int) $booking['id']; ?>"><button name="action" value="approve_payment">Confirm Payment</button></form>
-                                        <form method="post"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>"><input type="hidden" name="booking_id" value="<?php echo (int) $booking['id']; ?>"><input type="hidden" name="reason" value="Payment rejected by admin"><button name="action" value="reject_payment">Reject Payment</button></form>
+                                        <form method="post"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>"><input type="hidden" name="booking_id" value="<?php echo (int) $booking['id']; ?>"><?php if (!empty($booking['latest_payment_id'])): ?><input type="hidden" name="payment_id" value="<?php echo (int) $booking['latest_payment_id']; ?>"><?php endif; ?><button name="action" value="approve_payment" <?php echo $canReviewPayment ? '' : 'disabled'; ?>>Approve Payment</button></form>
+                                        <form method="post"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>"><input type="hidden" name="booking_id" value="<?php echo (int) $booking['id']; ?>"><?php if (!empty($booking['latest_payment_id'])): ?><input type="hidden" name="payment_id" value="<?php echo (int) $booking['latest_payment_id']; ?>"><?php endif; ?><input type="hidden" name="reason" value="Payment rejected by admin"><button name="action" value="reject_payment" <?php echo $canReviewPayment ? '' : 'disabled'; ?>>Reject Payment</button></form>
                                         <a href="<?php echo pickled_admin_url('manage-bookings.php?view=table&id=' . (int) $booking['id']); ?>">Edit Booking</a>
                                         <form method="post"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>"><input type="hidden" name="booking_id" value="<?php echo (int) $booking['id']; ?>"><input type="hidden" name="status" value="Cancelled"><button name="action" value="update_status">Cancel Booking</button></form>
                                     </div>
@@ -372,13 +392,27 @@ $calendarLanes = [
 </div>
 
 <?php if ($currentBooking): ?>
+    <?php $latestPayment = $currentBooking['latest_payment'] ?? null; $paymentRows = $currentBooking['payments'] ?? []; ?>
     <div class="booking-drawer-backdrop"><a href="<?php echo pickled_admin_url('manage-bookings.php?view=' . $view); ?>" aria-label="Close"></a></div>
     <aside class="booking-drawer">
         <header><div><span>Booking Details</span><h2><?php echo htmlspecialchars($currentBooking['reference']); ?></h2></div><a href="<?php echo pickled_admin_url('manage-bookings.php?view=' . $view); ?>">×</a></header>
         <section><h3>Booking Information</h3><p><strong>Date</strong><?php echo htmlspecialchars($currentBooking['items'][0]['booking_date'] ?? date('M j, Y', strtotime($currentBooking['created_at']))); ?></p><p><strong>Time</strong><?php echo htmlspecialchars($currentBooking['items'][0]['booking_time'] ?? '-'); ?></p><p><strong>Program</strong><?php echo htmlspecialchars($currentBooking['items'][0]['name'] ?? 'Booking'); ?></p><p><strong>Court</strong><?php echo htmlspecialchars($currentBooking['items'][0]['court'] ?? 'Any Court'); ?></p><p><strong>Players</strong><?php echo array_sum(array_map(fn($item) => (int) $item['quantity'], $currentBooking['items'] ?? [])); ?></p></section>
         <section><h3>Customer Information</h3><p><strong>Name</strong><?php echo htmlspecialchars($currentBooking['user']['name'] ?? 'Guest'); ?></p><p><strong>Email</strong><?php echo htmlspecialchars($currentBooking['user']['email'] ?? '-'); ?></p><p><strong>Membership</strong>Standard</p></section>
+        <section><h3>Uploaded Receipt</h3><?php if ($latestPayment): ?><p><strong>Status</strong><em class="status-pill payment-<?php echo booking_payment_key($latestPayment['status']); ?>"><?php echo htmlspecialchars($latestPayment['status']); ?></em></p><p><strong>Reference No.</strong><?php echo htmlspecialchars($latestPayment['reference_number']); ?></p><p><strong>Amount</strong>&#8369;<?php echo number_format((float) $latestPayment['amount'], 2); ?></p><p><a href="<?php echo booking_public_url($latestPayment['proof_image']); ?>" target="_blank" rel="noopener">View uploaded receipt</a></p><img src="<?php echo booking_public_url($latestPayment['proof_image']); ?>" alt="Payment receipt" style="max-width:100%;border-radius:8px;margin-top:10px;"><?php else: ?><p>No uploaded receipt yet.</p><?php endif; ?></section>
+        <?php if ($paymentRows): ?><section><h3>Receipt History</h3><?php foreach ($paymentRows as $payment): ?><p><strong><?php echo htmlspecialchars(ucfirst((string) $payment['status'])); ?></strong> <?php echo htmlspecialchars($payment['reference_number']); ?> - &#8369;<?php echo number_format((float) $payment['amount'], 2); ?><?php if (!empty($payment['remarks'])): ?><br><small><?php echo htmlspecialchars($payment['remarks']); ?></small><?php endif; ?></p><?php endforeach; ?></section><?php endif; ?>
         <section><h3>Payment Information</h3><p><strong>Amount</strong>₱<?php echo number_format((float) $currentBooking['total'], 2); ?></p><p><strong>Method</strong><?php echo htmlspecialchars($currentBooking['payment_method']); ?></p><p><strong>Status</strong><em class="status-pill payment-<?php echo booking_payment_key($currentBooking['payment_status']); ?>"><?php echo htmlspecialchars($currentBooking['payment_status']); ?></em></p></section>
-        <form class="drawer-actions" method="post"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>"><input type="hidden" name="booking_id" value="<?php echo (int) $currentBooking['id']; ?>"><button name="action" value="approve_payment" class="approve">Approve Payment</button><button name="action" value="reject_payment" class="reject">Reject Payment</button><button name="action" value="update_status" onclick="this.form.status.value='Confirmed'">Confirm Booking</button><input type="hidden" name="status" value=""></form>
+        <form class="drawer-actions" method="post">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>">
+            <input type="hidden" name="booking_id" value="<?php echo (int) $currentBooking['id']; ?>">
+            <?php if ($latestPayment): ?>
+                <input type="hidden" name="payment_id" value="<?php echo (int) $latestPayment['id']; ?>">
+            <?php endif; ?>
+            <textarea name="remarks" rows="3" placeholder="Admin remarks"></textarea>
+            <button name="action" value="approve_payment" class="approve" <?php echo (($latestPayment['status'] ?? '') !== 'pending') ? 'disabled' : ''; ?>>Approve Payment</button>
+            <button name="action" value="reject_payment" class="reject" <?php echo (($latestPayment['status'] ?? '') !== 'pending') ? 'disabled' : ''; ?>>Reject Payment</button>
+            <button name="action" value="update_status" onclick="this.form.status.value='Confirmed'">Confirm Booking</button>
+            <input type="hidden" name="status" value="">
+        </form>
     </aside>
 <?php endif; ?>
 

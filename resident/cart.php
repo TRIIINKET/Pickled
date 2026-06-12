@@ -22,7 +22,7 @@ $activePage = 'cart.php';
 $basePath   = '../';
 $message = '';
 $messageType = 'success';
-$selectedPayment = $_POST['payment_method'] ?? 'gcash';
+$selectedPayment = $_POST['payment_method'] ?? 'manual_online';
 $paymentMethods = CheckoutController::paymentMethods();
 $isCheckout = isset($_GET['checkout']) || ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'checkout');
 
@@ -53,7 +53,7 @@ if (isset($_GET['updated'])) {
   $message = 'Cart item updated.';
 }
 if (isset($_GET['booked']) && !empty($_SESSION['last_booking'])) {
-  $message = 'Booking confirmed. Reference: ' . $_SESSION['last_booking']['reference'];
+  $message = 'Booking created. Upload your payment receipt to complete review. Reference: ' . $_SESSION['last_booking']['reference'];
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -127,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$emailService->sendBookingConfirmation($_SESSION['user'], $_SESSION['last_booking'])) {
           $_SESSION['flash'] = [
             'type' => 'warning',
-            'message' => 'Booking confirmed, but the confirmation email could not be sent.'
+            'message' => 'Booking created, but the confirmation email could not be sent.'
           ];
           error_log('Booking confirmation email failed for ' . ($_SESSION['user']['email'] ?? 'unknown email'));
         }
@@ -227,12 +227,13 @@ include __DIR__ . '/../includes/header.php';
 
         <?php if (!empty($_SESSION['last_booking'])): ?>
           <section id="booking-status" class="confirmation">
-            <h2>Booking Confirmation</h2>
+            <h2>Booking Created</h2>
             <p>Reference: <?= htmlspecialchars($_SESSION['last_booking']['reference']) ?></p>
             <p>Status: <?= htmlspecialchars($_SESSION['last_booking']['status']) ?> · <?= htmlspecialchars($_SESSION['last_booking']['cancellation_policy']['label']) ?></p>
             <p>Customer: <?= htmlspecialchars($_SESSION['last_booking']['customer_name'] ?? 'Guest') ?></p>
-            <p>Payment: <?= htmlspecialchars($_SESSION['last_booking']['payment_method'] ?? 'GCash') ?> · <?= htmlspecialchars($_SESSION['last_booking']['payment_status'] ?? 'pending') ?></p>
-            <p>Total paid: ₱<?= number_format((float) ($_SESSION['last_booking']['total'] ?? 0), 2) ?></p>
+            <p>Payment: <?= htmlspecialchars($_SESSION['last_booking']['payment_method'] ?? 'Manual Online Payment') ?> · <?= htmlspecialchars($_SESSION['last_booking']['payment_status'] ?? 'pending') ?></p>
+            <p>Amount due: ₱<?= number_format((float) ($_SESSION['last_booking']['total'] ?? 0), 2) ?></p>
+            <p><a class="btn btn-green btn-sm" href="booking-details.php?id=<?= (int) ($_SESSION['last_booking']['id'] ?? 0) ?>">Upload payment receipt</a></p>
             <?php if (!empty($_SESSION['last_booking']['items'])): $confirmedItem = reset($_SESSION['last_booking']['items']); ?>
               <p>Reserved: <?= htmlspecialchars($confirmedItem['court'] ?? 'Court') ?> · <?= htmlspecialchars($confirmedItem['name'] ?? 'Session') ?> · <?= htmlspecialchars($confirmedItem['date'] ?? '') ?> <?= htmlspecialchars($confirmedItem['time'] ?? '') ?></p>
             <?php endif; ?>
@@ -283,7 +284,7 @@ include __DIR__ . '/../includes/header.php';
           </div>
           <label class="terms"><input type="checkbox" name="terms" value="1" /> I agree with Terms & Conditions</label>
           <input type="hidden" name="action" value="checkout" />
-          <button class="checkout-btn" type="submit" <?= empty($cartItems) ? 'disabled' : '' ?>>Pay now</button>
+          <button class="checkout-btn" type="submit" <?= empty($cartItems) ? 'disabled' : '' ?>>Create booking</button>
         </form>
         <?php endif; ?>
 

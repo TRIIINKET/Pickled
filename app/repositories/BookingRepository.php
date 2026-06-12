@@ -16,6 +16,7 @@ final class BookingRepository
         if (!$items) {
             throw new RuntimeException('Your cart is empty. Add a booking before checkout.');
         }
+        $bookingStatus = $this->normalizeBookingStatus((string) ($booking['status'] ?? 'pending'));
 
         $pdo = Database::connection();
         $startedTransaction = !$pdo->inTransaction();
@@ -33,7 +34,7 @@ final class BookingRepository
             $stmt->execute([
                 'user_id' => $userId,
                 'reference' => $booking['reference'],
-                'status' => $this->normalizeBookingStatus((string) ($booking['status'] ?? 'pending')),
+                'status' => $bookingStatus,
                 'subtotal' => (float) ($booking['subtotal'] ?? 0),
                 'payment_fee' => (float) ($booking['payment_fee'] ?? 0),
                 'total' => (float) ($booking['total'] ?? 0),
@@ -58,7 +59,7 @@ final class BookingRepository
                     throw new RuntimeException('One of the selected sessions is no longer available.');
                 }
 
-                if (!$this->catalog->incrementBookedCount($sessionId, $quantity)) {
+                if ($this->statusConsumesCapacity($bookingStatus) && !$this->catalog->incrementBookedCount($sessionId, $quantity)) {
                     throw new RuntimeException('One of the selected sessions is already full.');
                 }
 
@@ -152,8 +153,52 @@ final class BookingRepository
 
     public function updateStatus(int $id, string $status): bool
     {
-        $stmt = Database::connection()->prepare('UPDATE bookings SET status = :status WHERE id = :id');
-        return $stmt->execute(['id' => $id, 'status' => $this->normalizeBookingStatus($status)]);
+        $newStatus = $this->normalizeBookingStatus($status);
+        $pdo = Database::connection();
+        $startedTransaction = !$pdo->inTransaction();
+        if ($startedTransaction) {
+            $pdo->beginTransaction();
+        }
+
+        try {
+            $stmt = $pdo->prepare('SELECT status FROM bookings WHERE id = :id LIMIT 1 FOR UPDATE');
+            $stmt->execute(['id' => $id]);
+            $current = $stmt->fetchColumn();
+            if ($current === false) {
+                if ($startedTransaction) {
+                    $pdo->commit();
+                }
+                return false;
+            }
+
+            $currentStatus = $this->normalizeBookingStatus((string) $current);
+            if ($currentStatus !== $newStatus) {
+                $currentConsumesCapacity = $this->statusConsumesCapacity($currentStatus);
+                $newConsumesCapacity = $this->statusConsumesCapacity($newStatus);
+
+                if ($currentConsumesCapacity && !$newConsumesCapacity) {
+                    $this->releaseBookingCapacity($id);
+                } elseif (!$currentConsumesCapacity && $newConsumesCapacity && !$this->reserveBookingCapacity($id)) {
+                    if ($startedTransaction && $pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    return false;
+                }
+            }
+
+            $update = $pdo->prepare('UPDATE bookings SET status = :status WHERE id = :id');
+            $ok = $update->execute(['id' => $id, 'status' => $newStatus]);
+
+            if ($startedTransaction) {
+                $pdo->commit();
+            }
+            return $ok;
+        } catch (Throwable $e) {
+            if ($startedTransaction && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
     }
 
     public function updatePaymentStatus(int $id, string $status): bool
@@ -199,7 +244,8 @@ final class BookingRepository
                 JOIN sessions s ON s.id = bi.session_id
                 JOIN bookings b ON b.id = bi.booking_id
                 LEFT JOIN users u ON u.id = b.user_id
-                WHERE s.coach_user_id = :coach_user_id";
+                WHERE s.coach_user_id = :coach_user_id
+                  AND b.status <> 'cancelled'";
         $params = ['coach_user_id' => $coachUserId];
 
         if ($startDate) {
@@ -222,6 +268,24 @@ final class BookingRepository
         $stmt = Database::connection()->query('SELECT COUNT(*) AS count FROM bookings');
         $result = $stmt->fetch();
         return (int) ($result['count'] ?? 0);
+    }
+
+    public function bookedCountMismatches(): array
+    {
+        $stmt = Database::connection()->query(
+            "SELECT s.id AS session_id,
+                    s.capacity,
+                    s.booked_count,
+                    COALESCE(SUM(CASE WHEN b.status <> 'cancelled' THEN bi.quantity ELSE 0 END), 0) AS expected_booked_count
+             FROM sessions s
+             LEFT JOIN booking_items bi ON bi.session_id = s.id
+             LEFT JOIN bookings b ON b.id = bi.booking_id
+             GROUP BY s.id, s.capacity, s.booked_count
+             HAVING s.booked_count <> expected_booked_count
+                OR s.booked_count < 0
+                OR s.booked_count > s.capacity"
+        );
+        return $stmt->fetchAll() ?: [];
     }
 
     private function itemSelect(string $alias = ''): string
@@ -261,6 +325,62 @@ final class BookingRepository
             return 'confirmed';
         }
         return in_array($status, self::BOOKING_STATUSES, true) ? $status : 'pending';
+    }
+
+    private function statusConsumesCapacity(string $status): bool
+    {
+        return $this->normalizeBookingStatus($status) !== 'cancelled';
+    }
+
+    private function bookingSessionQuantities(int $bookingId): array
+    {
+        $stmt = Database::connection()->prepare(
+            'SELECT session_id, COALESCE(SUM(quantity), 0) AS quantity
+             FROM booking_items
+             WHERE booking_id = :booking_id
+             GROUP BY session_id'
+        );
+        $stmt->execute(['booking_id' => $bookingId]);
+        return $stmt->fetchAll() ?: [];
+    }
+
+    private function releaseBookingCapacity(int $bookingId): void
+    {
+        $stmt = Database::connection()->prepare(
+            "UPDATE sessions
+             SET booked_count = GREATEST(booked_count - :quantity_count, 0),
+                 status = CASE
+                    WHEN status = 'full' AND GREATEST(booked_count - :quantity_status, 0) < capacity THEN 'open'
+                    ELSE status
+                 END
+             WHERE id = :session_id"
+        );
+
+        foreach ($this->bookingSessionQuantities($bookingId) as $item) {
+            $quantity = max(0, (int) ($item['quantity'] ?? 0));
+            if ($quantity <= 0) {
+                continue;
+            }
+            $stmt->execute([
+                'session_id' => (int) $item['session_id'],
+                'quantity_count' => $quantity,
+                'quantity_status' => $quantity,
+            ]);
+        }
+    }
+
+    private function reserveBookingCapacity(int $bookingId): bool
+    {
+        foreach ($this->bookingSessionQuantities($bookingId) as $item) {
+            $quantity = max(0, (int) ($item['quantity'] ?? 0));
+            if ($quantity <= 0) {
+                continue;
+            }
+            if (!$this->catalog->incrementBookedCount((int) $item['session_id'], $quantity)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private function normalizePaymentStatus(string $status): string

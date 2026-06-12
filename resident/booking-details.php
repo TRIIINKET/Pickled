@@ -2,8 +2,10 @@
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/booking-system.php';
 require_once __DIR__ . '/../app/repositories/BookingRepository.php';
+require_once __DIR__ . '/../app/services/PaymentService.php';
 
 pickled_start_secure_session();
+pickled_init_csrf();
 
 if (!pickled_is_logged_in()) {
   header('Location: ../auth/login.php?notice=booking&redirect=resident/booking-details.php');
@@ -15,8 +17,34 @@ $activePage = 'booking.php';
 $userId = (int) ($_SESSION['user']['id'] ?? 0);
 $bookingId = (int) ($_GET['id'] ?? 0);
 $bookingRepo = new BookingRepository();
+$paymentService = new PaymentService();
+$message = '';
+$messageType = 'success';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? '')) {
+    $message = 'Invalid request. Please refresh and try again.';
+    $messageType = 'error';
+  } elseif (($_POST['action'] ?? '') === 'upload_payment') {
+    try {
+      $paymentService->uploadReceipt(
+        $userId,
+        (int) ($_POST['booking_id'] ?? 0),
+        $_FILES['proof_image'] ?? [],
+        (string) ($_POST['reference_number'] ?? '')
+      );
+      $message = 'Payment receipt uploaded. Please wait for admin review.';
+    } catch (RuntimeException $e) {
+      $message = $e->getMessage();
+      $messageType = 'warning';
+    }
+  }
+}
+
 $booking = $bookingId > 0 ? $bookingRepo->findByIdForUser($bookingId, $userId) : null;
 $items = $booking ? $bookingRepo->getBookingItems((int) $booking['id']) : [];
+$payments = $booking ? $paymentService->paymentsForBooking((int) $booking['id']) : [];
+$latestPayment = $payments[0] ?? null;
 $extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260430d"/>';
 
 function booking_detail_status_key(string $status): string {
@@ -25,6 +53,10 @@ function booking_detail_status_key(string $status): string {
   if (str_contains($status, 'complete')) return 'completed';
   if (str_contains($status, 'confirm')) return 'confirmed';
   return 'pending';
+}
+
+function payment_proof_url(string $path): string {
+  return '../' . ltrim($path, '/');
 }
 
 include __DIR__ . '/../includes/header.php';
@@ -39,6 +71,10 @@ include __DIR__ . '/../includes/header.php';
         <a href="courts.php#court-detail">Continue shopping</a>
       </div>
     </div>
+
+    <?php if ($message): ?>
+      <div class="cart-message cart-message--<?= htmlspecialchars($messageType) ?>"><?= htmlspecialchars($message) ?></div>
+    <?php endif; ?>
 
     <?php if (!$booking): ?>
       <div class="empty-cart">
@@ -60,6 +96,59 @@ include __DIR__ . '/../includes/header.php';
             <span>Total: &#8369;<?= number_format((float) $booking['total'], 2) ?></span>
             <span>Booked on: <?= htmlspecialchars($booking['created_at'] ?? '') ?></span>
           </div>
+
+          <section class="booking-items">
+            <div class="booking-item">
+              <div>
+                <strong>Payment Status</strong>
+                <p><?= htmlspecialchars(ucfirst((string) ($latestPayment['status'] ?? $booking['payment_status'] ?? 'pending'))) ?></p>
+                <?php if (!empty($latestPayment['reference_number'])): ?>
+                  <p>Reference No: <?= htmlspecialchars($latestPayment['reference_number']) ?></p>
+                <?php endif; ?>
+                <?php if (!empty($latestPayment['remarks'])): ?>
+                  <p>Admin remarks: <?= htmlspecialchars($latestPayment['remarks']) ?></p>
+                <?php endif; ?>
+              </div>
+            </div>
+          </section>
+
+          <?php $canUpload = !$latestPayment || (($latestPayment['status'] ?? '') === 'rejected'); ?>
+          <?php if ($canUpload && ($booking['payment_status'] ?? '') !== 'paid' && ($booking['status'] ?? '') !== 'cancelled'): ?>
+            <form class="checkout-card" method="post" enctype="multipart/form-data">
+              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
+              <input type="hidden" name="action" value="upload_payment" />
+              <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>" />
+              <h2>Upload Payment Receipt</h2>
+              <label>
+                Reference Number
+                <input type="text" name="reference_number" required />
+              </label>
+              <label>
+                Receipt Image
+                <input type="file" name="proof_image" accept="image/png,image/jpeg,image/webp" required />
+              </label>
+              <button class="checkout-btn" type="submit">Submit receipt</button>
+            </form>
+          <?php elseif (($latestPayment['status'] ?? '') === 'pending'): ?>
+            <div class="cart-message cart-message--warning">Your uploaded receipt is waiting for admin review.</div>
+          <?php endif; ?>
+
+          <?php if ($payments): ?>
+            <div class="booking-items">
+              <?php foreach ($payments as $payment): ?>
+                <div class="booking-item">
+                  <img src="<?= htmlspecialchars(payment_proof_url((string) $payment['proof_image'])) ?>" alt="Payment receipt" />
+                  <div>
+                    <strong><?= htmlspecialchars(ucfirst((string) $payment['status'])) ?> receipt</strong>
+                    <p>Reference No: <?= htmlspecialchars($payment['reference_number']) ?></p>
+                    <p>Amount: &#8369;<?= number_format((float) $payment['amount'], 2) ?> - <?= htmlspecialchars($payment['payment_method']) ?></p>
+                    <p>Uploaded: <?= htmlspecialchars($payment['created_at']) ?></p>
+                    <?php if (!empty($payment['remarks'])): ?><p>Remarks: <?= htmlspecialchars($payment['remarks']) ?></p><?php endif; ?>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
 
           <?php if (!empty($booking['notes'])): ?>
             <p><?= htmlspecialchars($booking['notes']) ?></p>

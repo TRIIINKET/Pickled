@@ -65,13 +65,13 @@ function admin_asset(string $path): string {
 
 $totalUsers = (int) admin_scalar($pdo, 'SELECT COUNT(*) FROM users', [], (int) ($stats['total_users'] ?? 0));
 $totalBookings = (int) admin_scalar($pdo, 'SELECT COUNT(*) FROM bookings', [], (int) ($stats['total_bookings'] ?? 0));
-$totalRevenue = (float) admin_scalar($pdo, "SELECT COALESCE(SUM(total), 0) FROM bookings WHERE LOWER(payment_status) IN ('completed', 'paid') OR LOWER(payment_status) = 'pay on site'", [], (float) ($stats['total_revenue'] ?? 0));
-$pendingPayments = (int) admin_scalar($pdo, "SELECT COUNT(*) FROM bookings WHERE LOWER(payment_status) LIKE '%pending%' OR LOWER(payment_status) = 'pay on site'", [], (int) ($stats['pending_payments'] ?? 0));
+$totalRevenue = (float) admin_scalar($pdo, "SELECT COALESCE(SUM(total), 0) FROM bookings WHERE LOWER(payment_status) IN ('completed', 'paid')", [], (float) ($stats['total_revenue'] ?? 0));
+$pendingPayments = (int) admin_scalar($pdo, "SELECT COUNT(*) FROM payments WHERE status = 'pending'", [], (int) ($stats['pending_payments'] ?? 0));
 $activePlayers = (int) admin_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = 'player'");
 $coachCount = (int) admin_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = 'coach'");
 $todayBookings = (int) admin_scalar($pdo, 'SELECT COUNT(*) FROM bookings WHERE DATE(created_at) = ?', [$todaySql]);
 $todayRevenue = (float) admin_scalar($pdo, "SELECT COALESCE(SUM(total), 0) FROM bookings WHERE DATE(created_at) = ? AND LOWER(payment_status) IN ('completed', 'paid')", [$todaySql]);
-$pendingTotal = (float) admin_scalar($pdo, "SELECT COALESCE(SUM(total), 0) FROM bookings WHERE LOWER(payment_status) LIKE '%pending%' OR LOWER(payment_status) = 'pay on site'");
+$pendingTotal = (float) admin_scalar($pdo, "SELECT COALESCE(SUM(b.total), 0) FROM payments p INNER JOIN bookings b ON b.id = p.booking_id WHERE p.status = 'pending'");
 
 if ($todayBookings === 0) {
     $todayBookings = $totalBookings;

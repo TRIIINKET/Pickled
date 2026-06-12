@@ -67,7 +67,7 @@ class AdminRepository {
             $stats['total_revenue'] = $result['total'] ?? 0;
             
             // Pending payments
-            $stmt = $this->connection->query("SELECT COUNT(*) as count FROM bookings WHERE LOWER(payment_status) LIKE '%pending%' OR LOWER(payment_status) = 'pay on site'");
+            $stmt = $this->connection->query("SELECT COUNT(*) as count FROM payments WHERE status = 'pending'");
             $stats['pending_payments'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
             
             // Total events

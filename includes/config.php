@@ -17,10 +17,6 @@ return [
         'from_name' => 'PICKLED',
     ],
     'payment_methods' => [
-        'gcash' => ['label' => 'GCash', 'fee_rate' => 0.00],
-        'maya' => ['label' => 'Maya', 'fee_rate' => 0.00],
-        'card' => ['label' => 'Credit / Debit Card', 'fee_rate' => 0.03],
-        'cash' => ['label' => 'Cash On Site', 'fee_rate' => 0.00],
-        'bank' => ['label' => 'Bank Transfer', 'fee_rate' => 0.00],
+        'manual_online' => ['label' => 'Manual Online Payment', 'fee_rate' => 0.00],
     ],
 ];
