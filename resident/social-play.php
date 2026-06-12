@@ -109,8 +109,8 @@ $faqs = [
             <input type="hidden" name="action" value="add_booking" />
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
             <input type="hidden" name="variant_id" value="green-open-match-play" />
-            <input type="hidden" name="date" value="Tuesday, May 5, 2026" />
-            <input type="hidden" name="time" value="07:00 PM - 09:00 PM" />
+            <input type="hidden" name="date" value="" />
+            <input type="hidden" name="time" value="" />
             <input type="hidden" name="quantity" value="1" />
             <button class="social-cart-button" type="submit">Add to cart</button>
           </form>
@@ -151,6 +151,14 @@ $faqs = [
 
 </main>
 
+<?php
+$initialCalendar = new DateTimeImmutable('first day of this month');
+$initialCalendarTitle = $initialCalendar->format('F Y');
+$initialDaysInMonth = (int) $initialCalendar->format('t');
+$initialMondayOffset = ((int) $initialCalendar->format('w') + 6) % 7;
+$initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) / 7) * 7;
+?>
+
 <div class="social-modal" id="socialModal" aria-hidden="true">
   <div class="social-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="socialBookingTitle">
     <button class="social-modal__close" type="button" aria-label="Close booking">×</button>
@@ -161,16 +169,17 @@ $faqs = [
         <p id="socialBookingHint">Open match-play dates are available on Tuesdays, Thursdays, and Saturdays.</p>
         <div class="calendar-head">
           <button type="button">‹</button>
-          <strong>May 2026</strong>
+          <strong><?= htmlspecialchars($initialCalendarTitle) ?></strong>
           <button type="button">›</button>
         </div>
         <div class="calendar-grid">
           <span>MO</span><span>TU</span><span>WE</span><span>TH</span><span>FR</span><span>SA</span><span>SU</span>
-          <?php for ($i = 0; $i < 35; $i++): $day = $i - 3; ?>
-            <?php if ($day < 1 || $day > 31): ?>
+          <?php for ($i = 0; $i < $initialCalendarCells; $i++): $day = $i - $initialMondayOffset + 1; ?>
+            <?php if ($day < 1 || $day > $initialDaysInMonth): ?>
               <button type="button" disabled></button>
             <?php else: ?>
-              <button type="button" class="<?= $day === 7 ? 'is-selected' : '' ?>" data-date="Thursday, May <?= $day ?>, 2026"><?= $day ?></button>
+              <?php $dateLabel = $initialCalendar->setDate((int) $initialCalendar->format('Y'), (int) $initialCalendar->format('n'), $day)->format('l, F j, Y'); ?>
+              <button type="button" disabled data-date="<?= htmlspecialchars($dateLabel) ?>"><?= $day ?></button>
             <?php endif; ?>
           <?php endfor; ?>
         </div>
@@ -192,7 +201,7 @@ $faqs = [
         <p>Asia/Manila · <span id="socialPhTime">PH time</span></p>
         <div class="social-time-grid" id="socialTimeGrid">
           <button class="social-time" type="button" data-time="08:00 AM - 10:00 AM" data-modes="open-play">08:00 AM - 10:00 AM</button>
-          <button class="social-time is-selected" type="button" data-time="07:00 PM - 09:00 PM" data-modes="open-play">07:00 PM - 09:00 PM</button>
+          <button class="social-time" type="button" data-time="07:00 PM - 09:00 PM" data-modes="open-play">07:00 PM - 09:00 PM</button>
           <button class="social-time" type="button" data-time="10:00 AM - 12:00 PM" data-modes="open-play">10:00 AM - 12:00 PM</button>
           <button class="social-time" type="button" data-time="12:00 PM - 02:00 PM" data-modes="open-play">12:00 PM - 02:00 PM</button>
           <button class="social-time" type="button" data-time="02:00 PM - 04:00 PM" data-modes="open-play">02:00 PM - 04:00 PM</button>
@@ -202,7 +211,7 @@ $faqs = [
           <button class="social-time" type="button" data-time="09:00 AM - 12:00 PM" data-modes="tournament">09:00 AM - 12:00 PM</button>
           <button class="social-time" type="button" data-time="01:00 PM - 04:00 PM" data-modes="tournament">01:00 PM - 04:00 PM</button>
           <button class="social-time" type="button" data-time="06:00 PM - 09:00 PM" data-modes="tournament">06:00 PM - 09:00 PM</button>
-          <button class="social-time" type="button" data-time="02:00 PM - 05:00 PM" data-modes="tournament" data-booked="true" disabled>02:00 PM - 05:00 PM <small>Booked</small></button>
+          <button class="social-time" type="button" data-time="02:00 PM - 05:00 PM" data-modes="tournament">02:00 PM - 05:00 PM</button>
         </div>
         <button class="social-continue" type="button">Continue</button>
       </div>
@@ -213,7 +222,7 @@ $faqs = [
         <img src="<?= htmlspecialchars($galleryImages[0]) ?>" alt="" />
         <h3 id="socialSummaryProduct">OPEN MATCH-PLAY ₱350</h3>
         <dl>
-          <dt>Date</dt><dd id="socialSummaryDate">Thursday, May 7, 2026</dd>
+          <dt>Date</dt><dd id="socialSummaryDate">Selected date</dd>
           <dt>Time</dt><dd id="socialSummaryTime">07:00 PM - 09:00 PM</dd>
           <dt>Quantity</dt><dd id="socialSummaryQty">1</dd>
           <dt>Subtotal</dt><dd id="socialSummarySubtotal">₱350.00</dd>
@@ -242,7 +251,7 @@ $faqs = [
         <img src="<?= htmlspecialchars($galleryImages[0]) ?>" alt="" />
         <h3 id="socialPaymentProduct">OPEN MATCH-PLAY ₱350</h3>
         <dl>
-          <dt>Date</dt><dd id="socialPaymentDate">Thursday, May 7, 2026</dd>
+          <dt>Date</dt><dd id="socialPaymentDate">Selected date</dd>
           <dt>Time</dt><dd id="socialPaymentTime">07:00 PM - 09:00 PM</dd>
           <dt>Quantity</dt><dd id="socialPaymentQty">1</dd>
           <dt>Subtotal</dt><dd id="socialPaymentSubtotal">₱350.00</dd>
@@ -279,7 +288,7 @@ $faqs = [
           <dl class="social-confirmed-details">
             <dt>Session</dt><dd id="confirmedSocialProduct">OPEN MATCH-PLAY</dd>
             <dt>Name</dt><dd id="confirmedSocialName">Guest</dd>
-            <dt>Date</dt><dd id="confirmedSocialDate">Thursday, May 7, 2026</dd>
+            <dt>Date</dt><dd id="confirmedSocialDate">Selected date</dd>
             <dt>Time</dt><dd id="confirmedSocialTime">07:00 PM - 09:00 PM</dd>
             <dt>Total</dt><dd id="confirmedSocialTotal">₱350.00</dd>
           </dl>
@@ -329,8 +338,8 @@ $faqs = [
     note: 'Open match-play dates are available on Tuesdays, Thursdays, and Saturdays.',
     mode: 'open-play',
     duration: '2 hours',
-    date: 'Tuesday, May 5, 2026',
-    time: '07:00 PM - 09:00 PM',
+    date: '',
+    time: '',
     qty: 1,
     price: 350,
     feeRate: 0,
@@ -341,7 +350,7 @@ $faqs = [
   const money = value => '₱' + Number(value).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  let visibleMonth = new Date(2026, 4, 1);
+  let visibleMonth = new Date(<?= (int) date('Y') ?>, <?= (int) date('n') - 1 ?>, 1);
 
   function absoluteUrl(path){
     return new URL(path, window.location.href).href;
@@ -391,9 +400,6 @@ $faqs = [
   }
 
   function dateAllowed(date){
-    const day = date.getDay();
-    if (state.mode === 'open-play') return [2, 4, 6].includes(day);
-    if (state.mode === 'tournament') return date.getMonth() === 4 && date.getDate() <= 7 && [5, 0].includes(day);
     return true;
   }
 

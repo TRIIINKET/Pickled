@@ -109,11 +109,14 @@ JOIN (
   UNION ALL SELECT 2, '17:00:00', '20:00:00', 'available'
   UNION ALL SELECT 4, '17:00:00', '20:00:00', 'available'
 ) schedule
+LEFT JOIN coach_availability existing
+  ON existing.coach_user_id = u.id
+ AND existing.day_of_week = schedule.day_of_week
+ AND existing.start_time = schedule.start_time
+ AND existing.end_time = schedule.end_time
 WHERE u.role = 'coach'
   AND u.email = 'coach@example.com'
-ON DUPLICATE KEY UPDATE
-  status = VALUES(status),
-  updated_at = CURRENT_TIMESTAMP;
+  AND existing.id IS NULL;
 
 INSERT INTO sessions (variant_id, coach_user_id, session_date, start_time, end_time, capacity, booked_count, status)
 SELECT v.id,
@@ -122,6 +125,8 @@ SELECT v.id,
 FROM booking_variants v
 JOIN (
   SELECT 'green-private-coaching' AS slug, DATE('2026-06-15') AS session_date, '09:00:00' AS start_time, '10:00:00' AS end_time, 1 AS capacity
+  UNION ALL SELECT 'green-court-rentals', DATE('2026-06-14'), '07:00:00', '08:00:00', 8
+  UNION ALL SELECT 'pink-base-rate', DATE('2026-06-14'), '08:00:00', '09:00:00', 8
   UNION ALL SELECT 'green-lessons', DATE('2026-06-16'), '17:00:00', '18:00:00', 8
   UNION ALL SELECT 'pink-kids-pickleball-class-ages-6-10', DATE('2026-06-18'), '17:00:00', '18:00:00', 10
   UNION ALL SELECT 'green-open-match-play', DATE('2026-06-19'), '18:00:00', '20:00:00', 16

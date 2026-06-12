@@ -244,10 +244,12 @@ final class SchedulingRepository
                         WHERE s.coach_user_id = u.id
                           AND s.session_date = :session_date
                           AND s.status IN ('open', 'full')
-                          AND :start_time < s.end_time
-                          AND :end_time > s.start_time
+                          AND :conflict_start_time < s.end_time
+                          AND :conflict_end_time > s.start_time
                       )";
             $params['session_date'] = $sessionDate;
+            $params['conflict_start_time'] = $startTime;
+            $params['conflict_end_time'] = $endTime;
         }
         $sql .= ' ORDER BY u.name ASC';
 
@@ -360,12 +362,17 @@ final class SchedulingRepository
         $stmt = Database::connection()->prepare(
             "UPDATE sessions
              SET booked_count = booked_count + :quantity,
-                 status = CASE WHEN booked_count + :quantity >= capacity THEN 'full' ELSE status END
+                 status = CASE WHEN booked_count + :status_quantity >= capacity THEN 'full' ELSE status END
              WHERE id = :id
                AND status IN ('open', 'full')
-               AND booked_count + :quantity <= capacity"
+               AND booked_count + :capacity_quantity <= capacity"
         );
-        $stmt->execute(['id' => $sessionId, 'quantity' => $quantity]);
+        $stmt->execute([
+            'id' => $sessionId,
+            'quantity' => $quantity,
+            'status_quantity' => $quantity,
+            'capacity_quantity' => $quantity,
+        ]);
         return $stmt->rowCount() === 1;
     }
 

@@ -149,13 +149,6 @@ foreach ($courtImages as $key => $courtImage) {
 
 include __DIR__ . '/../includes/header.php';
 
-$coaches = [
-  ['01', 'Coach Martina', 'pink', 'Technical fundamentals and youth development coach focused on biomechanics and injury prevention.', 'women', 'Mon, Wed, Fri · 9:00 AM - 12:00 PM', '1,3,5', '09:00 AM - 10:00 AM|10:00 AM - 11:00 AM|11:00 AM - 12:00 PM', 'https://i.pinimg.com/1200x/b2/41/a4/b241a487eac25d97256b8b9820c7fc3a.jpg'],
-  ['02', 'Coach David', 'green', 'Competitive singles and strategy coach with a background in collegiate tennis.', 'mens', 'Tue, Thu · 5:00 PM - 8:00 PM', '2,4', '05:00 PM - 06:00 PM|06:00 PM - 07:00 PM|07:00 PM - 08:00 PM', 'https://i.pinimg.com/1200x/a8/6e/22/a86e22941537296b1bd5f25fc67b0d3c.jpg'],
-  ['03', 'Coach Anton', 'green', 'Defensive play and dinking mastery coach with Asian pickleball tournament experience.', 'mens', 'Sat · 8:00 AM - 12:00 PM', '6', '08:00 AM - 09:00 AM|09:00 AM - 10:00 AM|10:00 AM - 11:00 AM|11:00 AM - 12:00 PM', 'https://i.pinimg.com/736x/a4/78/00/a4780006b6f1c0029111f8ff54bd87c4.jpg'],
-  ['04', 'Coach Kenji', 'green', 'Power hitting and offensive doubles coach specializing in third-shot drops.', 'mens', 'Mon, Thu · 1:00 PM - 4:00 PM', '1,4', '01:00 PM - 02:00 PM|02:00 PM - 03:00 PM|03:00 PM - 04:00 PM', 'https://i.pinimg.com/736x/73/49/a7/7349a7512c81363fb8045bb46b19c28b.jpg'],
-  ['05', 'Coach Sophia', 'pink', 'Social play and women’s clinic coach focused on group dynamics and community.', 'women', 'Wed, Sun · 3:00 PM - 6:00 PM', '3,0', '03:00 PM - 04:00 PM|04:00 PM - 05:00 PM|05:00 PM - 06:00 PM', 'https://i.pinimg.com/1200x/54/e4/c8/54e4c8c91b1594d3b960154e980f40dd.jpg'],
-];
 $coaches = [];
 foreach ($coachRows as $index => $coachRow) {
   $availability = $schedulingService->availabilityForCoach((int) $coachRow['id'], true);
@@ -231,8 +224,8 @@ foreach ($coachRows as $index => $coachRow) {
             <input type="hidden" name="action" value="add_booking" />
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
             <input type="hidden" name="variant_id" value="<?= htmlspecialchars($defaultRate['variant']) ?>" />
-            <input type="hidden" name="date" value="Thursday, May 7, 2026" />
-            <input type="hidden" name="time" value="Selected schedule" />
+            <input type="hidden" name="date" value="" />
+            <input type="hidden" name="time" value="" />
             <input type="hidden" name="quantity" value="1" />
             <button class="court-cart-button" type="submit">Add to cart</button>
           </form>
@@ -328,6 +321,11 @@ foreach ($coachRows as $index => $coachRow) {
 <?php
 $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
 $defaultCoach = $coaches[0] ?? ['00', 'Coach', 'green', '', 'all', '', '', '', '../assets/img/court/academy.png'];
+$initialCalendar = new DateTimeImmutable('first day of this month');
+$initialCalendarTitle = $initialCalendar->format('F Y');
+$initialDaysInMonth = (int) $initialCalendar->format('t');
+$initialMondayOffset = ((int) $initialCalendar->format('w') + 6) % 7;
+$initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) / 7) * 7;
 ?>
 
 <div class="booking-modal" id="bookingModal" aria-hidden="true">
@@ -340,16 +338,17 @@ $defaultCoach = $coaches[0] ?? ['00', 'Coach', 'green', '', 'all', '', '', '', '
         <p id="bookingHint"><?= htmlspecialchars($defaultRate['note']) ?></p>
         <div class="calendar-head">
           <button type="button" aria-label="Previous month">‹</button>
-          <strong>May 2026</strong>
+          <strong><?= htmlspecialchars($initialCalendarTitle) ?></strong>
           <button type="button" aria-label="Next month">›</button>
         </div>
-        <div class="calendar-grid" aria-label="May 2026 calendar">
+        <div class="calendar-grid" aria-label="<?= htmlspecialchars($initialCalendarTitle) ?> calendar">
           <span>MO</span><span>TU</span><span>WE</span><span>TH</span><span>FR</span><span>SA</span><span>SU</span>
-          <?php for ($i = 0; $i < 35; $i++): $day = $i - 3; ?>
-            <?php if ($day < 1 || $day > 31): ?>
+          <?php for ($i = 0; $i < $initialCalendarCells; $i++): $day = $i - $initialMondayOffset + 1; ?>
+            <?php if ($day < 1 || $day > $initialDaysInMonth): ?>
               <button type="button" disabled></button>
             <?php else: ?>
-              <button type="button" class="<?= $day === 7 ? 'is-date-selected' : '' ?>" data-date="Thursday, May <?= $day ?>, 2026"><?= $day ?></button>
+              <?php $dateLabel = $initialCalendar->setDate((int) $initialCalendar->format('Y'), (int) $initialCalendar->format('n'), $day)->format('l, F j, Y'); ?>
+              <button type="button" disabled data-date="<?= htmlspecialchars($dateLabel) ?>"><?= $day ?></button>
             <?php endif; ?>
           <?php endfor; ?>
         </div>
@@ -385,8 +384,8 @@ $defaultCoach = $coaches[0] ?? ['00', 'Coach', 'green', '', 'all', '', '', '', '
           <button type="button" data-time-format="24">24h</button>
         </div>
         <div class="time-slot-grid" id="timeSlotGrid">
-          <button class="time-slot is-selected" type="button" data-time="07:00 AM - 08:00 AM">07:00 AM - 08:00 AM</button>
-          <button class="time-slot is-selected" type="button" data-time="08:00 AM - 09:00 AM">08:00 AM - 09:00 AM</button>
+          <button class="time-slot" type="button" data-time="07:00 AM - 08:00 AM">07:00 AM - 08:00 AM</button>
+          <button class="time-slot" type="button" data-time="08:00 AM - 09:00 AM">08:00 AM - 09:00 AM</button>
           <button class="time-slot" type="button" data-time="09:00 AM - 10:00 AM">09:00 AM - 10:00 AM</button>
           <button class="time-slot" type="button" data-time="10:00 AM - 11:00 AM">10:00 AM - 11:00 AM</button>
           <button class="time-slot" type="button" data-time="11:00 AM - 12:00 PM">11:00 AM - 12:00 PM</button>
@@ -394,10 +393,10 @@ $defaultCoach = $coaches[0] ?? ['00', 'Coach', 'green', '', 'all', '', '', '', '
           <button class="time-slot" type="button" data-time="02:00 PM - 03:00 PM">02:00 PM - 03:00 PM</button>
           <button class="time-slot" type="button" data-time="03:00 PM - 04:00 PM">03:00 PM - 04:00 PM</button>
           <button class="time-slot" type="button" data-time="04:00 PM - 05:00 PM">04:00 PM - 05:00 PM</button>
-          <button class="time-slot" type="button" data-time="05:00 PM - 06:00 PM" data-booked="true" disabled>05:00 PM - 06:00 PM <small>Booked</small></button>
+          <button class="time-slot" type="button" data-time="05:00 PM - 06:00 PM">05:00 PM - 06:00 PM</button>
           <button class="time-slot" type="button" data-time="06:00 PM - 07:00 PM">06:00 PM - 07:00 PM</button>
           <button class="time-slot" type="button" data-time="07:00 PM - 08:00 PM">07:00 PM - 08:00 PM</button>
-          <button class="time-slot" type="button" data-time="08:00 PM - 09:00 PM" data-booked="true" disabled>08:00 PM - 09:00 PM <small>Booked</small></button>
+          <button class="time-slot" type="button" data-time="08:00 PM - 09:00 PM">08:00 PM - 09:00 PM</button>
           <button class="time-slot" type="button" data-time="09:00 PM - 10:00 PM">09:00 PM - 10:00 PM</button>
         </div>
         <p class="slot-help">Select as many available hours as you want.</p>
@@ -412,7 +411,7 @@ $defaultCoach = $coaches[0] ?? ['00', 'Coach', 'green', '', 'all', '', '', '', '
         <h3 id="summaryProduct">COURT RENTALS</h3>
         <p id="summaryNote">Selected booking details</p>
         <dl>
-          <dt>Date</dt><dd id="summaryDate">Thursday, May 7, 2026</dd>
+          <dt>Date</dt><dd id="summaryDate">Selected date</dd>
           <dt>Time</dt><dd id="summaryTime">10:00 AM - 11:00 AM</dd>
           <dt>Duration</dt><dd id="summaryDuration">1 hour</dd>
           <dt>Quantity</dt><dd id="summaryQty">1</dd>
@@ -472,7 +471,7 @@ $defaultCoach = $coaches[0] ?? ['00', 'Coach', 'green', '', 'all', '', '', '', '
               <strong id="confirmedTotal">₱1,200.00</strong>
               <span>Name: <b id="confirmedName">Guest</b></span>
               <span>Email: <b id="confirmedEmail">guest@example.com</b></span>
-              <span>Date: <b id="confirmedDate">Thursday, May 7, 2026</b></span>
+              <span>Date: <b id="confirmedDate">Selected date</b></span>
               <span>Time: <b id="confirmedSchedule">07:00 AM - 09:00 AM</b></span>
             </div>
           </article>
@@ -520,8 +519,8 @@ $defaultCoach = $coaches[0] ?? ['00', 'Coach', 'green', '', 'all', '', '', '', '
     price: <?= json_encode((float) $defaultRate['price']) ?>,
     duration: <?= json_encode($defaultRate['duration'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
     court: <?= json_encode($defaultRate['court'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-    date: 'Thursday, May 7, 2026',
-    selectedTimes: ['07:00 AM - 08:00 AM', '08:00 AM - 09:00 AM'],
+    date: '',
+    selectedTimes: [],
     qty: 1,
     feeRate: 0,
     paymentMethod: 'Pay at Club',
@@ -553,7 +552,7 @@ $defaultCoach = $coaches[0] ?? ['00', 'Coach', 'green', '', 'all', '', '', '', '
   const coachSchedule = document.getElementById('coachSchedule');
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  let visibleMonth = new Date(2026, 4, 1);
+  let visibleMonth = new Date(<?= (int) date('Y') ?>, <?= (int) date('n') - 1 ?>, 1);
 
   function absoluteUrl(path){
     return new URL(path, window.location.href).href;
@@ -888,7 +887,7 @@ $defaultCoach = $coaches[0] ?? ['00', 'Coach', 'green', '', 'all', '', '', '', '
     courtCartForm.addEventListener('submit', () => {
       courtCartForm.elements.variant_id.value = state.variant;
       courtCartForm.elements.date.value = state.date;
-      courtCartForm.elements.time.value = state.selectedTimes[0] || 'Selected schedule';
+      courtCartForm.elements.time.value = state.selectedTimes[0] || '';
       courtCartForm.elements.quantity.value = state.qty;
     });
   }
