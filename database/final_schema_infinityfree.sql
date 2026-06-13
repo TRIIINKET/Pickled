@@ -1,4 +1,4 @@
-
+﻿
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
@@ -182,24 +182,6 @@ CREATE TABLE `coach_availability` (
 /*!50003 SET collation_connection  = utf8_general_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION' */ ;
-DELIMITER ;;
-/*!50003 CREATE*/ /*!50003 TRIGGER trg_coach_availability_no_overlap_insert
-BEFORE INSERT ON coach_availability
-FOR EACH ROW
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM coach_availability ca
-    WHERE ca.coach_user_id = NEW.coach_user_id
-      AND ca.day_of_week = NEW.day_of_week
-      AND NEW.start_time < ca.end_time
-      AND NEW.end_time > ca.start_time
-    LIMIT 1
-  ) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Overlapping coach availability is not allowed.';
-  END IF;
-END */;;
-DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
 /*!50003 SET character_set_client  = @saved_cs_client */ ;
 /*!50003 SET character_set_results = @saved_cs_results */ ;
@@ -212,25 +194,6 @@ DELIMITER ;
 /*!50003 SET collation_connection  = utf8_general_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION' */ ;
-DELIMITER ;;
-/*!50003 CREATE*/ /*!50003 TRIGGER trg_coach_availability_no_overlap_update
-BEFORE UPDATE ON coach_availability
-FOR EACH ROW
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM coach_availability ca
-    WHERE ca.id <> NEW.id
-      AND ca.coach_user_id = NEW.coach_user_id
-      AND ca.day_of_week = NEW.day_of_week
-      AND NEW.start_time < ca.end_time
-      AND NEW.end_time > ca.start_time
-    LIMIT 1
-  ) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Overlapping coach availability is not allowed.';
-  END IF;
-END */;;
-DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
 /*!50003 SET character_set_client  = @saved_cs_client */ ;
 /*!50003 SET character_set_results = @saved_cs_results */ ;
@@ -391,80 +354,6 @@ CREATE TABLE `feedback` (
 /*!50003 SET collation_connection  = utf8_general_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION' */ ;
-DELIMITER ;;
-/*!50003 CREATE*/ /*!50003 TRIGGER trg_feedback_before_insert
-BEFORE INSERT ON feedback
-FOR EACH ROW
-BEGIN
-  DECLARE item_coach_user_id INT UNSIGNED DEFAULT NULL;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM bookings b
-    WHERE b.id = NEW.booking_id
-      AND b.status = 'completed'
-    LIMIT 1
-  ) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback requires a completed booking.';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM bookings b
-    WHERE b.id = NEW.booking_id
-      AND b.user_id = NEW.user_id
-    LIMIT 1
-  ) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback user must own the booking.';
-  END IF;
-
-  IF NEW.booking_item_id IS NOT NULL THEN
-    IF NOT EXISTS (
-      SELECT 1
-      FROM booking_items bi
-      WHERE bi.id = NEW.booking_item_id
-        AND bi.booking_id = NEW.booking_id
-      LIMIT 1
-    ) THEN
-      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback booking item must belong to the booking.';
-    END IF;
-
-    SELECT s.coach_user_id
-    INTO item_coach_user_id
-    FROM booking_items bi
-    LEFT JOIN sessions s ON s.id = bi.session_id
-    WHERE bi.id = NEW.booking_item_id
-    LIMIT 1;
-
-    IF NEW.coach_user_id IS NULL THEN
-      SET NEW.coach_user_id = item_coach_user_id;
-    END IF;
-  END IF;
-
-  IF NEW.coach_user_id IS NOT NULL THEN
-    IF NOT EXISTS (
-      SELECT 1
-      FROM users u
-      WHERE u.id = NEW.coach_user_id
-        AND u.role = 'coach'
-      LIMIT 1
-    ) THEN
-      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback coach must be a coach user.';
-    END IF;
-
-    IF NOT EXISTS (
-      SELECT 1
-      FROM booking_items bi
-      JOIN sessions s ON s.id = bi.session_id
-      WHERE bi.booking_id = NEW.booking_id
-        AND s.coach_user_id = NEW.coach_user_id
-      LIMIT 1
-    ) THEN
-      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback coach must be assigned to the booked session.';
-    END IF;
-  END IF;
-END */;;
-DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
 /*!50003 SET character_set_client  = @saved_cs_client */ ;
 /*!50003 SET character_set_results = @saved_cs_results */ ;
@@ -477,80 +366,6 @@ DELIMITER ;
 /*!50003 SET collation_connection  = utf8_general_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION' */ ;
-DELIMITER ;;
-/*!50003 CREATE*/ /*!50003 TRIGGER trg_feedback_before_update
-BEFORE UPDATE ON feedback
-FOR EACH ROW
-BEGIN
-  DECLARE item_coach_user_id INT UNSIGNED DEFAULT NULL;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM bookings b
-    WHERE b.id = NEW.booking_id
-      AND b.status = 'completed'
-    LIMIT 1
-  ) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback requires a completed booking.';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM bookings b
-    WHERE b.id = NEW.booking_id
-      AND b.user_id = NEW.user_id
-    LIMIT 1
-  ) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback user must own the booking.';
-  END IF;
-
-  IF NEW.booking_item_id IS NOT NULL THEN
-    IF NOT EXISTS (
-      SELECT 1
-      FROM booking_items bi
-      WHERE bi.id = NEW.booking_item_id
-        AND bi.booking_id = NEW.booking_id
-      LIMIT 1
-    ) THEN
-      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback booking item must belong to the booking.';
-    END IF;
-
-    SELECT s.coach_user_id
-    INTO item_coach_user_id
-    FROM booking_items bi
-    LEFT JOIN sessions s ON s.id = bi.session_id
-    WHERE bi.id = NEW.booking_item_id
-    LIMIT 1;
-
-    IF NEW.coach_user_id IS NULL THEN
-      SET NEW.coach_user_id = item_coach_user_id;
-    END IF;
-  END IF;
-
-  IF NEW.coach_user_id IS NOT NULL THEN
-    IF NOT EXISTS (
-      SELECT 1
-      FROM users u
-      WHERE u.id = NEW.coach_user_id
-        AND u.role = 'coach'
-      LIMIT 1
-    ) THEN
-      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback coach must be a coach user.';
-    END IF;
-
-    IF NOT EXISTS (
-      SELECT 1
-      FROM booking_items bi
-      JOIN sessions s ON s.id = bi.session_id
-      WHERE bi.booking_id = NEW.booking_id
-        AND s.coach_user_id = NEW.coach_user_id
-      LIMIT 1
-    ) THEN
-      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback coach must be assigned to the booked session.';
-    END IF;
-  END IF;
-END */;;
-DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
 /*!50003 SET character_set_client  = @saved_cs_client */ ;
 /*!50003 SET character_set_results = @saved_cs_results */ ;
