@@ -2,13 +2,17 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/SchedulingRepository.php';
+require_once __DIR__ . '/NotificationService.php';
 
 final class SchedulingService
 {
     private const SESSION_STATUSES = ['open', 'full', 'cancelled', 'completed'];
     private const AVAILABILITY_STATUSES = ['available', 'unavailable', 'leave'];
 
-    public function __construct(private readonly SchedulingRepository $schedules = new SchedulingRepository()) {}
+    public function __construct(
+        private readonly SchedulingRepository $schedules = new SchedulingRepository(),
+        private readonly NotificationService $notifications = new NotificationService()
+    ) {}
 
     public function coaches(bool $activeOnly = true): array
     {
@@ -19,7 +23,13 @@ final class SchedulingService
     {
         $data = $this->sessionData($input);
         $this->assertSessionCanBeSaved($data, null);
-        return $this->schedules->createSession($data);
+        $sessionId = $this->schedules->createSession($data);
+        $session = $this->schedules->sessionById($sessionId);
+        if ($session) {
+            $this->notifications->notifySessionUpdated($session, 'assigned');
+        }
+
+        return $sessionId;
     }
 
     public function updateSession(int $id, array $input): bool
@@ -29,7 +39,15 @@ final class SchedulingService
         }
         $data = $this->sessionData($input);
         $this->assertSessionCanBeSaved($data, $id);
-        return $this->schedules->updateSession($id, $data);
+        $updated = $this->schedules->updateSession($id, $data);
+        if ($updated) {
+            $session = $this->schedules->sessionById($id);
+            if ($session) {
+                $this->notifications->notifySessionUpdated($session, 'updated');
+            }
+        }
+
+        return $updated;
     }
 
     public function setSessionStatus(int $id, string $status): bool
@@ -38,7 +56,15 @@ final class SchedulingService
             throw new RuntimeException('Session is required.');
         }
         $status = $this->sessionStatus($status);
-        return $this->schedules->setSessionStatus($id, $status);
+        $updated = $this->schedules->setSessionStatus($id, $status);
+        if ($updated) {
+            $session = $this->schedules->sessionById($id);
+            if ($session) {
+                $this->notifications->notifySessionUpdated($session, 'updated');
+            }
+        }
+
+        return $updated;
     }
 
     public function sessionById(int $id, bool $forUpdate = false): ?array

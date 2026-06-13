@@ -9,6 +9,47 @@ $adminService = new AdminService();
 $userRepo = new UserRepository();
 $successMsg = '';
 $errorMsg = '';
+$notificationTypes = [
+    'info' => 'Info',
+    'success' => 'Success',
+    'warning' => 'Warning',
+    'error' => 'Error',
+];
+
+function admin_notification_type_label(string $type): string {
+    return ucwords(str_replace('_', ' ', $type));
+}
+
+function admin_notification_safe_href(?string $link): string {
+    $link = trim((string) $link);
+    if ($link === '') {
+        return '';
+    }
+
+    $parts = parse_url($link);
+    if ($parts === false) {
+        return '';
+    }
+
+    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+    if ($scheme !== '') {
+        return in_array($scheme, ['http', 'https'], true) ? $link : '';
+    }
+
+    if (function_exists('pickled_frontend_url') && preg_match('#^(resident|admin|coach|auth)/#', $link)) {
+        return pickled_frontend_url($link);
+    }
+
+    return $link;
+}
+
+function admin_notification_excerpt(string $message): string {
+    if (function_exists('mb_strimwidth')) {
+        return mb_strimwidth($message, 0, 120, '...');
+    }
+
+    return strlen($message) > 120 ? substr($message, 0, 117) . '...' : $message;
+}
 
 // Handle notification actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -19,13 +60,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         if ($action === 'send_notification') {
             $userId = (int) ($_POST['user_id'] ?? 0);
-            if ($userId === 0) {
+            $title = trim((string) ($_POST['title'] ?? ''));
+            $body = trim((string) ($_POST['message'] ?? ''));
+            $type = (string) ($_POST['type'] ?? 'info');
+            $link = trim((string) ($_POST['link'] ?? '')) ?: null;
+
+            if ($title === '' || $body === '') {
+                $errorMsg = 'Title and message are required';
+            } elseif ($userId === 0) {
                 // Broadcast
                 $count = $adminService->sendBroadcastNotification(
-                    $_POST['title'] ?? '',
-                    $_POST['message'] ?? '',
+                    $title,
+                    $body,
                     (int) $_SESSION['user']['id'],
-                    $_POST['type'] ?? 'info'
+                    $type,
+                    $link
                 );
                 if ($count > 0) {
                     $successMsg = "Broadcast sent to $count users";
@@ -35,11 +84,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 if ($adminService->sendNotification(
                     $userId,
-                    $_POST['title'] ?? '',
-                    $_POST['message'] ?? '',
+                    $title,
+                    $body,
                     (int) $_SESSION['user']['id'],
-                    $_POST['type'] ?? 'info',
-                    $_POST['link'] ?? null
+                    $type,
+                    $link
                 )) {
                     $successMsg = 'Notification sent successfully';
                 } else {
@@ -57,8 +106,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$users = $userRepo->findAll();
-$notifications = $adminService->getAdminLogs(50);
+$users = $userRepo->findAll() ?? [];
+$notifications = $adminService->getAllNotifications(100);
 ?>
 
 <?php require_once __DIR__ . '/../includes/admin-navbar.php'; ?>
@@ -109,16 +158,15 @@ $notifications = $adminService->getAdminLogs(50);
                     <div class="form-group">
                         <label for="type">Type</label>
                         <select id="type" name="type">
-                            <option value="info">Info</option>
-                            <option value="success">Success</option>
-                            <option value="warning">Warning</option>
-                            <option value="error">Error</option>
+                            <?php foreach ($notificationTypes as $value => $label): ?>
+                                <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($label); ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     
                     <div class="form-group">
                         <label for="link">Link (Optional)</label>
-                        <input type="text" id="link" name="link" placeholder="/admin/manage-bookings.php">
+                        <input type="text" id="link" name="link" placeholder="resident/booking.php">
                     </div>
                     
                     <button type="submit" class="btn btn-success">Send Notification</button>
@@ -127,24 +175,55 @@ $notifications = $adminService->getAdminLogs(50);
             
             <!-- Notification History -->
             <section>
-                <h2>Activity Log</h2>
+                <h2>Notification History</h2>
                 <div class="table-responsive">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Admin</th>
-                                <th>Action</th>
-                                <th>Entity</th>
+                                <th>Recipient</th>
+                                <th>Type</th>
+                                <th>Notification</th>
+                                <th>Status</th>
+                                <th>Link</th>
                                 <th>Date</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach (array_slice($notifications, 0, 20) as $log): ?>
+                            <?php if (!$notifications): ?>
                                 <tr>
-                                    <td><?php echo htmlspecialchars($log['name'] ?? 'Unknown'); ?></td>
-                                    <td><?php echo htmlspecialchars($log['action']); ?></td>
-                                    <td><?php echo htmlspecialchars($log['entity_type'] ?? '-'); ?> #<?php echo isset($log['entity_id']) ? (int) $log['entity_id'] : '-'; ?></td>
-                                    <td><?php echo date('M d, Y H:i', strtotime($log['created_at'])); ?></td>
+                                    <td colspan="7">No notifications have been sent yet.</td>
+                                </tr>
+                            <?php endif; ?>
+                            <?php foreach ($notifications as $notification): ?>
+                                <?php $safeLink = admin_notification_safe_href($notification['link'] ?? null); ?>
+                                <tr>
+                                    <td>
+                                        <?php echo htmlspecialchars($notification['user_name'] ?? 'Unknown user'); ?><br>
+                                        <small><?php echo htmlspecialchars($notification['user_email'] ?? ''); ?></small>
+                                    </td>
+                                    <td><?php echo htmlspecialchars(admin_notification_type_label((string) $notification['type'])); ?></td>
+                                    <td>
+                                        <strong><?php echo htmlspecialchars($notification['title']); ?></strong><br>
+                                        <small><?php echo htmlspecialchars(admin_notification_excerpt((string) $notification['message'])); ?></small>
+                                    </td>
+                                    <td><?php echo empty($notification['is_read']) ? 'Unread' : 'Read'; ?></td>
+                                    <td>
+                                        <?php if ($safeLink !== ''): ?>
+                                            <a href="<?php echo htmlspecialchars($safeLink); ?>">Open</a>
+                                        <?php else: ?>
+                                            -
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?php echo date('M d, Y H:i', strtotime((string) $notification['created_at'])); ?></td>
+                                    <td>
+                                        <form method="post" onsubmit="return confirm('Delete this notification?');">
+                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>">
+                                            <input type="hidden" name="action" value="delete_notification">
+                                            <input type="hidden" name="notification_id" value="<?php echo (int) $notification['id']; ?>">
+                                            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                                        </form>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>

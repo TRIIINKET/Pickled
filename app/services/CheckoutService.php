@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/BookingRepository.php';
 require_once __DIR__ . '/CartService.php';
+require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/../controllers/CheckoutController.php';
 require_once __DIR__ . '/../../includes/booking-system.php';
 
@@ -10,7 +11,8 @@ final class CheckoutService
 {
     public function __construct(
         private readonly BookingRepository $bookings = new BookingRepository(),
-        private readonly CartService $cart = new CartService()
+        private readonly CartService $cart = new CartService(),
+        private readonly NotificationService $notifications = new NotificationService()
     ) {}
 
     public function createBooking(int $userId, array $items, string $customerName, string $paymentMethod, string $notes): array
@@ -40,6 +42,7 @@ final class CheckoutService
         ];
 
         $stored = $this->bookings->create($userId, $booking);
+        $this->notifications->notifyBookingCreated($stored);
         $this->cart->clearForUser($userId);
 
         if (session_status() === PHP_SESSION_ACTIVE) {

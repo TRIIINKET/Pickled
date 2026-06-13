@@ -1,6 +1,7 @@
 <?php
 // Shared site navigation.
 require_once __DIR__ . '/paths.php';
+require_once __DIR__ . '/../app/services/NotificationService.php';
 $activePage = $activePage ?? '';
 $links = [
   'index.php'       => 'Home',
@@ -16,6 +17,14 @@ $logoImage = pickled_asset_url('img/' . $logoFile);
 $navClasses = 'nav' . ($useDarkNav ? ' nav--dark' : '');
 $loggedIn = !empty($_SESSION['user']);
 $cartCount = !empty($_SESSION['cart']) ? array_sum(array_column($_SESSION['cart'], 'quantity')) : 0;
+$notificationUnreadCount = 0;
+if ($loggedIn) {
+    try {
+        $notificationUnreadCount = (new NotificationService())->unreadCount((int) ($_SESSION['user']['id'] ?? 0));
+    } catch (Throwable $e) {
+        error_log('Notification badge failed: ' . $e->getMessage());
+    }
+}
 $bookNowRedirect = 'resident/courts.php#court-detail';
 $bookNowHref = $loggedIn ? pickled_frontend_url('resident/courts.php#court-detail') : pickled_frontend_url('auth/login.php?notice=booking&redirect=' . rawurlencode($bookNowRedirect));
 if ($loggedIn && empty($_SESSION['csrf_token'])) {
@@ -58,6 +67,17 @@ $accountInitial = strtoupper(substr($accountName !== '' ? $accountName : $accoun
         <?php endif; ?>
       </a>
       <?php if ($loggedIn): ?>
+        <a href="<?= htmlspecialchars(pickled_frontend_url('resident/notifications.php')) ?>" class="nav-cart<?= $activePage === 'notifications.php' ? ' active' : '' ?>" aria-label="Notifications<?= $notificationUnreadCount ? ' with ' . $notificationUnreadCount . ' unread' : '' ?>">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <?php if ($notificationUnreadCount): ?>
+            <span class="nav-cart__count"><?= min($notificationUnreadCount, 9) ?></span>
+          <?php endif; ?>
+        </a>
+      <?php endif; ?>
+      <?php if ($loggedIn): ?>
         <details class="nav-account" data-account-menu>
           <summary class="nav-account__trigger" aria-label="Open account menu">
             <span class="nav-account__avatar" aria-hidden="true">
@@ -87,6 +107,10 @@ $accountInitial = strtoupper(substr($accountName !== '' ? $accountName : $accoun
               <a href="<?= htmlspecialchars(pickled_frontend_url('resident/booking.php')) ?>"<?= $activePage === 'booking.php' ? ' aria-current="page"' : '' ?>>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg>
                 My Bookings
+              </a>
+              <a href="<?= htmlspecialchars(pickled_frontend_url('resident/notifications.php')) ?>"<?= $activePage === 'notifications.php' ? ' aria-current="page"' : '' ?>>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                Notifications<?php if ($notificationUnreadCount): ?> (<?= min($notificationUnreadCount, 99) ?>)<?php endif; ?>
               </a>
               <a href="<?= htmlspecialchars(pickled_frontend_url('resident/profile.php#payments')) ?>">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"></rect><path d="M3 10h18M7 15h3"></path></svg>

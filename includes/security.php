@@ -79,6 +79,7 @@ function pickled_safe_redirect(string $redirect): string {
         'cart.php',
         'booking.php',
         'booking-details.php',
+        'notifications.php',
         'profile.php',
         'courts.php',
         'social-play.php',

@@ -1,0 +1,18 @@
+warning: in the working copy of 'app/repositories/NotificationRepository.php', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/services/AdminService.php', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/services/BookingExpiryService.php', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/services/CheckoutService.php', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/services/PaymentService.php', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/services/SchedulingService.php', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'coach/announcements.php', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'includes/navbar.php', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'includes/security.php', LF will be replaced by CRLF the next time Git touches it
+app/repositories/NotificationRepository.php
+app/services/AdminService.php
+app/services/BookingExpiryService.php
+app/services/CheckoutService.php
+app/services/PaymentService.php
+app/services/SchedulingService.php
+coach/announcements.php
+includes/navbar.php
+includes/security.php

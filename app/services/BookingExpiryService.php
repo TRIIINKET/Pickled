@@ -2,12 +2,16 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/BookingRepository.php';
+require_once __DIR__ . '/NotificationService.php';
 
 final class BookingExpiryService
 {
     private const DEFAULT_PENDING_EXPIRY_HOURS = 24;
 
-    public function __construct(private readonly BookingRepository $bookings = new BookingRepository()) {}
+    public function __construct(
+        private readonly BookingRepository $bookings = new BookingRepository(),
+        private readonly NotificationService $notifications = new NotificationService()
+    ) {}
 
     public function processExpiredPendingBookings(?DateTimeImmutable $now = null, int $limit = 100): int
     {
@@ -16,6 +20,10 @@ final class BookingExpiryService
 
         foreach ($this->bookings->findExpiredPendingIds($cutoff, $limit) as $bookingId) {
             if ($this->bookings->expirePendingBooking($bookingId, $cutoff)) {
+                $booking = $this->bookings->findById($bookingId);
+                if ($booking) {
+                    $this->notifications->notifyBookingExpired($booking);
+                }
                 $expired++;
             }
         }

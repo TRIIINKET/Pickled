@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../repositories/BookingRepository.php';
 require_once __DIR__ . '/../repositories/PaymentRepository.php';
 require_once __DIR__ . '/BookingExpiryService.php';
+require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/../../database/Database.php';
 
 final class PaymentService
@@ -18,7 +19,8 @@ final class PaymentService
 
     public function __construct(
         private readonly PaymentRepository $payments = new PaymentRepository(),
-        private readonly BookingRepository $bookings = new BookingRepository()
+        private readonly BookingRepository $bookings = new BookingRepository(),
+        private readonly NotificationService $notifications = new NotificationService()
     ) {}
 
     public function uploadReceipt(int $userId, int $bookingId, array $file, string $referenceNumber): array
@@ -60,7 +62,10 @@ final class PaymentService
         $this->bookings->updateStatus($bookingId, 'pending');
         $this->bookings->updatePaymentStatus($bookingId, 'pending');
 
-        return $this->payments->findById($paymentId) ?? [];
+        $payment = $this->payments->findById($paymentId) ?? [];
+        $this->notifications->notifyPaymentUploaded($booking, $payment);
+
+        return $payment;
     }
 
     public function approveLatestForBooking(int $bookingId, int $adminId, string $remarks = ''): bool
@@ -141,6 +146,13 @@ final class PaymentService
             } else {
                 $this->bookings->updateStatus($bookingId, 'pending');
                 $this->bookings->updatePaymentStatus($bookingId, 'rejected');
+            }
+
+            $updatedBooking = $this->bookings->findById($bookingId) ?? $booking;
+            if ($status === 'approved') {
+                $this->notifications->notifyPaymentApproved($updatedBooking);
+            } else {
+                $this->notifications->notifyPaymentRejected($updatedBooking, $remarks);
             }
 
             if ($startedTransaction) {
