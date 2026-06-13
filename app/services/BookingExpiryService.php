@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/BookingRepository.php';
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/AdminLogService.php';
 
 final class BookingExpiryService
 {
@@ -10,7 +11,8 @@ final class BookingExpiryService
 
     public function __construct(
         private readonly BookingRepository $bookings = new BookingRepository(),
-        private readonly NotificationService $notifications = new NotificationService()
+        private readonly NotificationService $notifications = new NotificationService(),
+        private readonly AdminLogService $adminLogs = new AdminLogService()
     ) {}
 
     public function processExpiredPendingBookings(?DateTimeImmutable $now = null, int $limit = 100): int
@@ -22,6 +24,7 @@ final class BookingExpiryService
             if ($this->bookings->expirePendingBooking($bookingId, $cutoff)) {
                 $booking = $this->bookings->findById($bookingId);
                 if ($booking) {
+                    $this->adminLogs->recordBookingExpired($booking);
                     $this->notifications->notifyBookingExpired($booking);
                 }
                 $expired++;

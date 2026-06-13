@@ -7,6 +7,7 @@ require_once __DIR__ . '/../repositories/EventRepository.php';
 require_once __DIR__ . '/../repositories/NotificationRepository.php';
 require_once __DIR__ . '/PaymentService.php';
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/AdminLogService.php';
 require_once __DIR__ . '/../../database/Database.php';
 require_once __DIR__ . '/../repositories/AdminRepository.php';
 require_once __DIR__ . '/../support/DatabaseRedesign.php';
@@ -19,8 +20,11 @@ class AdminService {
     private $notificationService;
     private $adminRepo;
     private $paymentService;
+    private $adminLogs;
 
     public function __construct() {
+        $this->adminLogs = new AdminLogService();
+
         if (DatabaseRedesign::active()) {
             $this->userRepo = new UserRepository();
             $this->bookingRepo = new BookingRepository();
@@ -120,9 +124,6 @@ class AdminService {
         $result = $paymentId
             ? $this->paymentService->approve($paymentId, $adminId, $remarks)
             : $this->paymentService->approveLatestForBooking($bookingId, $adminId, $remarks);
-        if ($result && $this->adminRepo) {
-            $this->adminRepo->logAction($adminId, 'payment_approved', 'booking', $bookingId);
-        }
         return $result;
     }
 
@@ -130,9 +131,6 @@ class AdminService {
         $result = $paymentId
             ? $this->paymentService->reject($paymentId, $adminId, $reason)
             : $this->paymentService->rejectLatestForBooking($bookingId, $adminId, $reason);
-        if ($result && $this->adminRepo) {
-            $this->adminRepo->logAction($adminId, 'payment_rejected', 'booking', $bookingId, ['reason' => $reason]);
-        }
         return $result;
     }
 
@@ -141,12 +139,13 @@ class AdminService {
         $wasCancelled = $previousBooking && str_contains(strtolower((string) ($previousBooking['status'] ?? '')), 'cancel');
         $isCancelled = str_contains(strtolower($status), 'cancel');
         $result = $this->bookingRepo->updateStatus($bookingId, $status);
-        if ($result && $this->adminRepo) {
-            $this->adminRepo->logAction($adminId, 'booking_status_changed', 'booking', $bookingId, ['new_status' => $status]);
+        $booking = $result ? ($this->bookingRepo->findById($bookingId) ?? $previousBooking) : null;
+        if ($result && $booking && in_array((string) ($booking['status'] ?? ''), ['confirmed', 'completed'], true)) {
+            $this->adminLogs->recordBookingConfirmed($booking, $adminId);
         }
         if ($result && $isCancelled && !$wasCancelled) {
-            $booking = $this->bookingRepo->findById($bookingId) ?? $previousBooking;
             if ($booking) {
+                $this->adminLogs->recordBookingCancelled($booking, $adminId);
                 $this->notificationService->notifyBookingCancelled($booking);
             }
         }
@@ -223,12 +222,9 @@ class AdminService {
     // Notification Management
     public function sendNotification(int $userId, string $title, string $message, int $adminId, string $type = 'info', ?string $link = null) {
         $notificationId = $this->notificationService->createForUser($userId, $title, $message, $type, $link);
-        if ($notificationId && $this->adminRepo) {
-            $details = ['user_id' => $userId];
-            if ($link !== null && trim($link) !== '') {
-                $details['link'] = trim($link);
-            }
-            $this->adminRepo->logAction($adminId, 'notification_sent', 'notification', $notificationId, $details);
+        if ($notificationId) {
+            $description = 'Admin sent notification "' . trim($title) . '" to user #' . $userId . '.';
+            $this->adminLogs->recordAdminNotificationSent($adminId, (int) $notificationId, $description);
         }
         return $notificationId;
     }
@@ -241,12 +237,12 @@ class AdminService {
                 $count++;
             }
         }
-        if ($count > 0 && $this->adminRepo) {
-            $details = ['recipient_count' => $count];
-            if ($link !== null && trim($link) !== '') {
-                $details['link'] = trim($link);
-            }
-            $this->adminRepo->logAction($adminId, 'broadcast_sent', 'notification', null, $details);
+        if ($count > 0) {
+            $this->adminLogs->recordAdminNotificationSent(
+                $adminId,
+                null,
+                'Admin broadcast notification "' . trim($title) . '" to ' . $count . ' recipient' . ($count === 1 ? '' : 's') . '.'
+            );
         }
         return $count;
     }
@@ -288,19 +284,11 @@ class AdminService {
         return $this->adminRepo->getBookingStats();
     }
 
-    public function getAdminLogs($limit = 100) {
-        if (DatabaseRedesign::active()) {
-            return DatabaseRedesign::adminLogs((int) $limit);
-        }
-
-        return $this->adminRepo->getLogs($limit);
+    public function getAdminLogs($limit = 100, array $filters = [], string $sort = 'desc') {
+        return $this->adminLogs->logs($filters, (int) $limit, $sort);
     }
 
-    public function getAdminActivityByAdmin(int $adminId, $limit = 50) {
-        if (DatabaseRedesign::active()) {
-            return DatabaseRedesign::adminLogs((int) $limit);
-        }
-
-        return $this->adminRepo->getLogsByAdmin($adminId, $limit);
+    public function getAdminActivityByAdmin(int $adminId, $limit = 50, string $sort = 'desc') {
+        return $this->adminLogs->logsForAdmin($adminId, (int) $limit, $sort);
     }
 }

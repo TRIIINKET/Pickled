@@ -6,12 +6,14 @@ require_once __DIR__ . '/../includes/admin-header.php';
 require_once __DIR__ . '/../includes/admin-paths.php';
 require_once __DIR__ . '/../database/Database.php';
 require_once __DIR__ . '/../app/services/FeedbackService.php';
+require_once __DIR__ . '/../app/services/AdminLogService.php';
 
 pickled_init_csrf();
 
 // TODO(database-redesign): reconnect analytics to aggregate tables/views from the new schema.
 $pdo = Database::enabled() ? Database::connection() : null;
 $feedbackService = new FeedbackService();
+$adminLogService = new AdminLogService();
 $adminName = $_SESSION['user']['name'] ?? 'Admin';
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
@@ -20,6 +22,10 @@ $rangeStart = $today->modify('-24 days')->format('M j');
 $rangeEnd = $today->format('M j, Y');
 $feedbackRatingFilter = isset($_GET['feedback_rating']) && $_GET['feedback_rating'] !== '' ? (int) $_GET['feedback_rating'] : null;
 $feedbackSearch = trim((string) ($_GET['feedback_q'] ?? ''));
+$logActionFilter = trim((string) ($_GET['log_action'] ?? ''));
+$logEntityFilter = trim((string) ($_GET['log_entity_type'] ?? ''));
+$logSearch = trim((string) ($_GET['log_q'] ?? ''));
+$logSort = strtolower((string) ($_GET['log_sort'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
 
 function reports_scalar(?PDO $pdo, string $sql, array $params = [], float|int $fallback = 0): float|int {
     if (!$pdo) {
@@ -66,6 +72,10 @@ function reports_status_key(string $value): string {
     if (str_contains($value, 'pending') || str_contains($value, 'registration')) return 'warning';
     if (str_contains($value, 'cancel') || str_contains($value, 'reject')) return 'danger';
     return 'neutral';
+}
+
+function reports_log_label(string $value): string {
+    return ucwords(str_replace(['_', '-'], ' ', $value));
 }
 
 function reports_program_metric(?PDO $pdo, string $where, array $params, array $fallback): array {
@@ -165,6 +175,27 @@ $activeCoaches = max(4, (int) reports_scalar($pdo, "SELECT COUNT(*) FROM users W
 $platformFeedbackStats = $feedbackService->platformStats();
 $coachFeedbackSummary = $feedbackService->coachSummary();
 $feedbackRows = $feedbackService->allFeedback($feedbackRatingFilter, $feedbackSearch, 80);
+$adminLogFilters = [];
+if ($logActionFilter !== '') {
+    $adminLogFilters['action'] = $logActionFilter;
+}
+if ($logEntityFilter !== '') {
+    $adminLogFilters['entity_type'] = $logEntityFilter;
+}
+if ($logSearch !== '') {
+    $adminLogFilters['q'] = $logSearch;
+}
+
+$adminLogRows = [];
+$adminLogActions = [];
+$adminLogEntities = [];
+try {
+    $adminLogRows = $adminLogService->logs($adminLogFilters, 100, $logSort);
+    $adminLogActions = $adminLogService->actionOptions();
+    $adminLogEntities = $adminLogService->entityTypeOptions();
+} catch (Throwable $e) {
+    error_log('Admin log report failed: ' . $e->getMessage());
+}
 
 $popularServices = [
     ['name' => 'Court Green Rental', 'bookings' => (int) $programs['green']['metric']['bookings'], 'tone' => 'green', 'icon' => 'target'],
@@ -359,6 +390,58 @@ if (!$activityFeed) {
                     <?php if (!$feedbackRows): ?>
                         <article><h3>No feedback found</h3><p>Completed booking reviews will appear here.</p></article>
                     <?php endif; ?>
+                </section>
+            </article>
+        </section>
+
+        <section class="reports-bottom-grid" id="activity-logs">
+            <article class="reports-panel performance-panel">
+                <header><h2><?php echo reports_icon($icons, 'shield'); ?> Activity Logs</h2></header>
+                <form class="booking-filter-bar" method="get">
+                    <input type="hidden" name="logs_section" value="1">
+                    <select name="log_action">
+                        <option value="">All actions</option>
+                        <?php foreach ($adminLogActions as $actionOption): ?>
+                            <option value="<?php echo htmlspecialchars($actionOption); ?>" <?php echo $logActionFilter === $actionOption ? 'selected' : ''; ?>><?php echo htmlspecialchars(reports_log_label((string) $actionOption)); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <select name="log_entity_type">
+                        <option value="">All entities</option>
+                        <?php foreach ($adminLogEntities as $entityOption): ?>
+                            <option value="<?php echo htmlspecialchars($entityOption); ?>" <?php echo $logEntityFilter === $entityOption ? 'selected' : ''; ?>><?php echo htmlspecialchars(reports_log_label((string) $entityOption)); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <select name="log_sort">
+                        <option value="desc" <?php echo $logSort === 'desc' ? 'selected' : ''; ?>>Newest first</option>
+                        <option value="asc" <?php echo $logSort === 'asc' ? 'selected' : ''; ?>>Oldest first</option>
+                    </select>
+                    <input type="search" name="log_q" value="<?php echo htmlspecialchars($logSearch); ?>" placeholder="Search action, description, or admin">
+                    <button type="submit">Apply</button>
+                </form>
+                <div class="program-performance-table">
+                    <div class="program-row head"><span>Date</span><span>Admin</span><span>Action</span><span>Entity</span><span>Description</span></div>
+                    <?php foreach ($adminLogRows as $logRow): ?>
+                        <div class="program-row report-green">
+                            <span><?php echo htmlspecialchars(date('M j, Y g:i A', strtotime((string) $logRow['created_at']))); ?></span>
+                            <span><?php echo htmlspecialchars($logRow['admin_name'] ?? 'User #' . (string) $logRow['admin_id']); ?></span>
+                            <span><?php echo htmlspecialchars(reports_log_label((string) $logRow['action'])); ?></span>
+                            <span><?php echo htmlspecialchars(reports_log_label((string) $logRow['entity_type'])); ?><?php echo !empty($logRow['entity_id']) ? ' #' . (int) $logRow['entity_id'] : ''; ?></span>
+                            <span><?php echo htmlspecialchars((string) ($logRow['description'] ?? '')); ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                    <?php if (!$adminLogRows): ?>
+                        <div class="program-row"><span>No activity logs found.</span><span></span><span></span><span></span><span></span></div>
+                    <?php endif; ?>
+                </div>
+            </article>
+
+            <article class="reports-panel report-export-panel">
+                <header><h2>Log Search</h2></header>
+                <section class="crystal-report-list">
+                    <article>
+                        <h3>Available Filters</h3>
+                        <p>Use action, entity, search text, and date sorting to review admin activity. Logs are written automatically by booking, payment, catalog, scheduling, notification, and expiry workflows.</p>
+                    </article>
                 </section>
             </article>
         </section>

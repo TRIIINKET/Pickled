@@ -5,6 +5,7 @@ require_once __DIR__ . '/../repositories/BookingRepository.php';
 require_once __DIR__ . '/../repositories/PaymentRepository.php';
 require_once __DIR__ . '/BookingExpiryService.php';
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/AdminLogService.php';
 require_once __DIR__ . '/../../database/Database.php';
 
 final class PaymentService
@@ -20,7 +21,8 @@ final class PaymentService
     public function __construct(
         private readonly PaymentRepository $payments = new PaymentRepository(),
         private readonly BookingRepository $bookings = new BookingRepository(),
-        private readonly NotificationService $notifications = new NotificationService()
+        private readonly NotificationService $notifications = new NotificationService(),
+        private readonly AdminLogService $adminLogs = new AdminLogService()
     ) {}
 
     public function uploadReceipt(int $userId, int $bookingId, array $file, string $referenceNumber): array
@@ -63,6 +65,7 @@ final class PaymentService
         $this->bookings->updatePaymentStatus($bookingId, 'pending');
 
         $payment = $this->payments->findById($paymentId) ?? [];
+        $this->adminLogs->recordPaymentUploaded($booking, $payment);
         $this->notifications->notifyPaymentUploaded($booking, $payment);
 
         return $payment;
@@ -149,9 +152,13 @@ final class PaymentService
             }
 
             $updatedBooking = $this->bookings->findById($bookingId) ?? $booking;
+            $updatedPayment = $this->payments->findById($paymentId) ?? $payment;
             if ($status === 'approved') {
+                $this->adminLogs->recordPaymentApproved($updatedBooking, $updatedPayment, $adminId);
+                $this->adminLogs->recordBookingConfirmed($updatedBooking, $adminId);
                 $this->notifications->notifyPaymentApproved($updatedBooking);
             } else {
+                $this->adminLogs->recordPaymentRejected($updatedBooking, $updatedPayment, $adminId, $remarks);
                 $this->notifications->notifyPaymentRejected($updatedBooking, $remarks);
             }
 

@@ -2,10 +2,14 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/CatalogRepository.php';
+require_once __DIR__ . '/AdminLogService.php';
 
 final class CatalogService
 {
-    public function __construct(private readonly CatalogRepository $catalog = new CatalogRepository()) {}
+    public function __construct(
+        private readonly CatalogRepository $catalog = new CatalogRepository(),
+        private readonly AdminLogService $adminLogs = new AdminLogService()
+    ) {}
 
     public function courts(bool $includeInactive = false): array
     {
@@ -17,28 +21,44 @@ final class CatalogService
         return $this->catalog->findCourtBySlug($slug, $includeInactive);
     }
 
-    public function createCourt(array $input): int
+    public function createCourt(array $input, ?int $adminId = null): int
     {
-        return $this->catalog->createCourt($this->courtData($input));
+        $data = $this->courtData($input);
+        $courtId = $this->catalog->createCourt($data);
+        $this->adminLogs->recordCourtCreated($this->adminId($input, $adminId), $courtId, (string) $data['name']);
+        return $courtId;
     }
 
-    public function updateCourt(int $id, array $input): bool
+    public function updateCourt(int $id, array $input, ?int $adminId = null): bool
     {
         if ($id <= 0) {
             throw new RuntimeException('Court is required.');
         }
 
-        return $this->catalog->updateCourt($id, $this->courtData($input));
+        $data = $this->courtData($input);
+        $updated = $this->catalog->updateCourt($id, $data);
+        if ($updated) {
+            $this->adminLogs->recordCourtUpdated($this->adminId($input, $adminId), $id, (string) $data['name']);
+        }
+        return $updated;
     }
 
-    public function setCourtStatus(int $id, string $status): bool
+    public function setCourtStatus(int $id, string $status, ?int $adminId = null): bool
     {
         if ($id <= 0) {
             throw new RuntimeException('Court is required.');
         }
 
         $status = $this->status($status);
-        return $this->catalog->setCourtStatus($id, $status);
+        $updated = $this->catalog->setCourtStatus($id, $status);
+        if ($updated) {
+            if ($status === 'active') {
+                $this->adminLogs->recordCourtUpdated((int) ($adminId ?? 0), $id, 'Court #' . $id);
+            } else {
+                $this->adminLogs->recordCourtDisabled((int) ($adminId ?? 0), $id, $status);
+            }
+        }
+        return $updated;
     }
 
     public function variantsForCourtSlug(string $courtSlug, bool $includeInactive = false): array
@@ -56,27 +76,39 @@ final class CatalogService
         return $this->catalog->variants($includeInactive);
     }
 
-    public function createVariant(array $input): int
+    public function createVariant(array $input, ?int $adminId = null): int
     {
-        return $this->catalog->createVariant($this->variantData($input));
+        $data = $this->variantData($input);
+        $variantId = $this->catalog->createVariant($data);
+        $this->adminLogs->recordVariantCreated($this->adminId($input, $adminId), $variantId, (string) $data['name']);
+        return $variantId;
     }
 
-    public function updateVariant(int $id, array $input): bool
+    public function updateVariant(int $id, array $input, ?int $adminId = null): bool
     {
         if ($id <= 0) {
             throw new RuntimeException('Booking variant is required.');
         }
 
-        return $this->catalog->updateVariant($id, $this->variantData($input));
+        $data = $this->variantData($input);
+        $updated = $this->catalog->updateVariant($id, $data);
+        if ($updated) {
+            $this->adminLogs->recordVariantUpdated($this->adminId($input, $adminId), $id, (string) $data['name']);
+        }
+        return $updated;
     }
 
-    public function setVariantActive(int $id, bool $active): bool
+    public function setVariantActive(int $id, bool $active, ?int $adminId = null): bool
     {
         if ($id <= 0) {
             throw new RuntimeException('Booking variant is required.');
         }
 
-        return $this->catalog->setVariantActive($id, $active);
+        $updated = $this->catalog->setVariantActive($id, $active);
+        if ($updated) {
+            $this->adminLogs->recordVariantUpdated((int) ($adminId ?? 0), $id, 'Variant #' . $id);
+        }
+        return $updated;
     }
 
     private function courtData(array $input): array
@@ -137,5 +169,10 @@ final class CatalogService
     {
         $status = strtolower(trim($status));
         return in_array($status, ['active', 'inactive', 'maintenance'], true) ? $status : 'active';
+    }
+
+    private function adminId(array $input, ?int $adminId): int
+    {
+        return max(0, (int) ($adminId ?? $input['admin_id'] ?? 0));
     }
 }

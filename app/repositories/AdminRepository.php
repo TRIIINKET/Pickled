@@ -9,12 +9,12 @@ class AdminRepository {
 
     public function logAction($adminId, $action, $entityType, $entityId, $details = null) {
         try {
-            $detailsJson = $details ? json_encode($details) : null;
+            $description = is_array($details) ? json_encode($details) : $details;
             $stmt = $this->connection->prepare("
-                INSERT INTO admin_logs (admin_id, action, entity_type, entity_id, details)
+                INSERT INTO admin_logs (admin_id, action, entity_type, entity_id, description)
                 VALUES (?, ?, ?, ?, ?)
             ");
-            return $stmt->execute([$adminId, $action, $entityType, $entityId, $detailsJson]);
+            return $stmt->execute([$adminId, $action, $entityType, $entityId, $description]);
         } catch (Exception $e) {
             error_log("AdminRepository::logAction - " . $e->getMessage());
             return false;

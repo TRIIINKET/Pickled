@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/SchedulingRepository.php';
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/AdminLogService.php';
 
 final class SchedulingService
 {
@@ -11,7 +12,8 @@ final class SchedulingService
 
     public function __construct(
         private readonly SchedulingRepository $schedules = new SchedulingRepository(),
-        private readonly NotificationService $notifications = new NotificationService()
+        private readonly NotificationService $notifications = new NotificationService(),
+        private readonly AdminLogService $adminLogs = new AdminLogService()
     ) {}
 
     public function coaches(bool $activeOnly = true): array
@@ -19,20 +21,21 @@ final class SchedulingService
         return $this->schedules->coaches($activeOnly);
     }
 
-    public function createSession(array $input): int
+    public function createSession(array $input, ?int $adminId = null): int
     {
         $data = $this->sessionData($input);
         $this->assertSessionCanBeSaved($data, null);
         $sessionId = $this->schedules->createSession($data);
         $session = $this->schedules->sessionById($sessionId);
         if ($session) {
+            $this->adminLogs->recordSessionCreated($this->adminId($input, $adminId), $session);
             $this->notifications->notifySessionUpdated($session, 'assigned');
         }
 
         return $sessionId;
     }
 
-    public function updateSession(int $id, array $input): bool
+    public function updateSession(int $id, array $input, ?int $adminId = null): bool
     {
         if ($id <= 0) {
             throw new RuntimeException('Session is required.');
@@ -43,6 +46,11 @@ final class SchedulingService
         if ($updated) {
             $session = $this->schedules->sessionById($id);
             if ($session) {
+                if (($session['status'] ?? '') === 'cancelled') {
+                    $this->adminLogs->recordSessionCancelled($this->adminId($input, $adminId), $session);
+                } else {
+                    $this->adminLogs->recordSessionUpdated($this->adminId($input, $adminId), $session);
+                }
                 $this->notifications->notifySessionUpdated($session, 'updated');
             }
         }
@@ -50,7 +58,7 @@ final class SchedulingService
         return $updated;
     }
 
-    public function setSessionStatus(int $id, string $status): bool
+    public function setSessionStatus(int $id, string $status, ?int $adminId = null): bool
     {
         if ($id <= 0) {
             throw new RuntimeException('Session is required.');
@@ -60,6 +68,11 @@ final class SchedulingService
         if ($updated) {
             $session = $this->schedules->sessionById($id);
             if ($session) {
+                if ($status === 'cancelled') {
+                    $this->adminLogs->recordSessionCancelled((int) ($adminId ?? 0), $session);
+                } else {
+                    $this->adminLogs->recordSessionUpdated((int) ($adminId ?? 0), $session);
+                }
                 $this->notifications->notifySessionUpdated($session, 'updated');
             }
         }
@@ -288,5 +301,10 @@ final class SchedulingService
             $status = 'unavailable';
         }
         return in_array($status, self::AVAILABILITY_STATUSES, true) ? $status : 'available';
+    }
+
+    private function adminId(array $input, ?int $adminId): int
+    {
+        return max(0, (int) ($adminId ?? $input['admin_id'] ?? 0));
     }
 }

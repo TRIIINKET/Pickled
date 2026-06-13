@@ -15,6 +15,7 @@ pickled_init_csrf();
 
 $catalogService = new CatalogService();
 $schedulingService = new SchedulingService();
+$adminId = (int) ($_SESSION['user']['id'] ?? 0);
 $successMsg = '';
 $errorMsg = '';
 $pdo = null;
@@ -32,33 +33,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $action = (string) ($_POST['action'] ?? '');
             if ($action === 'create_court') {
-                $catalogService->createCourt($_POST);
+                $catalogService->createCourt($_POST, $adminId);
                 $courtSlug = preg_replace('/[^a-z0-9-]/', '', strtolower((string) ($_POST['slug'] ?? $_POST['name'] ?? $courtSlug))) ?: $courtSlug;
                 $successMsg = 'Court added successfully.';
             } elseif ($action === 'update_court') {
-                $catalogService->updateCourt((int) ($_POST['court_id'] ?? 0), $_POST);
+                $catalogService->updateCourt((int) ($_POST['court_id'] ?? 0), $_POST, $adminId);
                 $courtSlug = preg_replace('/[^a-z0-9-]/', '', strtolower((string) ($_POST['slug'] ?? $courtSlug))) ?: $courtSlug;
                 $successMsg = 'Court updated successfully.';
             } elseif ($action === 'set_court_status') {
-                $catalogService->setCourtStatus((int) ($_POST['court_id'] ?? 0), (string) ($_POST['status'] ?? 'inactive'));
+                $catalogService->setCourtStatus((int) ($_POST['court_id'] ?? 0), (string) ($_POST['status'] ?? 'inactive'), $adminId);
                 $successMsg = 'Court status updated successfully.';
             } elseif ($action === 'create_variant') {
-                $catalogService->createVariant($_POST);
+                $catalogService->createVariant($_POST, $adminId);
                 $successMsg = 'Booking variant added successfully.';
             } elseif ($action === 'update_variant') {
-                $catalogService->updateVariant((int) ($_POST['variant_id'] ?? 0), $_POST);
+                $catalogService->updateVariant((int) ($_POST['variant_id'] ?? 0), $_POST, $adminId);
                 $successMsg = 'Booking variant updated successfully.';
             } elseif ($action === 'set_variant_active') {
-                $catalogService->setVariantActive((int) ($_POST['variant_id'] ?? 0), (string) ($_POST['active'] ?? '0') === '1');
+                $catalogService->setVariantActive((int) ($_POST['variant_id'] ?? 0), (string) ($_POST['active'] ?? '0') === '1', $adminId);
                 $successMsg = 'Booking variant status updated successfully.';
             } elseif ($action === 'create_session') {
-                $schedulingService->createSession($_POST);
+                $schedulingService->createSession($_POST, $adminId);
                 $successMsg = 'Session created successfully.';
             } elseif ($action === 'update_session') {
-                $schedulingService->updateSession((int) ($_POST['session_id'] ?? 0), $_POST);
+                $schedulingService->updateSession((int) ($_POST['session_id'] ?? 0), $_POST, $adminId);
                 $successMsg = 'Session updated successfully.';
             } elseif ($action === 'set_session_status') {
-                $schedulingService->setSessionStatus((int) ($_POST['session_id'] ?? 0), (string) ($_POST['status'] ?? 'cancelled'));
+                $schedulingService->setSessionStatus((int) ($_POST['session_id'] ?? 0), (string) ($_POST['status'] ?? 'cancelled'), $adminId);
                 $successMsg = 'Session status updated successfully.';
             }
         } catch (Throwable $e) {
