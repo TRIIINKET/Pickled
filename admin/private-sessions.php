@@ -1,58 +1,113 @@
 <?php
+declare(strict_types=1);
+
 $pageTitle = 'Private Sessions';
 $activePage = 'events';
 $bodyClass = 'admin-dashboard-body';
+
 require_once __DIR__ . '/../includes/admin-header.php';
 require_once __DIR__ . '/../includes/admin-paths.php';
+require_once __DIR__ . '/../app/services/PrivatePackageService.php';
+require_once __DIR__ . '/../app/services/PrivateInquiryService.php';
 
 pickled_init_csrf();
 
+$packageService = new PrivatePackageService();
+$inquiryService = new PrivateInquiryService();
+$adminId = (int) ($_SESSION['user']['id'] ?? 0);
 $adminName = $_SESSION['user']['name'] ?? 'Admin';
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
 $todayLabel = $today->format('M j, Y (D)');
+$successMsg = '';
+$errorMsg = '';
+$packageStatusFilter = trim((string) ($_GET['package_status'] ?? ''));
+$inquiryStatusFilter = trim((string) ($_GET['inquiry_status'] ?? ''));
+$search = trim((string) ($_GET['q'] ?? ''));
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? null)) {
+        $errorMsg = 'Invalid form submission. Please try again.';
+    } else {
+        try {
+            $action = (string) ($_POST['action'] ?? '');
+            if ($action === 'create_package') {
+                $packageService->create($_POST, $adminId);
+                $successMsg = 'Private package created.';
+            } elseif ($action === 'update_package') {
+                $packageService->update((int) ($_POST['package_id'] ?? 0), $_POST, $adminId);
+                $successMsg = 'Private package updated.';
+            } elseif ($action === 'set_package_status') {
+                $packageService->setStatus((int) ($_POST['package_id'] ?? 0), (string) ($_POST['status'] ?? 'inactive'), $adminId);
+                $successMsg = 'Private package status updated.';
+            } elseif ($action === 'respond_inquiry') {
+                $inquiryService->respond((int) ($_POST['inquiry_id'] ?? 0), (string) ($_POST['admin_response'] ?? ''), (string) ($_POST['status'] ?? 'responded'), $adminId);
+                $successMsg = 'Inquiry response saved.';
+            } elseif ($action === 'set_inquiry_status') {
+                $inquiryService->setStatus((int) ($_POST['inquiry_id'] ?? 0), (string) ($_POST['status'] ?? 'in_review'), $adminId);
+                $successMsg = 'Inquiry status updated.';
+            }
+        } catch (Throwable $e) {
+            error_log('Private sessions admin action failed: ' . $e->getMessage());
+            $errorMsg = $e instanceof RuntimeException ? $e->getMessage() : 'Unable to save private session changes.';
+        }
+    }
+}
+
+try {
+    $coachProfiles = $packageService->coachProfiles();
+    $packages = $packageService->allPackages($packageStatusFilter !== '' ? $packageStatusFilter : null, $search, 100);
+    $inquiries = $inquiryService->allInquiries($inquiryStatusFilter !== '' ? $inquiryStatusFilter : null, $search, 100);
+} catch (Throwable $e) {
+    error_log('Private sessions admin load failed: ' . $e->getMessage());
+    $coachProfiles = [];
+    $packages = [];
+    $inquiries = [];
+    $errorMsg = $errorMsg ?: 'Private sessions data is unavailable. Apply the private packages and inquiries schema.';
+}
+
+$activePackages = count(array_filter($packages, static fn(array $package): bool => ($package['status'] ?? '') === 'active'));
+$newInquiries = count(array_filter($inquiries, static fn(array $inquiry): bool => ($inquiry['status'] ?? '') === 'new'));
 
 function private_asset(string $path): string {
     return htmlspecialchars(pickled_admin_asset_url($path), ENT_QUOTES, 'UTF-8');
 }
 
-function private_public_url(string $path): string {
-    $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/admin/private-sessions.php');
-    $position = strpos($script, '/admin/');
-    $base = $position === false ? rtrim(dirname($script), '/') . '/' : substr($script, 0, $position + 1);
-    return htmlspecialchars($base . ltrim($path, '/'), ENT_QUOTES, 'UTF-8');
+function private_h(mixed $value): string {
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+}
+
+function private_label(string $value): string {
+    return ucwords(str_replace('_', ' ', strtolower($value)));
+}
+
+function private_icon(array $icons, string $name): string {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['target']) . '</svg>';
+}
+
+function private_status_options(string $selected, array $statuses): string {
+    $html = '';
+    foreach ($statuses as $status) {
+        $html .= '<option value="' . private_h($status) . '"' . ($selected === $status ? ' selected' : '') . '>' . private_h(private_label($status)) . '</option>';
+    }
+    return $html;
 }
 
 $icons = [
     'home' => '<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>',
     'calendar' => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
     'users' => '<path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
-    'user' => '<path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/>',
     'target' => '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M22 2 12 12"/>',
     'bell' => '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
     'chart' => '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>',
     'courts' => '<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
     'image' => '<rect x="3" y="5" width="18" height="16" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 16-5-5L5 21"/>',
-    'tag' => '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="8" cy="8" r="1.5"/>',
-    'gear' => '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06A2 2 0 1 1 20.1 7l-.06.06A1.7 1.7 0 0 0 19.4 9c.38.22.74.57 1 .95.26.38.4.8.4 1.2V12a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.31-.6Z"/>',
-    'eye' => '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
-    'edit' => '<path d="M12 20h9"/><path d="m16.5 3.5 4 4L8 20H4v-4Z"/>',
-    'more' => '<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
     'plus' => '<path d="M12 5v14M5 12h14"/>',
-    'upload' => '<path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M20 16v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"/>',
+    'edit' => '<path d="M12 20h9"/><path d="m16.5 3.5 4 4L8 20H4v-4Z"/>',
     'mail' => '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
-    'pin' => '<path d="M20 10c0 5-8 11-8 11s-8-6-8-11a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
-    'phone' => '<path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 3.08 5.18 2 2 0 0 1 5.06 3h3a2 2 0 0 1 2 1.72c.12.9.33 1.77.63 2.61a2 2 0 0 1-.45 2.11L9 10.69a16 16 0 0 0 4.31 4.31l1.25-1.24a2 2 0 0 1 2.11-.45c.84.3 1.71.51 2.61.63A2 2 0 0 1 22 16.92Z"/>',
-    'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    'reply' => '<path d="m9 17-5-5 5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>',
     'check' => '<path d="m20 6-11 11-5-5"/>',
-    'external' => '<path d="M15 3h6v6"/><path d="m10 14 11-11"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/>',
     'peso' => '<path d="M8 5h6a4 4 0 0 1 0 8H8M8 5v14M5 9h12M5 13h9"/>',
 ];
-
-function private_icon(array $icons, string $name): string {
-    return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['target']) . '</svg>';
-}
 
 $dashboardNav = [
     ['type' => 'single', 'label' => 'Dashboard', 'href' => 'admin-dashboard.php', 'key' => 'dashboard', 'icon' => 'home'],
@@ -60,22 +115,8 @@ $dashboardNav = [
     ['type' => 'group', 'label' => 'Users', 'href' => 'manage-users.php?role=player', 'key' => 'users', 'icon' => 'users', 'children' => [['Players', 'manage-users.php?role=player', ''], ['Coaches', 'manage-users.php?role=coach', '']]],
     ['type' => 'group', 'label' => 'Courts', 'href' => 'manage-events.php?court=green', 'key' => 'courts', 'icon' => 'courts', 'children' => [['Court Green', 'manage-events.php?court=green', ''], ['Court Pink', 'manage-events.php?court=pink', '']]],
     ['type' => 'group', 'label' => 'Programs & Events', 'href' => 'manage-events.php?program=social-play', 'key' => 'events', 'icon' => 'target', 'children' => [['Social Play', 'manage-events.php?program=social-play', 'social-play'], ['Private Sessions', 'private-sessions.php', 'private']]],
-['type' => 'single', 'label' => 'Content', 'href' => 'content.php', 'key' => 'content', 'icon' => 'image'],
-['type' => 'single', 'label' => 'Reports', 'href' => 'reports.php', 'key' => 'reports', 'icon' => 'chart'],
-['type' => 'single', 'label' => 'Admin Profile', 'href' => 'admin-profile.php', 'key' => 'admin-profile', 'icon' => 'users'],
-];
-
-$heroDescription = 'A 5,000 sq ft private space best for ultimate corporate or brand event experience where your team can dine, drink, and play in a dynamic and engaging environment. Our dedicated event spaces, pickleball courts, and food and drink options create the perfect setting for fostering connections, collaboration, and unforgettable moments.';
-$gallery = ['img/court/private-1.png', 'img/court/private-2.png', 'img/court/private-3.png', 'img/court/friends private.png'];
-$inquiries = [
-    ['John Santos', 'ABC Corporation', 'May 23, 2026', 'Team building event for 30 pax with court time, food, and facilitation.', 'New', 'danger'],
-    ['Maria Cruz', 'Family Birthday', 'May 21, 2026', 'Birthday celebration for my son with games, snacks, and a private area.', 'Contacted', 'warning'],
-    ['Patricia Lim', 'Brand Launch', 'May 18, 2026', 'Exclusive venue rental for a product reveal and creator event.', 'Confirmed', 'success'],
-];
-$packages = [
-    ['Corporate Team Building', 'Team building, meetings, dining, and pickleball activities.', '20 - 50 Guests', '₱15,000', 'users', 'green'],
-    ['Birthday Celebration', 'Celebrate birthdays with fun games, food, and memories.', '10 - 30 Guests', '₱8,000', 'tag', 'pink'],
-    ['Exclusive Venue Rental', 'Entire venue for your exclusive event and private use.', 'Up to 100 Guests', '₱20,000', 'courts', 'orange'],
+    ['type' => 'single', 'label' => 'Content', 'href' => 'content.php', 'key' => 'content', 'icon' => 'image'],
+    ['type' => 'single', 'label' => 'Reports', 'href' => 'reports.php', 'key' => 'reports', 'icon' => 'chart'],
 ];
 ?>
 
@@ -85,9 +126,9 @@ $packages = [
         <nav class="admin-side-nav" aria-label="Admin navigation">
             <?php foreach ($dashboardNav as $item): ?>
                 <?php if ($item['type'] === 'group'): ?>
-                    <section class="admin-nav-group"><a class="admin-nav-parent <?php echo $activePage === $item['key'] ? 'active' : ''; ?>" href="<?php echo pickled_admin_url($item['href']); ?>"><?php echo private_icon($icons, $item['icon']); ?><span><?php echo htmlspecialchars($item['label']); ?></span></a><div class="admin-nav-children"><?php foreach ($item['children'] as [$childLabel, $childHref, $childKey]): ?><a class="<?php echo $childKey === 'private' ? 'active-child' : ''; ?>" href="<?php echo pickled_admin_url($childHref); ?>"><?php echo htmlspecialchars($childLabel); ?></a><?php endforeach; ?></div></section>
+                    <section class="admin-nav-group"><a class="admin-nav-parent <?php echo $activePage === $item['key'] ? 'active' : ''; ?>" href="<?php echo pickled_admin_url($item['href']); ?>"><?php echo private_icon($icons, $item['icon']); ?><span><?php echo private_h($item['label']); ?></span></a><div class="admin-nav-children"><?php foreach ($item['children'] as [$childLabel, $childHref, $childKey]): ?><a class="<?php echo $childKey === 'private' ? 'active-child' : ''; ?>" href="<?php echo pickled_admin_url($childHref); ?>"><?php echo private_h($childLabel); ?></a><?php endforeach; ?></div></section>
                 <?php else: ?>
-                    <a class="admin-nav-parent <?php echo $activePage === $item['key'] ? 'active' : ''; ?>" href="<?php echo pickled_admin_url($item['href']); ?>"><?php echo private_icon($icons, $item['icon']); ?><span><?php echo htmlspecialchars($item['label']); ?></span></a>
+                    <a class="admin-nav-parent <?php echo $activePage === $item['key'] ? 'active' : ''; ?>" href="<?php echo pickled_admin_url($item['href']); ?>"><?php echo private_icon($icons, $item['icon']); ?><span><?php echo private_h($item['label']); ?></span></a>
                 <?php endif; ?>
             <?php endforeach; ?>
         </nav>
@@ -95,85 +136,115 @@ $packages = [
 
     <main class="admin-dashboard-main private-sessions-main">
         <header class="admin-topbar">
-            <div><h1>Private Sessions <span class="court-title-badge">Active</span></h1><p class="program-subtitle">Custom events, team-building, and private bookings</p></div>
-            <div class="admin-topbar-actions"><button class="admin-date-pill" type="button"><?php echo private_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button><a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>"><?php echo private_icon($icons, 'bell'); ?><span>3</span>
-                </a>
-                <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'topbar'); ?>
-            </div>
+            <div><h1>Private Sessions <span class="court-title-badge">MySQL</span></h1><p class="program-subtitle">Private package management and player inquiries</p></div>
+            <div class="admin-topbar-actions"><button class="admin-date-pill" type="button"><?php echo private_icon($icons, 'calendar'); ?><span><?php echo private_h($todayLabel); ?></span></button><a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>"><?php echo private_icon($icons, 'bell'); ?></a><?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'topbar'); ?></div>
         </header>
 
-        <section class="private-page-actions">
-            <a class="bookings-button ghost" href="<?php echo pickled_admin_url('content.php'); ?>"><?php echo private_icon($icons, 'image'); ?> Edit Website Content</a>
-            <button class="bookings-button primary" type="button"><?php echo private_icon($icons, 'plus'); ?> Add Package</button>
+        <?php if ($successMsg !== ''): ?><p class="status-pill status-success"><?php echo private_h($successMsg); ?></p><?php endif; ?>
+        <?php if ($errorMsg !== ''): ?><p class="status-pill status-danger"><?php echo private_h($errorMsg); ?></p><?php endif; ?>
+
+        <section class="private-kpi-grid" aria-label="Private sessions metrics">
+            <article class="user-stat green"><div><?php echo private_icon($icons, 'target'); ?></div><span>Packages</span><strong><?php echo number_format(count($packages)); ?></strong><small><?php echo number_format($activePackages); ?> active</small></article>
+            <article class="user-stat pink"><div><?php echo private_icon($icons, 'mail'); ?></div><span>Inquiries</span><strong><?php echo number_format(count($inquiries)); ?></strong><small><?php echo number_format($newInquiries); ?> new</small></article>
+            <article class="user-stat orange"><div><?php echo private_icon($icons, 'users'); ?></div><span>Coaches</span><strong><?php echo number_format(count($coachProfiles)); ?></strong><small>Assignable profiles</small></article>
+            <article class="user-stat purple"><div><?php echo private_icon($icons, 'peso'); ?></div><span>Active Value</span><strong>PHP <?php echo number_format(array_sum(array_map(static fn(array $package): float => ($package['status'] ?? '') === 'active' ? (float) $package['price'] : 0.0, $packages)), 0); ?></strong><small>Package total</small></article>
         </section>
 
         <section class="private-admin-layout">
             <div class="private-editor-column">
-                <section class="private-kpi-grid" aria-label="Private sessions metrics">
-                    <article class="user-stat green"><div><?php echo private_icon($icons, 'users'); ?></div><span>Inquiries</span><strong>18</strong><small>↑ 20% vs last month</small></article>
-                    <article class="user-stat pink"><div><?php echo private_icon($icons, 'peso'); ?></div><span>Revenue This Month</span><strong>₱72,000</strong><small>↑ 15% vs last month</small></article>
-                    <article class="user-stat orange"><div><?php echo private_icon($icons, 'calendar'); ?></div><span>Events This Month</span><strong>12</strong><small>↑ 9% vs last month</small></article>
-                    <article class="user-stat purple"><div><?php echo private_icon($icons, 'clock'); ?></div><span>Pending Inquiries</span><strong>4</strong><small>View all pending</small></article>
-                </section>
+                <article class="private-admin-card">
+                    <header><div><h2><?php echo private_icon($icons, 'plus'); ?> Create Package</h2><p>Add a coach-assigned private coaching package.</p></div></header>
+                    <form class="private-contact-grid" method="post">
+                        <input type="hidden" name="csrf_token" value="<?php echo private_h(pickled_csrf_token()); ?>">
+                        <input type="hidden" name="action" value="create_package">
+                        <label>Title<input name="title" required></label>
+                        <label>Price<input name="price" type="number" min="0" step="0.01" required></label>
+                        <label>Duration<input name="duration" required placeholder="90 minutes"></label>
+                        <label>Coach<select name="coach_profile_id" required><option value="">Select coach</option><?php foreach ($coachProfiles as $coach): ?><option value="<?php echo (int) $coach['id']; ?>"><?php echo private_h($coach['name'] . ' - ' . ($coach['specialization'] ?? 'Coach')); ?></option><?php endforeach; ?></select></label>
+                        <label>Status<select name="status"><?php echo private_status_options('active', ['active', 'inactive', 'archived']); ?></select></label>
+                        <label>Description<textarea name="description" rows="4" required></textarea></label>
+                        <button class="bookings-button primary" type="submit">Create Package</button>
+                    </form>
+                </article>
 
                 <article class="private-admin-card">
-                    <header><div><h2>Private Packages</h2><p>Manage promoted offerings for private events and group bookings.</p></div><button type="button"><?php echo private_icon($icons, 'plus'); ?> Add Package</button></header>
+                    <header><div><h2>Private Packages</h2><p>Create, edit, activate, and deactivate private package offerings.</p></div></header>
+                    <form class="booking-filter-bar" method="get">
+                        <select name="package_status"><option value="">All package statuses</option><?php echo private_status_options($packageStatusFilter, ['active', 'inactive', 'archived']); ?></select>
+                        <input type="search" name="q" value="<?php echo private_h($search); ?>" placeholder="Search packages or coaches">
+                        <button type="submit">Filter</button>
+                    </form>
                     <div class="package-list operational-package-list">
-                        <?php foreach ($packages as [$title, $copy, $capacity, $price, $icon, $tone]): ?>
-                            <article class="package-item package-<?php echo $tone; ?>"><span><?php echo private_icon($icons, $icon); ?></span><div><strong><?php echo htmlspecialchars($title); ?></strong><small><?php echo htmlspecialchars($copy); ?></small></div><p><small>Starting at</small><b><?php echo htmlspecialchars($price); ?></b><em><?php echo htmlspecialchars($capacity); ?></em></p><button type="button">Edit</button><button class="icon-button danger" type="button" aria-label="Archive package"><?php echo private_icon($icons, 'trash'); ?></button></article>
+                        <?php foreach ($packages as $package): ?>
+                            <article class="package-item package-green">
+                                <span><?php echo private_icon($icons, 'target'); ?></span>
+                                <form method="post">
+                                    <input type="hidden" name="csrf_token" value="<?php echo private_h(pickled_csrf_token()); ?>">
+                                    <input type="hidden" name="action" value="update_package">
+                                    <input type="hidden" name="package_id" value="<?php echo (int) $package['id']; ?>">
+                                    <label>Title<input name="title" value="<?php echo private_h($package['title']); ?>" required></label>
+                                    <label>Description<textarea name="description" rows="3" required><?php echo private_h($package['description']); ?></textarea></label>
+                                    <label>Price<input name="price" type="number" min="0" step="0.01" value="<?php echo private_h($package['price']); ?>" required></label>
+                                    <label>Duration<input name="duration" value="<?php echo private_h($package['duration']); ?>" required></label>
+                                    <label>Coach<select name="coach_profile_id" required><?php foreach ($coachProfiles as $coach): ?><option value="<?php echo (int) $coach['id']; ?>" <?php echo (int) $coach['id'] === (int) $package['coach_profile_id'] ? 'selected' : ''; ?>><?php echo private_h($coach['name']); ?></option><?php endforeach; ?></select></label>
+                                    <label>Status<select name="status"><?php echo private_status_options((string) $package['status'], ['active', 'inactive', 'archived']); ?></select></label>
+                                    <button type="submit"><?php echo private_icon($icons, 'edit'); ?> Save</button>
+                                </form>
+                                <form method="post">
+                                    <input type="hidden" name="csrf_token" value="<?php echo private_h(pickled_csrf_token()); ?>">
+                                    <input type="hidden" name="action" value="set_package_status">
+                                    <input type="hidden" name="package_id" value="<?php echo (int) $package['id']; ?>">
+                                    <input type="hidden" name="status" value="<?php echo ($package['status'] ?? '') === 'active' ? 'inactive' : 'active'; ?>">
+                                    <button type="submit"><?php echo ($package['status'] ?? '') === 'active' ? 'Deactivate' : 'Activate'; ?></button>
+                                </form>
+                            </article>
                         <?php endforeach; ?>
-                    </div>
-                </article>
-
-                <article class="private-admin-card">
-                    <header><div><h2>Upcoming Events</h2><p>Track confirmed private events and venue rentals.</p></div><button type="button"><?php echo private_icon($icons, 'calendar'); ?> Add Event</button></header>
-                    <div class="private-inquiry-table">
-                        <div class="private-inquiry-row head"><span>Event</span><span>Client</span><span>Date</span><span>Package</span><span>Status</span><span>Actions</span></div>
-                        <div class="private-inquiry-row"><span>Team Building</span><span>ABC Corporation</span><span>Jun 14, 2026</span><span>Corporate Team Building</span><span><em class="status-pill status-success">Confirmed</em></span><span class="private-row-actions"><button><?php echo private_icon($icons, 'eye'); ?></button><button><?php echo private_icon($icons, 'edit'); ?></button></span></div>
-                        <div class="private-inquiry-row"><span>Birthday Party</span><span>Cruz Family</span><span>Jun 20, 2026</span><span>Birthday Celebration</span><span><em class="status-pill status-warning">Pending</em></span><span class="private-row-actions"><button><?php echo private_icon($icons, 'eye'); ?></button><button><?php echo private_icon($icons, 'edit'); ?></button></span></div>
-                    </div>
-                </article>
-
-                <article class="private-admin-card">
-                    <header><div><h2>Revenue Snapshot</h2><p>Compare private-event value without opening Reports.</p></div><button type="button">View Report</button></header>
-                    <div class="private-contact-grid">
-                        <label>Confirmed Revenue<input type="text" value="₱72,000" readonly></label>
-                        <label>Average Event Value<input type="text" value="₱12,000" readonly></label>
-                        <label>Pending Pipeline<input type="text" value="₱36,000" readonly></label>
-                        <label>Conversion Rate<input type="text" value="67%" readonly></label>
+                        <?php if (!$packages): ?><p>No private packages found.</p><?php endif; ?>
                     </div>
                 </article>
 
                 <article class="private-admin-card private-table-card">
-                    <header><div><h2>Recent Inquiries</h2><p>View and manage the latest private event inquiries.</p></div><button type="button">View All Inquiries</button></header>
+                    <header><div><h2>Private Inquiries</h2><p>Respond to players and update inquiry status.</p></div></header>
+                    <form class="booking-filter-bar" method="get">
+                        <select name="inquiry_status"><option value="">All inquiry statuses</option><?php echo private_status_options($inquiryStatusFilter, ['new', 'in_review', 'responded', 'closed', 'cancelled']); ?></select>
+                        <input type="search" name="q" value="<?php echo private_h($search); ?>" placeholder="Search inquiries, packages, or players">
+                        <button type="submit">Filter</button>
+                    </form>
                     <div class="private-inquiry-table">
-                        <div class="private-inquiry-row head"><span>Name</span><span>Company / Event</span><span>Date</span><span>Message</span><span>Status</span><span>Actions</span></div>
-                        <?php foreach ($inquiries as [$name, $event, $date, $message, $status, $tone]): ?>
-                            <div class="private-inquiry-row"><span><?php echo htmlspecialchars($name); ?></span><span><?php echo htmlspecialchars($event); ?></span><span><?php echo htmlspecialchars($date); ?></span><span><?php echo htmlspecialchars($message); ?></span><span><em class="status-pill status-<?php echo $tone; ?>"><?php echo htmlspecialchars($status); ?></em></span><span class="private-row-actions"><button aria-label="View inquiry"><?php echo private_icon($icons, 'eye'); ?></button><button aria-label="Reply"><?php echo private_icon($icons, 'reply'); ?></button><button aria-label="Mark complete"><?php echo private_icon($icons, 'check'); ?></button></span></div>
+                        <div class="private-inquiry-row head"><span>Player</span><span>Package</span><span>Message</span><span>Status</span><span>Response</span><span>Actions</span></div>
+                        <?php foreach ($inquiries as $inquiry): ?>
+                            <div class="private-inquiry-row">
+                                <span><?php echo private_h($inquiry['user_name']); ?><br><small><?php echo private_h($inquiry['user_email']); ?></small></span>
+                                <span><?php echo private_h($inquiry['package_title']); ?><br><small><?php echo private_h($inquiry['coach_name'] ?? 'Coach'); ?></small></span>
+                                <span><?php echo private_h($inquiry['message']); ?></span>
+                                <span><em class="status-pill status-<?php echo ($inquiry['status'] ?? '') === 'new' ? 'danger' : 'success'; ?>"><?php echo private_h(private_label((string) $inquiry['status'])); ?></em></span>
+                                <span><?php echo private_h($inquiry['admin_response'] ?? ''); ?></span>
+                                <span class="private-row-actions">
+                                    <form method="post">
+                                        <input type="hidden" name="csrf_token" value="<?php echo private_h(pickled_csrf_token()); ?>">
+                                        <input type="hidden" name="action" value="respond_inquiry">
+                                        <input type="hidden" name="inquiry_id" value="<?php echo (int) $inquiry['id']; ?>">
+                                        <select name="status"><?php echo private_status_options((string) $inquiry['status'], ['new', 'in_review', 'responded', 'closed', 'cancelled']); ?></select>
+                                        <textarea name="admin_response" rows="3" required placeholder="Admin response"><?php echo private_h($inquiry['admin_response'] ?? ''); ?></textarea>
+                                        <button type="submit"><?php echo private_icon($icons, 'check'); ?> Respond</button>
+                                    </form>
+                                </span>
+                            </div>
                         <?php endforeach; ?>
+                        <?php if (!$inquiries): ?><p>No private inquiries found.</p><?php endif; ?>
                     </div>
                 </article>
             </div>
 
             <aside class="private-preview-column">
-                <details class="private-preview-card">
-                    <summary>Website Preview</summary>
-                    <div class="private-site-preview">
-                        <section class="private-site-hero"><p>Planning an event?</p><h3>PICKLE <span>&amp;</span> LAUNCH</h3><p><?php echo htmlspecialchars($heroDescription); ?></p></section>
-                        <section class="private-site-contact"><span><?php echo private_icon($icons, 'mail'); ?> info@pickled.ph</span><span><?php echo private_icon($icons, 'pin'); ?> Makati, Metro Manila</span><span><?php echo private_icon($icons, 'clock'); ?> Monday - Sunday, 10AM - 10PM</span><span><?php echo private_icon($icons, 'phone'); ?> 0900 000 0000</span></section>
-                        <section class="private-site-gallery"><img class="large" src="<?php echo private_asset('img/court/private-1.png'); ?>" alt="Private event preview"><img src="<?php echo private_asset('img/court/private-2.png'); ?>" alt="Private event preview"><img src="<?php echo private_asset('img/court/private-3.png'); ?>" alt="Private event preview"></section>
-                    </div>
-                    <footer><a href="<?php echo private_public_url('resident/private.php'); ?>">Open in new tab <?php echo private_icon($icons, 'external'); ?></a></footer>
-                </details>
-
                 <article class="private-preview-card package-card">
-                    <header><div><h2>Featured Packages <span>(Optional)</span></h2><p>Manage the event packages or offerings you want to highlight.</p></div><button type="button"><?php echo private_icon($icons, 'plus'); ?> Add Package</button></header>
+                    <header><div><h2>Website Preview</h2><p>Active packages shown to players.</p></div></header>
                     <div class="package-list">
-                        <?php foreach ($packages as [$title, $copy, $capacity, $price, $icon, $tone]): ?>
-                            <article class="package-item package-<?php echo $tone; ?>"><span><?php echo private_icon($icons, $icon); ?></span><div><strong><?php echo htmlspecialchars($title); ?></strong><small><?php echo htmlspecialchars($copy); ?></small></div><p><small>Starting at</small><b><?php echo htmlspecialchars($price); ?></b><em><?php echo htmlspecialchars($capacity); ?></em></p><button type="button">Edit</button><button type="button" aria-label="More options"><?php echo private_icon($icons, 'more'); ?></button></article>
+                        <?php foreach (array_filter($packages, static fn(array $package): bool => ($package['status'] ?? '') === 'active') as $package): ?>
+                            <article class="package-item package-pink"><span><?php echo private_icon($icons, 'target'); ?></span><div><strong><?php echo private_h($package['title']); ?></strong><small><?php echo private_h($package['duration']); ?> with <?php echo private_h($package['coach_name']); ?></small></div><p><small>Price</small><b>PHP <?php echo number_format((float) $package['price'], 2); ?></b></p></article>
                         <?php endforeach; ?>
                     </div>
-                    <footer><?php echo private_icon($icons, 'clock'); ?> Packages are shown on the website. You can reorder them.</footer>
+                    <footer>Only active packages appear on the resident private page.</footer>
                 </article>
             </aside>
         </section>

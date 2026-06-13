@@ -3,6 +3,7 @@ require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
 require_once __DIR__ . '/../app/services/SchedulingService.php';
 require_once __DIR__ . '/../app/services/FeedbackService.php';
+require_once __DIR__ . '/../app/services/PrivatePackageService.php';
 require_once __DIR__ . '/../app/repositories/BookingRepository.php';
 
 pickled_start_secure_session();
@@ -25,6 +26,7 @@ $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $schedulingService = new SchedulingService();
 $bookingRepository = new BookingRepository();
 $feedbackService = new FeedbackService();
+$privatePackageService = new PrivatePackageService();
 
 function coach_icon(array $icons, string $name): string {
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['calendar']) . '</svg>';
@@ -61,6 +63,7 @@ $coachSessions = $coachId ? $schedulingService->sessionsBetween($coachId, $today
 $coachBookingItems = $coachId ? $bookingRepository->getItemsForCoach($coachId, $today->format('Y-m-d'), $today->modify('+30 days')->format('Y-m-d')) : [];
 $coachFeedbackStats = $feedbackService->statsForCoach($coachId);
 $recentCoachFeedback = $feedbackService->recentForCoach($coachId, 3);
+$coachPrivatePackages = $privatePackageService->packagesForCoach($coachId);
 $activeStudentCount = array_sum(array_map(static fn(array $item): int => (int) $item['quantity'], $coachBookingItems));
 $todaySessions = array_values(array_filter($coachSessions, fn(array $session): bool => $session['session_date'] === $todayDate));
 $sessions = array_map(static function (array $session): array {
@@ -172,6 +175,7 @@ $nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No court',
             <article class="coach-kpi pink"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Upcoming This Week</span><strong><?php echo number_format(count($coachSessions)); ?></strong><small>Sessions</small></div></article>
             <article class="coach-kpi orange"><?php echo coach_icon($icons, 'students'); ?><div><span>Active Students</span><strong><?php echo number_format($activeStudentCount); ?></strong><small>From bookings</small></div></article>
             <article class="coach-kpi purple"><?php echo coach_icon($icons, 'star'); ?><div><span>Average Rating</span><strong><?php echo number_format((float) $coachFeedbackStats['average_rating'], 1); ?></strong><small><?php echo number_format((int) $coachFeedbackStats['total_reviews']); ?> reviews</small></div></article>
+            <article class="coach-kpi green"><?php echo coach_icon($icons, 'trophy'); ?><div><span>Private Packages</span><strong><?php echo number_format(count($coachPrivatePackages)); ?></strong><small>Assigned offers</small></div></article>
         </section>
 
         <section class="coach-content-grid">
@@ -244,6 +248,23 @@ $nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No court',
                     <?php endforeach; ?>
                     <?php if (!$recentCoachFeedback): ?>
                         <article class="announcement-item green"><i><?php echo coach_icon($icons, 'star'); ?></i><div><strong>No reviews yet</strong><span>Completed session feedback will appear here.</span></div><b></b></article>
+                    <?php endif; ?>
+                </article>
+
+                <article class="coach-card announcements-card" id="private-packages">
+                    <header><h2>Assigned Private Packages</h2></header>
+                    <?php foreach (array_slice($coachPrivatePackages, 0, 4) as $package): ?>
+                        <article class="announcement-item green">
+                            <i><?php echo coach_icon($icons, 'trophy'); ?></i>
+                            <div>
+                                <strong><?php echo htmlspecialchars($package['title']); ?></strong>
+                                <span>PHP <?php echo number_format((float) $package['price'], 2); ?> - <?php echo htmlspecialchars($package['duration']); ?> - <?php echo htmlspecialchars(ucfirst((string) $package['status'])); ?></span>
+                            </div>
+                            <b></b>
+                        </article>
+                    <?php endforeach; ?>
+                    <?php if (!$coachPrivatePackages): ?>
+                        <article class="announcement-item green"><i><?php echo coach_icon($icons, 'trophy'); ?></i><div><strong>No assigned private packages</strong><span>Admin-assigned packages will appear here.</span></div><b></b></article>
                     <?php endif; ?>
                 </article>
 
