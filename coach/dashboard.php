@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
 require_once __DIR__ . '/../app/services/SchedulingService.php';
+require_once __DIR__ . '/../app/services/FeedbackService.php';
 require_once __DIR__ . '/../app/repositories/BookingRepository.php';
 
 pickled_start_secure_session();
@@ -23,6 +24,7 @@ $scheduleDateLabel = $today->format('l, F j, Y');
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $schedulingService = new SchedulingService();
 $bookingRepository = new BookingRepository();
+$feedbackService = new FeedbackService();
 
 function coach_icon(array $icons, string $name): string {
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['calendar']) . '</svg>';
@@ -43,6 +45,7 @@ $icons = [
     'trophy' => '<path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M5 5H3v2a4 4 0 0 0 4 4"/><path d="M19 5h2v2a4 4 0 0 1-4 4"/>',
     'stopwatch' => '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6M12 2v3"/>',
     'check' => '<path d="m20 6-11 11-5-5"/>',
+    'star' => '<path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z"/>',
 ];
 
 $navItems = [
@@ -56,6 +59,8 @@ $navItems = [
 
 $coachSessions = $coachId ? $schedulingService->sessionsBetween($coachId, $today->format('Y-m-d'), $today->modify('+7 days')->format('Y-m-d')) : [];
 $coachBookingItems = $coachId ? $bookingRepository->getItemsForCoach($coachId, $today->format('Y-m-d'), $today->modify('+30 days')->format('Y-m-d')) : [];
+$coachFeedbackStats = $feedbackService->statsForCoach($coachId);
+$recentCoachFeedback = $feedbackService->recentForCoach($coachId, 3);
 $activeStudentCount = array_sum(array_map(static fn(array $item): int => (int) $item['quantity'], $coachBookingItems));
 $todaySessions = array_values(array_filter($coachSessions, fn(array $session): bool => $session['session_date'] === $todayDate));
 $sessions = array_map(static function (array $session): array {
@@ -166,7 +171,7 @@ $nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No court',
             <article class="coach-kpi green"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Today's Sessions</span><strong><?php echo number_format(count($todaySessions)); ?></strong><small>From MySQL</small></div></article>
             <article class="coach-kpi pink"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Upcoming This Week</span><strong><?php echo number_format(count($coachSessions)); ?></strong><small>Sessions</small></div></article>
             <article class="coach-kpi orange"><?php echo coach_icon($icons, 'students'); ?><div><span>Active Students</span><strong><?php echo number_format($activeStudentCount); ?></strong><small>From bookings</small></div></article>
-            <article class="coach-kpi purple"><?php echo coach_icon($icons, 'stopwatch'); ?><div><span>Hours Coached</span><strong>24</strong><small>This week</small></div></article>
+            <article class="coach-kpi purple"><?php echo coach_icon($icons, 'star'); ?><div><span>Average Rating</span><strong><?php echo number_format((float) $coachFeedbackStats['average_rating'], 1); ?></strong><small><?php echo number_format((int) $coachFeedbackStats['total_reviews']); ?> reviews</small></div></article>
         </section>
 
         <section class="coach-content-grid">
@@ -223,6 +228,23 @@ $nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No court',
                     <?php foreach ($announcements as [$title, $copy, $tone, $icon]): ?>
                         <article class="announcement-item <?php echo $tone; ?>"><i><?php echo coach_icon($icons, $icon); ?></i><div><strong><?php echo htmlspecialchars($title); ?></strong><span><?php echo htmlspecialchars($copy); ?></span></div><b></b></article>
                     <?php endforeach; ?>
+                </article>
+
+                <article class="coach-card announcements-card" id="feedback">
+                    <header><h2>Recent Feedback</h2><a href="<?php echo htmlspecialchars(pickled_frontend_url('coach/profile.php#feedback')); ?>">View all</a></header>
+                    <?php foreach ($recentCoachFeedback as $review): ?>
+                        <article class="announcement-item green">
+                            <i><?php echo coach_icon($icons, 'star'); ?></i>
+                            <div>
+                                <strong><?php echo (int) $review['rating']; ?> / 5 from <?php echo htmlspecialchars($review['user_name'] ?? 'Player'); ?></strong>
+                                <span><?php echo htmlspecialchars((string) ($review['comment'] ?? '')); ?></span>
+                            </div>
+                            <b></b>
+                        </article>
+                    <?php endforeach; ?>
+                    <?php if (!$recentCoachFeedback): ?>
+                        <article class="announcement-item green"><i><?php echo coach_icon($icons, 'star'); ?></i><div><strong>No reviews yet</strong><span>Completed session feedback will appear here.</span></div><b></b></article>
+                    <?php endif; ?>
                 </article>
 
                 <article class="coach-card coach-profile-card" id="profile">

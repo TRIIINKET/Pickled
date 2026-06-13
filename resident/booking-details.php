@@ -3,6 +3,7 @@ require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/booking-system.php';
 require_once __DIR__ . '/../app/repositories/BookingRepository.php';
 require_once __DIR__ . '/../app/services/PaymentService.php';
+require_once __DIR__ . '/../app/services/FeedbackService.php';
 
 pickled_start_secure_session();
 pickled_init_csrf();
@@ -19,6 +20,7 @@ $bookingId = (int) ($_GET['id'] ?? 0);
 pickled_process_pending_booking_expiry();
 $bookingRepo = new BookingRepository();
 $paymentService = new PaymentService();
+$feedbackService = new FeedbackService();
 $message = '';
 $messageType = 'success';
 
@@ -39,12 +41,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $message = $e->getMessage();
       $messageType = 'warning';
     }
+  } elseif (($_POST['action'] ?? '') === 'submit_feedback') {
+    try {
+      $feedbackService->submit(
+        $userId,
+        (int) ($_POST['booking_id'] ?? 0),
+        empty($_POST['booking_item_id']) ? null : (int) $_POST['booking_item_id'],
+        (int) ($_POST['rating'] ?? 0),
+        (string) ($_POST['comment'] ?? '')
+      );
+      $message = 'Thanks for your feedback.';
+    } catch (RuntimeException $e) {
+      $message = $e->getMessage();
+      $messageType = 'warning';
+    }
+  } elseif (($_POST['action'] ?? '') === 'update_feedback') {
+    try {
+      $feedbackService->update(
+        $userId,
+        (int) ($_POST['booking_id'] ?? 0),
+        empty($_POST['booking_item_id']) ? null : (int) $_POST['booking_item_id'],
+        (int) ($_POST['rating'] ?? 0),
+        (string) ($_POST['comment'] ?? '')
+      );
+      $message = 'Feedback updated.';
+    } catch (RuntimeException $e) {
+      $message = $e->getMessage();
+      $messageType = 'warning';
+    }
   }
 }
 
 $booking = $bookingId > 0 ? $bookingRepo->findByIdForUser($bookingId, $userId) : null;
 $items = $booking ? $bookingRepo->getBookingItems((int) $booking['id']) : [];
 $payments = $booking ? $paymentService->paymentsForBooking((int) $booking['id']) : [];
+$feedback = $booking ? $feedbackService->feedbackForBooking((int) $booking['id'], $userId) : null;
+$feedbackTargets = $booking ? $feedbackService->targetsForBooking((int) $booking['id'], $userId) : [];
 $latestPayment = $payments[0] ?? null;
 $extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260430d"/>';
 
@@ -58,6 +90,14 @@ function booking_detail_status_key(string $status): string {
 
 function payment_proof_url(string $path): string {
   return '../' . ltrim($path, '/');
+}
+
+function feedback_target_label(array $target): string {
+  $label = (string) ($target['court'] ?? 'Session') . ' - ' . (string) ($target['name'] ?? 'Booking');
+  if (!empty($target['coach_name'])) {
+    $label .= ' with ' . (string) $target['coach_name'];
+  }
+  return $label;
 }
 
 include __DIR__ . '/../includes/header.php';
@@ -168,6 +208,59 @@ include __DIR__ . '/../includes/header.php';
               </div>
             <?php endforeach; ?>
           </div>
+
+          <?php if ($statusKey === 'completed'): ?>
+            <section class="checkout-card">
+              <h2><?= $feedback ? 'Your Feedback' : 'Share Feedback' ?></h2>
+              <?php if ($feedback): ?>
+                <p><strong>Current rating:</strong> <?= (int) $feedback['rating'] ?> / 5</p>
+                <p><?= htmlspecialchars((string) $feedback['comment']) ?></p>
+                <?php if (!empty($feedback['coach_name'])): ?>
+                  <p>Coach: <?= htmlspecialchars((string) $feedback['coach_name']) ?></p>
+                <?php endif; ?>
+              <?php else: ?>
+                <p>Tell us how the completed booking went.</p>
+              <?php endif; ?>
+
+              <form method="post">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
+                <input type="hidden" name="action" value="<?= $feedback ? 'update_feedback' : 'submit_feedback' ?>" />
+                <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>" />
+
+                <?php if ($feedbackTargets): ?>
+                  <label>
+                    Session or coach
+                    <select name="booking_item_id">
+                      <option value="">Overall booking</option>
+                      <?php foreach ($feedbackTargets as $target): ?>
+                        <option value="<?= (int) $target['booking_item_id'] ?>" <?= $feedback && (int) ($feedback['booking_item_id'] ?? 0) === (int) $target['booking_item_id'] ? 'selected' : '' ?>>
+                          <?= htmlspecialchars(feedback_target_label($target)) ?>
+                        </option>
+                      <?php endforeach; ?>
+                    </select>
+                  </label>
+                <?php endif; ?>
+
+                <label>
+                  Rating
+                  <select name="rating" required>
+                    <?php for ($rating = 5; $rating >= 1; $rating--): ?>
+                      <option value="<?= $rating ?>" <?= $feedback && (int) $feedback['rating'] === $rating ? 'selected' : '' ?>><?= $rating ?> / 5</option>
+                    <?php endfor; ?>
+                  </select>
+                </label>
+
+                <label>
+                  Comment
+                  <textarea name="comment" required><?= htmlspecialchars((string) ($feedback['comment'] ?? '')) ?></textarea>
+                </label>
+
+                <button class="checkout-btn" type="submit"><?= $feedback ? 'Update feedback' : 'Submit feedback' ?></button>
+              </form>
+            </section>
+          <?php else: ?>
+            <div class="cart-message cart-message--warning">Feedback opens after this booking is marked completed.</div>
+          <?php endif; ?>
         </article>
       </section>
     <?php endif; ?>

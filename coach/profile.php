@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
+require_once __DIR__ . '/../app/services/FeedbackService.php';
 
 pickled_start_secure_session();
 pickled_init_csrf();
@@ -11,7 +12,11 @@ if (empty($_SESSION['user']) || ($_SESSION['user']['role'] ?? '') !== 'coach') {
 }
 
 $coach = $_SESSION['user'];
+$coachId = (int) ($coach['id'] ?? 0);
 $coachName = $coach['name'] ?? 'Coach Mia Santos';
+$feedbackService = new FeedbackService();
+$coachFeedbackStats = $feedbackService->statsForCoach($coachId);
+$recentCoachFeedback = $feedbackService->recentForCoach($coachId, 8);
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
 $todayLabel = $today->format('M j, Y (D)');
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
@@ -32,6 +37,7 @@ $icons = [
     'eye' => '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
     'camera' => '<path d="M14.5 4 16 7h4a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l1.5-3z"/><circle cx="12" cy="13" r="4"/>',
     'shield' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
+    'star' => '<path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z"/>',
 ];
 
 $navItems = [
@@ -44,10 +50,10 @@ $navItems = [
 ];
 
 $stats = [
-    ['Students', '48'],
+    ['Reviews', number_format((int) $coachFeedbackStats['total_reviews'])],
     ['Sessions This Month', '36'],
     ['Years Coaching', '3'],
-    ['Rating', '4.8'],
+    ['Rating', number_format((float) $coachFeedbackStats['average_rating'], 1)],
 ];
 
 $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
@@ -130,6 +136,21 @@ $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
                         <label>Certifications<input type="text" value="PPR Certified Coach"></label>
                         <label class="full">Bio<textarea>Patient and encouraging pickleball coach focused on beginner confidence, youth development, and practical game habits.</textarea></label>
                     </form>
+                </section>
+
+                <section class="coach-card profile-form-card" id="feedback">
+                    <header><h2><?php echo profile_icon($icons, 'star'); ?>Feedback</h2><span><?php echo number_format((float) $coachFeedbackStats['average_rating'], 1); ?> / 5 average</span></header>
+                    <div class="coach-check-list">
+                        <?php foreach ($recentCoachFeedback as $review): ?>
+                            <label>
+                                <strong><?php echo (int) $review['rating']; ?> / 5 - <?php echo htmlspecialchars($review['user_name'] ?? 'Player'); ?></strong>
+                                <span><?php echo htmlspecialchars((string) ($review['comment'] ?? '')); ?></span>
+                            </label>
+                        <?php endforeach; ?>
+                        <?php if (!$recentCoachFeedback): ?>
+                            <label>No feedback has been submitted for your assigned sessions yet.</label>
+                        <?php endif; ?>
+                    </div>
                 </section>
 
                 <section class="coach-card profile-form-card">

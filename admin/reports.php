@@ -5,17 +5,21 @@ $bodyClass = 'admin-dashboard-body';
 require_once __DIR__ . '/../includes/admin-header.php';
 require_once __DIR__ . '/../includes/admin-paths.php';
 require_once __DIR__ . '/../database/Database.php';
+require_once __DIR__ . '/../app/services/FeedbackService.php';
 
 pickled_init_csrf();
 
 // TODO(database-redesign): reconnect analytics to aggregate tables/views from the new schema.
 $pdo = Database::enabled() ? Database::connection() : null;
+$feedbackService = new FeedbackService();
 $adminName = $_SESSION['user']['name'] ?? 'Admin';
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
 $todayLabel = $today->format('M j, Y (D)');
 $rangeStart = $today->modify('-24 days')->format('M j');
 $rangeEnd = $today->format('M j, Y');
+$feedbackRatingFilter = isset($_GET['feedback_rating']) && $_GET['feedback_rating'] !== '' ? (int) $_GET['feedback_rating'] : null;
+$feedbackSearch = trim((string) ($_GET['feedback_q'] ?? ''));
 
 function reports_scalar(?PDO $pdo, string $sql, array $params = [], float|int $fallback = 0): float|int {
     if (!$pdo) {
@@ -105,6 +109,7 @@ $icons = [
     'arrow' => '<path d="m9 18 6-6-6-6"/>',
     'shield' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
     'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    'star' => '<path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z"/>',
 ];
 
 $dashboardNav = [
@@ -157,6 +162,9 @@ $totalBookings = array_sum(array_map(fn($program) => (int) $program['metric']['b
 $totalRevenue = array_sum(array_map(fn($program) => (float) $program['metric']['revenue'], $programs));
 $activePlayers = max(156, (int) reports_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = 'player'", [], 156));
 $activeCoaches = max(4, (int) reports_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = 'coach'", [], 4));
+$platformFeedbackStats = $feedbackService->platformStats();
+$coachFeedbackSummary = $feedbackService->coachSummary();
+$feedbackRows = $feedbackService->allFeedback($feedbackRatingFilter, $feedbackSearch, 80);
 
 $popularServices = [
     ['name' => 'Court Green Rental', 'bookings' => (int) $programs['green']['metric']['bookings'], 'tone' => 'green', 'icon' => 'target'],
@@ -235,6 +243,7 @@ if (!$activityFeed) {
             <article class="reports-kpi-card report-pink"><div><?php echo reports_icon($icons, 'peso'); ?></div><span>Total Revenue</span><strong>₱<?php echo number_format($totalRevenue, 0); ?></strong><small>↑ 14% vs last 7 days</small></article>
             <article class="reports-kpi-card report-orange"><div><?php echo reports_icon($icons, 'users'); ?></div><span>Active Players</span><strong><?php echo number_format($activePlayers); ?></strong><small>↑ 22% vs last 7 days</small></article>
             <article class="reports-kpi-card report-purple"><div><?php echo reports_icon($icons, 'shield'); ?></div><span>Active Coaches</span><strong><?php echo number_format($activeCoaches); ?></strong><small>No change</small></article>
+            <article class="reports-kpi-card report-green"><div><?php echo reports_icon($icons, 'star'); ?></div><span>Platform Rating</span><strong><?php echo number_format((float) $platformFeedbackStats['average_rating'], 1); ?></strong><small><?php echo number_format((int) $platformFeedbackStats['total_reviews']); ?> reviews</small></article>
         </section>
 
         <section class="reports-insights-grid">
@@ -297,6 +306,59 @@ if (!$activityFeed) {
                             <div class="mini-report-table three"><span><?php echo htmlspecialchars($program['short']); ?></span><span><?php echo number_format((int) $program['metric']['bookings']); ?> bookings</span><span>₱<?php echo number_format((float) $program['metric']['revenue'], 0); ?></span><span><?php echo $pct; ?>%</span></div>
                         <?php endforeach; ?>
                     </article>
+                </section>
+            </article>
+        </section>
+
+        <section class="reports-bottom-grid" id="feedback">
+            <article class="reports-panel performance-panel">
+                <header><h2><?php echo reports_icon($icons, 'star'); ?> Coach Ratings Summary</h2></header>
+                <div class="program-performance-table">
+                    <div class="program-row head"><span>Coach</span><span>Email</span><span>Average Rating</span><span>Total Reviews</span><span>Trend</span></div>
+                    <?php foreach ($coachFeedbackSummary as $coachRow): ?>
+                        <div class="program-row report-green">
+                            <span><?php echo reports_icon($icons, 'user'); ?><?php echo htmlspecialchars($coachRow['coach_name'] ?? 'Coach'); ?></span>
+                            <span><?php echo htmlspecialchars($coachRow['coach_email'] ?? '-'); ?></span>
+                            <span><?php echo number_format((float) ($coachRow['average_rating'] ?? 0), 1); ?> / 5</span>
+                            <span><?php echo number_format((int) ($coachRow['total_reviews'] ?? 0)); ?></span>
+                            <span><?php echo ((int) ($coachRow['total_reviews'] ?? 0)) > 0 ? 'Reviewed' : 'No reviews yet'; ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                    <?php if (!$coachFeedbackSummary): ?>
+                        <div class="program-row"><span>No coaches found.</span><span></span><span></span><span></span><span></span></div>
+                    <?php endif; ?>
+                </div>
+            </article>
+
+            <article class="reports-panel report-export-panel">
+                <header><h2>All Feedback</h2></header>
+                <form class="booking-filter-bar" method="get">
+                    <input type="hidden" name="feedback_section" value="1">
+                    <select name="feedback_rating">
+                        <option value="">All ratings</option>
+                        <?php for ($rating = 5; $rating >= 1; $rating--): ?>
+                            <option value="<?php echo $rating; ?>" <?php echo $feedbackRatingFilter === $rating ? 'selected' : ''; ?>><?php echo $rating; ?> / 5</option>
+                        <?php endfor; ?>
+                    </select>
+                    <input type="search" name="feedback_q" value="<?php echo htmlspecialchars($feedbackSearch); ?>" placeholder="Search comments, booking, player, or coach">
+                    <button type="submit">Apply</button>
+                </form>
+                <section class="crystal-report-list">
+                    <?php foreach ($feedbackRows as $review): ?>
+                        <article>
+                            <h3><?php echo (int) $review['rating']; ?> / 5 - <?php echo htmlspecialchars($review['reference'] ?? 'Booking'); ?></h3>
+                            <div class="mini-report-table three">
+                                <span><?php echo htmlspecialchars($review['user_name'] ?? 'Player'); ?></span>
+                                <span><?php echo htmlspecialchars($review['coach_name'] ?? 'No coach assigned'); ?></span>
+                                <span><?php echo htmlspecialchars(date('M j, Y', strtotime((string) $review['created_at']))); ?></span>
+                                <span><?php echo htmlspecialchars($review['booking_item_name'] ?? 'Overall booking'); ?></span>
+                            </div>
+                            <p><?php echo htmlspecialchars((string) ($review['comment'] ?? '')); ?></p>
+                        </article>
+                    <?php endforeach; ?>
+                    <?php if (!$feedbackRows): ?>
+                        <article><h3>No feedback found</h3><p>Completed booking reviews will appear here.</p></article>
+                    <?php endif; ?>
                 </section>
             </article>
         </section>
