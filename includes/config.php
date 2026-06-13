@@ -13,7 +13,7 @@ return [
     ],
     'database' => [
         'enabled' => true,
-        'redesign_mode' => true,
+        'redesign_mode' => false,
     ],
     'mail' => [
         'from_email' => 'no-reply@pickled.local',

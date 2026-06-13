@@ -12,7 +12,6 @@ pickled_init_csrf();
 
 $adminService = new AdminService();
 (new BookingExpiryService())->processExpiredPendingBookings();
-// TODO(database-redesign): reconnect this page to the new reporting queries after schema approval.
 $pdo = Database::enabled() ? Database::connection() : null;
 $stats = $adminService->getDashboardStats();
 $adminName = $_SESSION['user']['name'] ?? 'Admin';

@@ -11,16 +11,10 @@ final class Database
         return !empty($config['database']['enabled']);
     }
 
-    public static function redesignMode(): bool
-    {
-        $config = require __DIR__ . '/../includes/config.php';
-        return !empty($config['database']['redesign_mode']);
-    }
-
     public static function connection(): PDO
     {
         if (!self::enabled()) {
-            throw new RuntimeException('Database connections are disabled while the schema redesign is in progress.');
+            throw new RuntimeException('Database connections are disabled.');
         }
 
         if (self::$pdo instanceof PDO) {

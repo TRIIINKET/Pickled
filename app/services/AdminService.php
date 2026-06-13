@@ -3,19 +3,16 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/UserRepository.php';
 require_once __DIR__ . '/../repositories/BookingRepository.php';
-require_once __DIR__ . '/../repositories/EventRepository.php';
 require_once __DIR__ . '/../repositories/NotificationRepository.php';
 require_once __DIR__ . '/PaymentService.php';
 require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/AdminLogService.php';
 require_once __DIR__ . '/../../database/Database.php';
 require_once __DIR__ . '/../repositories/AdminRepository.php';
-require_once __DIR__ . '/../support/DatabaseRedesign.php';
 
 class AdminService {
     private $userRepo;
     private $bookingRepo;
-    private $eventRepo;
     private $notificationRepo;
     private $notificationService;
     private $adminRepo;
@@ -23,25 +20,12 @@ class AdminService {
     private $adminLogs;
 
     public function __construct() {
-        $this->adminLogs = new AdminLogService();
-
-        if (DatabaseRedesign::active()) {
-            $this->userRepo = new UserRepository();
-            $this->bookingRepo = new BookingRepository();
-            $this->paymentService = new PaymentService();
-            $this->notificationRepo = new NotificationRepository();
-            $this->notificationService = new NotificationService($this->notificationRepo);
-            $this->eventRepo = null;
-            $this->adminRepo = null;
-            return;
-        }
-
         $connection = Database::connection();
 
+        $this->adminLogs = new AdminLogService();
         $this->userRepo = new UserRepository();
         $this->bookingRepo = new BookingRepository();
         $this->paymentService = new PaymentService();
-        $this->eventRepo = new EventRepository($connection);
         $this->notificationRepo = new NotificationRepository($connection);
         $this->notificationService = new NotificationService($this->notificationRepo);
         $this->adminRepo = new AdminRepository($connection);
@@ -62,7 +46,7 @@ class AdminService {
 
     public function updateUserRole(int $userId, string $role, int $adminId) {
         $result = $this->userRepo->updateRole($userId, $role);
-        if ($result && $this->adminRepo) {
+        if ($result) {
             $this->adminRepo->logAction($adminId, 'role_changed', 'user', $userId, ['new_role' => $role]);
         }
         return $result;
@@ -70,7 +54,7 @@ class AdminService {
 
     public function updateUser(int $userId, string $name, string $email, int $adminId) {
         $result = $this->userRepo->update($userId, $name, $email);
-        if ($result && $this->adminRepo) {
+        if ($result) {
             $this->adminRepo->logAction($adminId, 'user_updated', 'user', $userId, ['name' => $name, 'email' => $email]);
         }
         return $result;
@@ -78,7 +62,7 @@ class AdminService {
 
     public function deleteUser(int $userId, int $adminId) {
         $result = $this->userRepo->delete($userId);
-        if ($result && $this->adminRepo) {
+        if ($result) {
             $this->adminRepo->logAction($adminId, 'user_deleted', 'user', $userId);
         }
         return $result;
@@ -90,10 +74,6 @@ class AdminService {
 
     // Booking Management
     public function getDashboardStats(): array {
-        if (DatabaseRedesign::active()) {
-            return DatabaseRedesign::dashboardStats();
-        }
-
         return $this->adminRepo->getDashboardStats();
     }
 
@@ -159,64 +139,34 @@ class AdminService {
     // Event Management
     public function createEvent(string $title, string $description, string $eventDate, string $eventTime, 
                               string $location, int $maxParticipants, int $adminId) {
-        if (DatabaseRedesign::active()) {
-            return 0;
-        }
-
-        $eventId = $this->eventRepo->create($title, $description, $eventDate, $eventTime, $location, $maxParticipants, $adminId);
-        if ($eventId) {
-            $this->adminRepo->logAction($adminId, 'event_created', 'event', $eventId, ['title' => $title]);
-        }
-        return $eventId;
+        $this->logLegacyEventAccess('createEvent');
+        return 0;
     }
 
     public function updateEvent(int $eventId, string $title, string $description, string $eventDate, 
                                string $eventTime, string $location, int $maxParticipants, string $status, int $adminId) {
-        if (DatabaseRedesign::active()) {
-            return true;
-        }
-
-        $result = $this->eventRepo->update($eventId, $title, $description, $eventDate, $eventTime, $location, $maxParticipants, $status);
-        if ($result) {
-            $this->adminRepo->logAction($adminId, 'event_updated', 'event', $eventId, ['title' => $title]);
-        }
-        return $result;
+        $this->logLegacyEventAccess('updateEvent');
+        return false;
     }
 
     public function deleteEvent(int $eventId, int $adminId) {
-        if (DatabaseRedesign::active()) {
-            return true;
-        }
-
-        $result = $this->eventRepo->delete($eventId);
-        if ($result) {
-            $this->adminRepo->logAction($adminId, 'event_deleted', 'event', $eventId);
-        }
-        return $result;
+        $this->logLegacyEventAccess('deleteEvent');
+        return false;
     }
 
     public function getAllEvents($limit = 50, $offset = 0) {
-        if (DatabaseRedesign::active()) {
-            return [];
-        }
-
-        return $this->eventRepo->findAll($limit, $offset);
+        $this->logLegacyEventAccess('getAllEvents');
+        return [];
     }
 
     public function getEventsByStatus(string $status) {
-        if (DatabaseRedesign::active()) {
-            return [];
-        }
-
-        return $this->eventRepo->findByStatus($status);
+        $this->logLegacyEventAccess('getEventsByStatus');
+        return [];
     }
 
     public function getEventDetail(int $eventId) {
-        if (DatabaseRedesign::active()) {
-            return null;
-        }
-
-        return $this->eventRepo->findById($eventId);
+        $this->logLegacyEventAccess('getEventDetail');
+        return null;
     }
 
     // Notification Management
@@ -269,18 +219,10 @@ class AdminService {
 
     // Analytics & Reports
     public function getRevenueStats(string $period = 'day') {
-        if (DatabaseRedesign::active()) {
-            return [];
-        }
-
         return $this->adminRepo->getRevenueStats($period);
     }
 
     public function getBookingStats() {
-        if (DatabaseRedesign::active()) {
-            return [];
-        }
-
         return $this->adminRepo->getBookingStats();
     }
 
@@ -290,5 +232,9 @@ class AdminService {
 
     public function getAdminActivityByAdmin(int $adminId, $limit = 50, string $sort = 'desc') {
         return $this->adminLogs->logsForAdmin($adminId, (int) $limit, $sort);
+    }
+
+    private function logLegacyEventAccess(string $method): void {
+        error_log("AdminService::$method is disabled. Events are represented by booking_variants, sessions, and private_packages in the approved ERD.");
     }
 }

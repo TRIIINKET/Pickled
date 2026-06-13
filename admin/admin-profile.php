@@ -8,7 +8,6 @@ require_once __DIR__ . '/../database/Database.php';
 
 pickled_init_csrf();
 
-// TODO(database-redesign): persist profile changes through the new account table.
 $pdo = Database::enabled() ? Database::connection() : null;
 $admin = $_SESSION['user'] ?? ['id' => 0, 'name' => 'Admin', 'email' => 'admin@example.com'];
 $adminName = $admin['name'] ?? 'Admin';

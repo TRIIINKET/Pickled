@@ -70,9 +70,12 @@ class AdminRepository {
             $stmt = $this->connection->query("SELECT COUNT(*) as count FROM payments WHERE status = 'pending'");
             $stats['pending_payments'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
             
-            // Total events
-            $stmt = $this->connection->query("SELECT COUNT(*) as count FROM events");
-            $stats['total_events'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+            // Scheduled sessions and services replace the legacy events table in the approved ERD.
+            $stmt = $this->connection->query("SELECT COUNT(*) as count FROM sessions");
+            $stats['total_sessions'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+
+            $stmt = $this->connection->query("SELECT COUNT(*) as count FROM booking_variants");
+            $stats['total_services'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
             
             // Total courts
             $stmt = $this->connection->query("SELECT COUNT(*) as count FROM courts");

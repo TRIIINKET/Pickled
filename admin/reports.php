@@ -10,7 +10,6 @@ require_once __DIR__ . '/../app/services/AdminLogService.php';
 
 pickled_init_csrf();
 
-// TODO(database-redesign): reconnect analytics to aggregate tables/views from the new schema.
 $pdo = Database::enabled() ? Database::connection() : null;
 $feedbackService = new FeedbackService();
 $adminLogService = new AdminLogService();
