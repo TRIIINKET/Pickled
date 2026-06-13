@@ -15,7 +15,8 @@ erDiagram
     USERS ||--o{ BOOKINGS : creates
     USERS ||--o{ NOTIFICATIONS : receives
     USERS ||--o{ ADMIN_LOGS : admin_id
-    USERS ||--o{ COACH_AVAILABILITY : defines
+    COACH_PROFILES ||--o{ COACH_AVAILABILITY : sets
+    COACH_AVAILABILITY ||--o| SESSIONS : schedules
     USERS ||--o{ PRIVATE_INQUIRIES : submits
 
     COURTS ||--o{ BOOKING_VARIANTS : offers
@@ -103,6 +104,7 @@ erDiagram
         int id PK
         int variant_id FK
         int coach_user_id FK
+        int availability_id FK
         date session_date
         time start_time
         time end_time
@@ -115,7 +117,7 @@ erDiagram
 
     COACH_AVAILABILITY {
         int id PK
-        int coach_user_id FK
+        int coach_profile_id FK
         int day_of_week
         time start_time
         time end_time
@@ -382,6 +384,7 @@ Foreign keys:
 | --- | --- | --- |
 | `variant_id` | `booking_variants.id` | One booking variant schedules many sessions. |
 | `coach_user_id` | `users.id` | Optional coach assigned to a coaching/private coaching session. |
+| `availability_id` | `coach_availability.id` | Availability slot used to generate the session. |
 
 Important fields:
 
@@ -398,7 +401,7 @@ Recommended unique constraint: `(variant_id, session_date, start_time, end_time)
 
 ### Table: coach_availability
 
-Purpose: Stores recurring coach availability used by coach management and scheduling.
+Purpose: Stores recurring coach availability used by coach management and scheduling. Availability records define the recurring time windows during which coaches are available to facilitate coaching-related sessions.
 
 Primary key: `id`
 
@@ -406,16 +409,18 @@ Foreign keys:
 
 | Column | References | Relationship |
 | --- | --- | --- |
-| `coach_user_id` | `users.id` | One coach defines many availability windows. |
+| `coach_profile_id` | `coach_profiles.id` | One coach profile can define many availability windows. |
 
 Important fields:
 
 | Column | Description |
 | --- | --- |
-| `day_of_week` | Numeric day value for recurring availability. |
-| `start_time` | Available start time. |
-| `end_time` | Available end time. |
-| `status` | Availability state, such as available, unavailable, or leave. |
+| `day_of_week` | Numeric day value representing recurring availability. |
+| `start_time` | Availability start time. |
+| `end_time` | Availability end time. |
+| `status` | Availability state such as available, unavailable, or leave. |
+| `created_at` | Availability creation timestamp. |
+| `updated_at` | Availability update timestamp. |
 
 ### Table: carts
 
@@ -660,9 +665,10 @@ Important fields:
 ### Court and Scheduling Relationships
 
 - `courts` to `booking_variants` is one-to-many. Court Green and Court Pink each offer multiple services.
-- `booking_variants` to `sessions` is one-to-many. A service such as Court Rentals or Open Match Play can generate many dated/time-slotted sessions.
+- `booking_variants` to `sessions` is one-to-many. A service such as Court Rentals, Lessons, Training, Open Match Play, or Private Coaching can generate many dated sessions.
 - `users` to `sessions` is one-to-many for coach assignments. This applies to coach-led sessions such as Lessons, Training, and Private Coaching.
-- `users` to `coach_availability` is one-to-many. A coach can define multiple availability windows.
+- `coach_profiles` to `coach_availability` is one-to-many. A coach profile may define multiple recurring availability windows.
+- `coach_availability` to `sessions` is one-to-zero-or-one. An availability slot may be used to create a scheduled coaching session.
 
 ### Booking System Relationships
 
@@ -721,6 +727,8 @@ The following entities are intentionally not part of the finalized ERD:
 - Use `ON DELETE RESTRICT` or soft deletes for `users`, `bookings`, `booking_items`, `payments`, `sessions`, `courts`, and `booking_variants` to preserve booking, payment, and audit history.
 - Keep `admin_logs.entity_type` and `admin_logs.entity_id` polymorphic, with integrity enforced at the application level.
 - Use unique constraints for `users.email`, `courts.slug`, `booking_variants.slug`, `carts.user_id`, and session slot uniqueness.
+- `COACH_AVAILABILITY.coach_profile_id` references `COACH_PROFILES.id`.
+- `SESSIONS.availability_id` references `COACH_AVAILABILITY.id`.
 
 ## G. Data Type and Constraint Recommendations
 
@@ -745,7 +753,7 @@ The following entities are intentionally not part of the finalized ERD:
 | `cart_items` | `(cart_id, session_id)` unique | Prevent duplicate session rows per cart. |
 | `notifications` | `(user_id, is_read, created_at)` | Notification listing and unread counts. |
 | `admin_logs` | `(admin_id, created_at)` | Admin activity history. |
-| `coach_availability` | `(coach_user_id, day_of_week, start_time)` | Coach schedule lookup. |
+| `coach_availability` | `(coach_profile_id, day_of_week, start_time)` | Coach schedule lookup. |
 | `private_inquiries` | `(status, created_at)` | Admin private inquiry management. |
 
 ## I. Defense Notes
