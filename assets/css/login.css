@@ -91,14 +91,16 @@
   background: rgba(221, 226, 85, .24);
 }
 
-.login-form > label {
+.login-form > label,
+.login-form-field {
   width: 100%;
   display: grid;
   gap: 10px;
   text-align: left;
 }
 
-.login-form > label > span:first-child {
+.login-form > label > span:first-child,
+.login-form-field > label {
   color: #245f49;
   font-size: 14px;
   font-weight: 900;
@@ -139,6 +141,55 @@
   stroke-linecap: round;
   stroke-linejoin: round;
   pointer-events: none;
+}
+
+.login-form .login-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #5e696d;
+  box-shadow: none;
+  transform: translateY(-50%);
+  transition: color .18s ease, background .18s ease;
+}
+
+.login-form .login-password-toggle:hover,
+.login-form .login-password-toggle:focus-visible {
+  background: rgba(221, 226, 85, .24);
+  color: #245f49;
+  transform: translateY(-50%);
+}
+
+.login-form .login-password-toggle:focus-visible {
+  outline: 2px solid #DDE255;
+  outline-offset: 2px;
+}
+
+.login-form .login-password-toggle svg {
+  position: static;
+  width: 22px;
+  height: 22px;
+  transform: none;
+  stroke: currentColor;
+}
+
+.login-password-toggle__icon--hide,
+.login-password-toggle.is-visible .login-password-toggle__icon--show {
+  display: none;
+}
+
+.login-password-toggle.is-visible .login-password-toggle__icon--hide {
+  display: block;
 }
 
 .login-form input::placeholder {

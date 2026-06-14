@@ -10,7 +10,8 @@ $pageTitle = 'Login - Pickled';
 $activePage = 'login.php';
 $frontendPath = __DIR__ . '/..';
 require_once $frontendPath . '/includes/paths.php';
-$extraHead = '<link rel="stylesheet" href="' . htmlspecialchars(pickled_asset_url('css/login.css?v=20260610b')) . '"/>';
+$extraHead = '<link rel="stylesheet" href="' . htmlspecialchars(pickled_asset_url('css/login.css?v=20260615a')) . '"/>' . "\n" .
+    '<script defer src="' . htmlspecialchars(pickled_asset_url('js/login.js?v=20260615a')) . '"></script>';
 
 $auth = new AuthService();
 
@@ -120,15 +121,41 @@ include $frontendPath . '/includes/header.php';
         <input type="email" name="email" placeholder="Email" autocomplete="email" required/>
       </label>
 
-      <label>
-        <span>Password</span>
-        <input type="password" name="password" placeholder="Password" autocomplete="new-password" required/>
-      </label>
+      <div class="login-form-field">
+        <label for="signupPassword">Password</label>
+        <span class="login-field login-field--password">
+          <input id="signupPassword" type="password" name="password" placeholder="Password" autocomplete="new-password" required/>
+          <button class="login-password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="signupPassword" data-password-toggle>
+            <svg class="login-password-toggle__icon login-password-toggle__icon--show" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg class="login-password-toggle__icon login-password-toggle__icon--hide" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="m3 3 18 18"></path>
+            </svg>
+          </button>
+        </span>
+      </div>
 
-      <label>
-        <span>Confirm Password</span>
-        <input type="password" name="confirm_password" placeholder="Confirm password" autocomplete="new-password" required/>
-      </label>
+      <div class="login-form-field">
+        <label for="signupConfirmPassword">Confirm Password</label>
+        <span class="login-field login-field--password">
+          <input id="signupConfirmPassword" type="password" name="confirm_password" placeholder="Confirm password" autocomplete="new-password" required/>
+          <button class="login-password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="signupConfirmPassword" data-password-toggle>
+            <svg class="login-password-toggle__icon login-password-toggle__icon--show" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg class="login-password-toggle__icon login-password-toggle__icon--hide" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="m3 3 18 18"></path>
+            </svg>
+          </button>
+        </span>
+      </div>
 
       <button type="submit">Sign up</button>
     </form>
@@ -180,16 +207,23 @@ include $frontendPath . '/includes/header.php';
         </span>
       </label>
 
-      <label>
-        <span>Password</span>
-        <span class="login-field">
-          <input type="password" name="password" placeholder="Enter your password" autocomplete="current-password" required/>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
-            <circle cx="12" cy="12" r="3"></circle>
-          </svg>
+      <div class="login-form-field">
+        <label for="loginPassword">Password</label>
+        <span class="login-field login-field--password">
+          <input id="loginPassword" type="password" name="password" placeholder="Enter your password" autocomplete="current-password" required/>
+          <button class="login-password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="loginPassword" data-password-toggle>
+            <svg class="login-password-toggle__icon login-password-toggle__icon--show" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg class="login-password-toggle__icon login-password-toggle__icon--hide" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="m3 3 18 18"></path>
+            </svg>
+          </button>
         </span>
-      </label>
+      </div>
 
       <div class="login-options">
         <label class="login-remember">
