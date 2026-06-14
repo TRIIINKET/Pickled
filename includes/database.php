@@ -2,12 +2,12 @@
 declare(strict_types=1);
 
 return [
-    'dsn' => getenv('PICKLED_DB_DSN') 
-        ?: 'mysql:host=sql308.byetcluster.com;dbname=if0_42175212_pickled;charset=utf8mb4',
+    'dsn' => getenv('PICKLED_DB_DSN')
+        ?: 'mysql:host=127.0.0.1;dbname=pickled;charset=utf8mb4',
 
-    'username' => getenv('PICKLED_DB_USER') 
-        ?: 'if0_42175212',
+    'username' => getenv('PICKLED_DB_USER')
+        ?: 'root',
 
-    'password' => getenv('PICKLED_DB_PASS') 
-        ?: 'J6OcrzEwXNMPryl',
+    'password' => getenv('PICKLED_DB_PASS')
+        ?: '',
 ];
