@@ -26,6 +26,15 @@ CREATE TABLE `users` (
   CONSTRAINT `chk_users_role` CHECK (`role` in ('player','coach','admin'))
 ) ENGINE=InnoDB AUTO_INCREMENT=36 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+INSERT INTO `users` (`name`, `email`, `password_hash`, `role`)
+VALUES
+  ('Admin Demo', 'admin@example.com', '$2y$12$ibR8MUreHNnonxJI.OPxNeSj6FXqyrcSDCHJs94MFMUxDXD5JgXZO', 'admin'),
+  ('Coach Demo', 'coach@example.com', '$2y$12$ibR8MUreHNnonxJI.OPxNeSj6FXqyrcSDCHJs94MFMUxDXD5JgXZO', 'coach'),
+  ('Player Demo', 'player@example.com', '$2y$12$ibR8MUreHNnonxJI.OPxNeSj6FXqyrcSDCHJs94MFMUxDXD5JgXZO', 'player')
+ON DUPLICATE KEY UPDATE
+  `name` = VALUES(`name`),
+  `password_hash` = VALUES(`password_hash`),
+  `role` = VALUES(`role`);
 DROP TABLE IF EXISTS `courts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
