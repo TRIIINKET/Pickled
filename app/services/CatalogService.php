@@ -123,6 +123,11 @@ final class CatalogService
             'name' => $name,
             'slug' => $slug,
             'status' => $this->status((string) ($input['status'] ?? 'active')),
+            'description' => trim((string) ($input['description'] ?? '')) ?: null,
+            'base_price' => max(0, (float) ($input['base_price'] ?? 0)),
+            'capacity' => max(1, (int) ($input['capacity'] ?? 1)),
+            'operating_hours' => trim((string) ($input['operating_hours'] ?? '')) ?: null,
+            'court_type' => trim((string) ($input['court_type'] ?? '')) ?: null,
         ];
     }
 
@@ -155,6 +160,7 @@ final class CatalogService
             'capacity' => $capacity,
             'image' => trim((string) ($input['image'] ?? '')) ?: null,
             'active' => !empty($input['active']),
+            'sort_order' => max(0, (int) ($input['sort_order'] ?? 0)),
         ];
     }
 

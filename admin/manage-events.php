@@ -26,6 +26,175 @@ try {
     error_log('Court catalog database connection failed: ' . $e->getMessage());
 }
 
+function court_column_exists(PDO $pdo, string $table, string $column): bool {
+    try {
+        $stmt = $pdo->prepare('
+            SELECT 1
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = :table_name
+              AND COLUMN_NAME = :column_name
+            LIMIT 1
+        ');
+        $stmt->execute(['table_name' => $table, 'column_name' => $column]);
+        return (bool) $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        error_log('Court schema check failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+function court_ensure_customization_schema(?PDO $pdo): void {
+    if (!$pdo) {
+        return;
+    }
+
+    $courtColumns = [
+        'description' => 'ADD COLUMN description TEXT NULL AFTER status',
+        'base_price' => 'ADD COLUMN base_price DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER description',
+        'capacity' => 'ADD COLUMN capacity INT UNSIGNED NOT NULL DEFAULT 1 AFTER base_price',
+        'operating_hours' => 'ADD COLUMN operating_hours VARCHAR(100) NULL AFTER capacity',
+        'court_type' => 'ADD COLUMN court_type VARCHAR(100) NULL AFTER operating_hours',
+    ];
+    foreach ($courtColumns as $column => $definition) {
+        if (!court_column_exists($pdo, 'courts', $column)) {
+            $pdo->exec("ALTER TABLE courts $definition");
+        }
+    }
+
+    if (!court_column_exists($pdo, 'booking_variants', 'sort_order')) {
+        $pdo->exec('ALTER TABLE booking_variants ADD COLUMN sort_order INT NOT NULL DEFAULT 0 AFTER active');
+    }
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS court_media (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            court_id INT UNSIGNED NOT NULL,
+            image_path VARCHAR(255) NOT NULL,
+            image_type VARCHAR(50) NOT NULL DEFAULT 'gallery',
+            is_hero TINYINT(1) NOT NULL DEFAULT 0,
+            sort_order INT NOT NULL DEFAULT 0,
+            status VARCHAR(20) NOT NULL DEFAULT 'active',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_court_media_court (court_id, status, sort_order),
+            CONSTRAINT fk_court_media_court FOREIGN KEY (court_id) REFERENCES courts(id) ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+}
+
+function court_normalize_image_path(string $path): string {
+    $path = str_replace('\\', '/', trim($path));
+    $path = preg_replace('#^(\.\./)?assets/#', '', $path) ?? $path;
+    return ltrim($path, '/');
+}
+
+function court_upload_image(array $file): string {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('Please choose a valid image file.');
+    }
+
+    $tmp = (string) ($file['tmp_name'] ?? '');
+    $mime = function_exists('mime_content_type') ? (string) mime_content_type($tmp) : '';
+    $extensions = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        'image/gif' => 'gif',
+    ];
+    if (!isset($extensions[$mime])) {
+        throw new RuntimeException('Only JPG, PNG, WEBP, and GIF photos are allowed.');
+    }
+
+    $dir = __DIR__ . '/../assets/img/court/uploads';
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        throw new RuntimeException('Unable to create the court upload folder.');
+    }
+
+    $filename = 'court-' . bin2hex(random_bytes(8)) . '.' . $extensions[$mime];
+    $destination = $dir . '/' . $filename;
+    if (!move_uploaded_file($tmp, $destination)) {
+        throw new RuntimeException('Unable to save uploaded court photo.');
+    }
+
+    return 'img/court/uploads/' . $filename;
+}
+
+function court_media_rows(?PDO $pdo, int $courtId, bool $includeInactive = false): array {
+    if (!$pdo || $courtId <= 0) {
+        return [];
+    }
+
+    try {
+        $sql = 'SELECT * FROM court_media WHERE court_id = :court_id';
+        if (!$includeInactive) {
+            $sql .= " AND status = 'active'";
+        }
+        $sql .= ' ORDER BY is_hero DESC, sort_order ASC, id ASC';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(['court_id' => $courtId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        error_log('Court media load failed: ' . $e->getMessage());
+        return [];
+    }
+}
+
+function court_seed_default_media(?PDO $pdo, int $courtId, array $paths): void {
+    if (!$pdo || $courtId <= 0 || court_media_rows($pdo, $courtId, true)) {
+        return;
+    }
+
+    $stmt = $pdo->prepare('INSERT INTO court_media (court_id, image_path, image_type, is_hero, sort_order, status) VALUES (:court_id, :image_path, :image_type, :is_hero, :sort_order, "active")');
+    foreach ($paths as $index => $path) {
+        $stmt->execute([
+            'court_id' => $courtId,
+            'image_path' => court_normalize_image_path((string) $path),
+            'image_type' => $index === 0 ? 'hero' : 'gallery',
+            'is_hero' => $index === 0 ? 1 : 0,
+            'sort_order' => $index,
+        ]);
+    }
+}
+
+function court_set_hero_media(?PDO $pdo, int $courtId, int $mediaId): void {
+    if (!$pdo || $courtId <= 0 || $mediaId <= 0) {
+        throw new RuntimeException('Photo is required.');
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('UPDATE court_media SET is_hero = 0, image_type = IF(image_type = "hero", "gallery", image_type) WHERE court_id = :court_id')->execute(['court_id' => $courtId]);
+        $pdo->prepare('UPDATE court_media SET is_hero = 1, image_type = "hero", status = "active" WHERE id = :id AND court_id = :court_id')->execute(['id' => $mediaId, 'court_id' => $courtId]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+function court_update_media_order(?PDO $pdo, int $courtId, array $orders): void {
+    if (!$pdo || $courtId <= 0) {
+        return;
+    }
+
+    $stmt = $pdo->prepare('UPDATE court_media SET sort_order = :sort_order WHERE id = :id AND court_id = :court_id');
+    foreach ($orders as $id => $sortOrder) {
+        $stmt->execute(['id' => (int) $id, 'court_id' => $courtId, 'sort_order' => max(0, (int) $sortOrder)]);
+    }
+}
+
+function court_soft_delete_media(?PDO $pdo, int $courtId, int $mediaId): void {
+    if (!$pdo || $courtId <= 0 || $mediaId <= 0) {
+        return;
+    }
+
+    $pdo->prepare('UPDATE court_media SET status = "deleted", is_hero = 0 WHERE id = :id AND court_id = :court_id')->execute(['id' => $mediaId, 'court_id' => $courtId]);
+}
+
+court_ensure_customization_schema($pdo);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? null)) {
         $errorMsg = 'Invalid form submission. Please try again.';
@@ -36,7 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $catalogService->createCourt($_POST, $adminId);
                 $courtSlug = preg_replace('/[^a-z0-9-]/', '', strtolower((string) ($_POST['slug'] ?? $_POST['name'] ?? $courtSlug))) ?: $courtSlug;
                 $successMsg = 'Court added successfully.';
-            } elseif ($action === 'update_court') {
+            } elseif ($action === 'update_court' || $action === 'update_court_details') {
                 $catalogService->updateCourt((int) ($_POST['court_id'] ?? 0), $_POST, $adminId);
                 $courtSlug = preg_replace('/[^a-z0-9-]/', '', strtolower((string) ($_POST['slug'] ?? $courtSlug))) ?: $courtSlug;
                 $successMsg = 'Court updated successfully.';
@@ -61,6 +230,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($action === 'set_session_status') {
                 $schedulingService->setSessionStatus((int) ($_POST['session_id'] ?? 0), (string) ($_POST['status'] ?? 'cancelled'), $adminId);
                 $successMsg = 'Session status updated successfully.';
+            } elseif (!$isSocialPlay && $action === 'upload_court_photo') {
+                $courtId = (int) ($_POST['court_id'] ?? 0);
+                $path = court_upload_image($_FILES['court_photo'] ?? []);
+                $isHero = !empty($_POST['is_hero']);
+                if ($isHero) {
+                    $pdo?->prepare('UPDATE court_media SET is_hero = 0, image_type = IF(image_type = "hero", "gallery", image_type) WHERE court_id = :court_id')->execute(['court_id' => $courtId]);
+                }
+                $stmt = $pdo?->prepare('INSERT INTO court_media (court_id, image_path, image_type, is_hero, sort_order, status) VALUES (:court_id, :image_path, :image_type, :is_hero, :sort_order, "active")');
+                $stmt?->execute([
+                    'court_id' => $courtId,
+                    'image_path' => $path,
+                    'image_type' => $isHero ? 'hero' : 'gallery',
+                    'is_hero' => $isHero ? 1 : 0,
+                    'sort_order' => (int) ($_POST['sort_order'] ?? 0),
+                ]);
+                $successMsg = 'Court photo uploaded successfully.';
+            } elseif (!$isSocialPlay && $action === 'replace_court_media') {
+                $courtId = (int) ($_POST['court_id'] ?? 0);
+                $mediaId = (int) ($_POST['media_id'] ?? 0);
+                $path = court_upload_image($_FILES['replacement_photo'] ?? []);
+                $pdo?->prepare('UPDATE court_media SET image_path = :image_path, status = "active" WHERE id = :id AND court_id = :court_id')->execute([
+                    'image_path' => $path,
+                    'id' => $mediaId,
+                    'court_id' => $courtId,
+                ]);
+                $successMsg = 'Court photo replaced successfully.';
+            } elseif (!$isSocialPlay && $action === 'set_hero_media') {
+                court_set_hero_media($pdo, (int) ($_POST['court_id'] ?? 0), (int) ($_POST['media_id'] ?? 0));
+                $successMsg = 'Hero image updated successfully.';
+            } elseif (!$isSocialPlay && $action === 'delete_court_media') {
+                court_soft_delete_media($pdo, (int) ($_POST['court_id'] ?? 0), (int) ($_POST['media_id'] ?? 0));
+                $successMsg = 'Court photo removed from the active gallery.';
+            } elseif (!$isSocialPlay && $action === 'update_media_order') {
+                court_update_media_order($pdo, (int) ($_POST['court_id'] ?? 0), $_POST['media_order'] ?? []);
+                $successMsg = 'Photo order saved successfully.';
             }
         } catch (Throwable $e) {
             error_log('Court catalog action failed: ' . $e->getMessage());
@@ -90,7 +294,7 @@ function court_rows(?PDO $pdo, string $sql, array $params = []): array {
 }
 
 function court_asset(string $path): string {
-    return htmlspecialchars(pickled_admin_asset_url($path), ENT_QUOTES, 'UTF-8');
+    return htmlspecialchars(pickled_admin_asset_url(court_normalize_image_path($path)), ENT_QUOTES, 'UTF-8');
 }
 
 function court_public_url(string $path): string {
@@ -118,6 +322,70 @@ function court_h(mixed $value): string {
 
 function court_csrf_input(): string {
     return '<input type="hidden" name="csrf_token" value="' . court_h(pickled_csrf_token()) . '">';
+}
+
+function court_stats(?PDO $pdo, int $courtId): array {
+    $stats = [
+        'bookings_month' => 0,
+        'revenue_month' => 0.0,
+        'upcoming_sessions' => 0,
+        'most_booked_service' => 'No bookings yet',
+    ];
+    if (!$pdo || $courtId <= 0) {
+        return $stats;
+    }
+
+    $monthStart = (new DateTimeImmutable('first day of this month 00:00:00', new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s');
+    $nextMonth = (new DateTimeImmutable('first day of next month 00:00:00', new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s');
+    try {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(DISTINCT b.id) AS total_bookings,
+                   COALESCE(SUM(bi.quantity * bi.unit_price), 0) AS revenue
+            FROM bookings b
+            JOIN booking_items bi ON bi.booking_id = b.id
+            JOIN sessions s ON s.id = bi.session_id
+            JOIN booking_variants v ON v.id = s.variant_id
+            LEFT JOIN payments p ON p.booking_id = b.id
+            WHERE v.court_id = :court_id
+              AND b.created_at >= :start_date
+              AND b.created_at < :end_date
+              AND b.status NOT IN ('cancelled', 'rejected')
+        ");
+        $stmt->execute(['court_id' => $courtId, 'start_date' => $monthStart, 'end_date' => $nextMonth]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $stats['bookings_month'] = (int) ($row['total_bookings'] ?? 0);
+        $stats['revenue_month'] = (float) ($row['revenue'] ?? 0);
+
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) AS upcoming
+            FROM sessions s
+            JOIN booking_variants v ON v.id = s.variant_id
+            WHERE v.court_id = :court_id
+              AND CONCAT(s.session_date, ' ', s.start_time) >= NOW()
+              AND s.status IN ('open', 'full')
+        ");
+        $stmt->execute(['court_id' => $courtId]);
+        $stats['upcoming_sessions'] = (int) ($stmt->fetchColumn() ?: 0);
+
+        $stmt = $pdo->prepare("
+            SELECT bi.name, COALESCE(SUM(bi.quantity), 0) AS slots
+            FROM booking_items bi
+            JOIN bookings b ON b.id = bi.booking_id
+            JOIN sessions s ON s.id = bi.session_id
+            JOIN booking_variants v ON v.id = s.variant_id
+            WHERE v.court_id = :court_id
+              AND b.status NOT IN ('cancelled', 'rejected')
+            GROUP BY bi.name
+            ORDER BY slots DESC, bi.name ASC
+            LIMIT 1
+        ");
+        $stmt->execute(['court_id' => $courtId]);
+        $stats['most_booked_service'] = (string) ($stmt->fetchColumn() ?: 'No bookings yet');
+    } catch (Throwable $e) {
+        error_log('Court stats query failed: ' . $e->getMessage());
+    }
+
+    return $stats;
 }
 
 $allCourts = [];
@@ -170,15 +438,48 @@ $socialSessions = court_rows($pdo, "
 $socialParticipants = array_sum(array_map(fn($row) => (int) ($row['booked_count'] ?? 0), $socialSessions));
 $socialRevenue = array_sum(array_map(fn($row) => (float) ($row['price'] ?? 0) * (int) ($row['booked_count'] ?? 0), $socialSessions));
 
-$heroImage = $courtSlug === 'pink' ? 'img/court/court pink-1.webp' : 'img/court/court green-1.png';
-$gallery = $courtSlug === 'pink'
+$defaultHeroImage = $courtSlug === 'pink' ? 'img/court/court pink-1.webp' : 'img/court/court green-1.png';
+$defaultGallery = $courtSlug === 'pink'
     ? ['img/court/court pink-1.webp', 'img/court/court pink-2.png', 'img/court/court pink-3.png', 'img/court/academy.png']
     : ['img/court/court green-1.png', 'img/court/court green-2.png', 'img/court/court green-3.png', 'img/court/social play-1.png'];
 $socialGallery = ['img/court/social play-1.png', 'img/court/social play-2.png', 'img/court/social play-3.png', 'img/court/court green-1.png', 'img/court/court pink-1.webp'];
 
-$basePrice = $services ? min(array_map(fn($service) => (float) $service['price'], $services)) : ($courtSlug === 'pink' ? 400 : 600);
-$capacity = $services ? max(array_map(fn($service) => (int) $service['capacity'], $services)) : 24;
-$subtitle = $courtSlug === 'pink' ? 'Youth-friendly indoor court' : 'Main standard indoor court';
+$activeServices = array_values(array_filter($services, static fn(array $service): bool => !empty($service['active'])));
+court_seed_default_media($pdo, (int) ($court['id'] ?? 0), $defaultGallery);
+$mediaRows = court_media_rows($pdo, (int) ($court['id'] ?? 0), false);
+$heroRow = null;
+foreach ($mediaRows as $mediaRow) {
+    if (!empty($mediaRow['is_hero'])) {
+        $heroRow = $mediaRow;
+        break;
+    }
+}
+$heroImage = court_normalize_image_path((string) ($heroRow['image_path'] ?? $defaultHeroImage));
+$gallery = array_values(array_map(static fn(array $media): string => court_normalize_image_path((string) $media['image_path']), $mediaRows));
+if (!$gallery) {
+    $gallery = $defaultGallery;
+}
+
+$fallbackBasePrice = $activeServices ? min(array_map(fn($service) => (float) $service['price'], $activeServices)) : ($courtSlug === 'pink' ? 400 : 600);
+$fallbackCapacity = $activeServices ? max(array_map(fn($service) => (int) $service['capacity'], $activeServices)) : 24;
+$basePrice = (float) ($court['base_price'] ?? 0) > 0 ? (float) $court['base_price'] : $fallbackBasePrice;
+$capacity = (int) ($court['capacity'] ?? 0) > 0 ? (int) $court['capacity'] : $fallbackCapacity;
+$subtitle = trim((string) ($court['description'] ?? '')) ?: ($courtSlug === 'pink' ? 'Youth-friendly indoor court' : 'Main standard indoor court');
+$operatingHours = trim((string) ($court['operating_hours'] ?? '')) ?: '8AM - 10PM';
+$courtType = trim((string) ($court['court_type'] ?? '')) ?: 'Indoor';
+$courtStats = court_stats($pdo, (int) ($court['id'] ?? 0));
+$courtVariantIds = array_map(static fn(array $service): int => (int) ($service['id'] ?? 0), $services);
+$courtSessions = array_values(array_filter($allSessions, static fn(array $session): bool => in_array((int) ($session['variant_id'] ?? 0), $courtVariantIds, true)));
+$sessionsByVariant = [];
+$upcomingSessionsByVariant = [];
+$todayDate = (new DateTimeImmutable('today', new DateTimeZone('Asia/Manila')))->format('Y-m-d');
+foreach ($courtSessions as $courtSession) {
+    $variantId = (int) ($courtSession['variant_id'] ?? 0);
+    $sessionsByVariant[$variantId][] = $courtSession;
+    if (($courtSession['session_date'] ?? '') >= $todayDate && in_array((string) ($courtSession['status'] ?? ''), ['open', 'full'], true)) {
+        $upcomingSessionsByVariant[$variantId] = ($upcomingSessionsByVariant[$variantId] ?? 0) + 1;
+    }
+}
 $accent = $courtSlug === 'pink' ? 'pink' : 'green';
 
 $icons = [
@@ -244,6 +545,7 @@ $dashboardNav = [
         <?php if ($successMsg): ?><div class="alert alert-success"><?php echo court_h($successMsg); ?></div><?php endif; ?>
         <?php if ($errorMsg): ?><div class="alert alert-error"><?php echo court_h($errorMsg); ?></div><?php endif; ?>
 
+        <?php if ($isSocialPlay): ?>
         <section class="catalog-admin-panel" aria-label="Court and service catalog management">
             <details id="catalog-add-court">
                 <summary><?php echo court_icon($icons, 'plus'); ?> Add Court</summary>
@@ -268,6 +570,7 @@ $dashboardNav = [
                     <label><span>Price</span><input type="number" name="price" step="0.01" min="0" value="0.00" required></label>
                     <label><span>Limit</span><input type="number" name="participants_limit" min="1" value="1" required></label>
                     <label><span>Capacity</span><input type="number" name="capacity" min="1" value="8" required></label>
+                    <label><span>Sort</span><input type="number" name="sort_order" min="0" value="0"></label>
                     <label><span>Image</span><input type="text" name="image" placeholder="assets/img/court/example.png"></label>
                     <label class="catalog-check"><input type="checkbox" name="active" value="1" checked> Active</label>
                     <button class="bookings-button primary" type="submit" name="action" value="create_variant">Add Variant</button>
@@ -331,6 +634,7 @@ $dashboardNav = [
                                 <label><span>Price</span><input type="number" name="price" step="0.01" min="0" value="<?php echo court_h($variant['price']); ?>" required></label>
                                 <label><span>Limit</span><input type="number" name="participants_limit" min="1" value="<?php echo (int) $variant['participants_limit']; ?>" required></label>
                                 <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $variant['capacity']; ?>" required></label>
+                                <label><span>Sort</span><input type="number" name="sort_order" min="0" value="<?php echo (int) ($variant['sort_order'] ?? 0); ?>"></label>
                                 <label><span>Image</span><input type="text" name="image" value="<?php echo court_h($variant['image'] ?? ''); ?>"></label>
                                 <label class="catalog-check"><input type="checkbox" name="active" value="1" <?php echo $variantActive ? 'checked' : ''; ?>> Active</label>
                                 <button type="submit" name="action" value="update_variant">Save</button>
@@ -377,6 +681,7 @@ $dashboardNav = [
                 </div>
             </details>
         </section>
+        <?php endif; ?>
 
         <?php if ($isSocialPlay): ?>
         <section class="social-play-layout">
@@ -426,63 +731,400 @@ $dashboardNav = [
         </section>
         <?php else: ?>
         <section class="court-actions-row">
-            <nav class="court-tabs" aria-label="Court sections"><a class="active" href="#">Catalogs</a><a href="#">Details</a><a href="#">Photos</a><a href="#">Schedule</a></nav>
-            <div><a class="bookings-button ghost" href="<?php echo court_public_url('courts.php#' . $courtSlug); ?>"><?php echo court_icon($icons, 'eye'); ?> Preview on Website</a><button class="bookings-button primary" type="button">Save Changes</button></div>
+            <nav class="court-tabs" aria-label="Court sections">
+                <button class="active" type="button" data-court-tab="catalogs">Catalogs</button>
+                <button type="button" data-court-tab="details">Details</button>
+                <button type="button" data-court-tab="photos">Photos</button>
+            </nav>
+            <div><a class="bookings-button ghost" href="<?php echo court_public_url('courts.php#' . $courtSlug); ?>" target="_blank" rel="noopener"><?php echo court_icon($icons, 'eye'); ?> Preview on Website</a><button class="bookings-button primary" type="submit" form="courtDetailsForm">Save Changes</button></div>
         </section>
 
         <section class="court-editor-layout court-accent-<?php echo $accent; ?>">
-            <div class="court-editor-column">
-                <article class="court-info-card">
-                    <header><h2>Court Details</h2><button type="button"><?php echo court_icon($icons, 'edit'); ?> Edit Details</button></header>
-                    <div class="court-info-grid">
-                        <div class="court-info-title"><span><?php echo court_icon($icons, 'courts'); ?></span><div><strong><?php echo htmlspecialchars($pageTitle); ?></strong><small><?php echo htmlspecialchars($subtitle); ?></small></div></div>
-                        <p><small>Base Price</small><strong>₱<?php echo number_format($basePrice, 2); ?> / session</strong></p>
-                        <p><small>Capacity</small><strong><?php echo number_format($capacity); ?> Players</strong></p>
-                        <p><small>Status</small><strong class="dot-status"><?php echo court_h(ucfirst((string) ($court['status'] ?? 'inactive'))); ?></strong></p>
-                    </div>
-                </article>
+            <section class="court-stats-grid" aria-label="<?php echo court_h($pageTitle); ?> live stats">
+                <article><span>Total bookings this month</span><strong><?php echo number_format($courtStats['bookings_month']); ?></strong></article>
+                <article><span>Revenue this month</span><strong>₱<?php echo number_format((float) $courtStats['revenue_month'], 2); ?></strong></article>
+                <article><span>Upcoming sessions</span><strong><?php echo number_format($courtStats['upcoming_sessions']); ?></strong></article>
+                <article><span>Most booked service</span><strong><?php echo court_h($courtStats['most_booked_service']); ?></strong></article>
+            </section>
 
-                <article class="catalog-manager-card">
-                    <header><div><h2>Services</h2><p>Manage the services and offers for <?php echo htmlspecialchars($pageTitle); ?>.</p></div><button type="button"><?php echo court_icon($icons, 'plus'); ?> Add New Service</button></header>
-                    <div class="service-list">
-                        <?php foreach ($services as $service): ?>
-                            <article class="service-card">
-                                <span class="service-icon"><?php echo court_icon($icons, service_icon_name($service['name'])); ?></span>
-                                <div><strong><?php echo htmlspecialchars($service['name']); ?></strong><small><?php echo htmlspecialchars($service['category']); ?> for <?php echo htmlspecialchars($pageTitle); ?></small></div>
-                                <p><small>Price</small><strong>₱<?php echo number_format((float) $service['price'], 2); ?></strong></p>
-                                <p><small>Duration</small><strong><?php echo htmlspecialchars($service['duration_label']); ?></strong></p>
-                                <p><small>Status</small><em class="status-pill status-<?php echo !empty($service['active']) ? 'success' : 'warning'; ?>"><?php echo !empty($service['active']) ? 'Active' : 'Inactive'; ?></em></p>
-                                <div class="service-actions"><button type="button"><?php echo court_icon($icons, 'edit'); ?> Edit</button><button class="icon-button danger" type="button" aria-label="Archive service"><?php echo court_icon($icons, 'trash'); ?></button></div>
+            <div class="court-tab-panels">
+                <section class="court-tab-panel is-active" data-court-panel="catalogs">
+                    <article class="catalog-manager-card">
+                        <header>
+                            <div><h2>Services</h2><p>Manage the services and offers for <?php echo htmlspecialchars($pageTitle); ?>.</p></div>
+                            <details class="inline-create-panel">
+                                <summary><?php echo court_icon($icons, 'plus'); ?> Add New Service</summary>
+                                <form class="catalog-admin-form catalog-admin-form-wide" method="post">
+                                    <?php echo court_csrf_input(); ?>
+                                    <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
+                                    <label><span>Name</span><input type="text" name="name" placeholder="Court Rental" required></label>
+                                    <label><span>Slug</span><input type="text" name="slug" placeholder="<?php echo court_h($courtSlug); ?>-court-rental" required></label>
+                                    <label><span>Category</span><input type="text" name="category" placeholder="Court Reservation" required></label>
+                                    <label><span>Duration</span><input type="text" name="duration_label" placeholder="1 hour" required></label>
+                                    <label><span>Price</span><input type="number" name="price" step="0.01" min="0" value="0.00" required></label>
+                                    <label><span>Limit</span><input type="number" name="participants_limit" min="1" value="1" required></label>
+                                    <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $capacity; ?>" required></label>
+                                    <label><span>Sort</span><input type="number" name="sort_order" min="0" value="<?php echo count($services) * 10; ?>"></label>
+                                    <label class="catalog-check"><input type="checkbox" name="active" value="1" checked> Active</label>
+                                    <button class="bookings-button primary" type="submit" name="action" value="create_variant">Add Service</button>
+                                </form>
+                            </details>
+                        </header>
+                        <div class="service-list service-table-list">
+                            <div class="service-table-head"><span></span><span>Service</span><span>Category</span><span>Price</span><span>Duration</span><span>Status</span><span>Actions</span></div>
+                            <?php foreach ($services as $service): ?>
+                                <article class="service-card">
+                                    <span class="service-icon"><?php echo court_icon($icons, service_icon_name($service['name'])); ?></span>
+                                    <?php $serviceSessionCount = (int) ($upcomingSessionsByVariant[(int) $service['id']] ?? 0); ?>
+                                    <div class="service-main"><strong><?php echo htmlspecialchars($service['name']); ?></strong><small><?php echo htmlspecialchars($service['category']); ?> for <?php echo htmlspecialchars($pageTitle); ?></small><small class="service-session-summary"><?php echo $serviceSessionCount > 0 ? number_format($serviceSessionCount) . ' upcoming session' . ($serviceSessionCount === 1 ? '' : 's') : 'No sessions created'; ?></small></div>
+                                    <p class="service-category-cell"><small>Category</small><strong><?php echo htmlspecialchars($service['category']); ?></strong></p>
+                                    <p><small>Price</small><strong>₱<?php echo number_format((float) $service['price'], 2); ?></strong></p>
+                                    <p><small>Duration</small><strong><?php echo htmlspecialchars($service['duration_label']); ?></strong></p>
+                                    <p><small>Status</small><em class="status-pill status-<?php echo !empty($service['active']) ? 'success' : 'warning'; ?>"><?php echo !empty($service['active']) ? 'Active' : 'Inactive'; ?></em></p>
+                                    <div class="service-actions">
+                                        <details class="service-edit-details">
+                                            <summary><?php echo court_icon($icons, 'edit'); ?> Edit</summary>
+                                            <form class="service-edit-form" method="post">
+                                                <?php echo court_csrf_input(); ?>
+                                                <input type="hidden" name="variant_id" value="<?php echo (int) $service['id']; ?>">
+                                                <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
+                                                <label><span>Name</span><input type="text" name="name" value="<?php echo court_h($service['name']); ?>" required></label>
+                                                <label><span>Slug</span><input type="text" name="slug" value="<?php echo court_h($service['slug']); ?>" required></label>
+                                                <label><span>Category</span><input type="text" name="category" value="<?php echo court_h($service['category']); ?>" required></label>
+                                                <label><span>Duration</span><input type="text" name="duration_label" value="<?php echo court_h($service['duration_label']); ?>" required></label>
+                                                <label><span>Price</span><input type="number" name="price" step="0.01" min="0" value="<?php echo court_h($service['price']); ?>" required></label>
+                                                <label><span>Limit</span><input type="number" name="participants_limit" min="1" value="<?php echo (int) $service['participants_limit']; ?>" required></label>
+                                                <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $service['capacity']; ?>" required></label>
+                                                <label><span>Sort</span><input type="number" name="sort_order" min="0" value="<?php echo (int) ($service['sort_order'] ?? 0); ?>"></label>
+                                                <input type="hidden" name="image" value="<?php echo court_h($service['image'] ?? ''); ?>">
+                                                <label class="catalog-check"><input type="checkbox" name="active" value="1" <?php echo !empty($service['active']) ? 'checked' : ''; ?>> Active on website</label>
+                                                <button type="submit" name="action" value="update_variant">Save Service</button>
+                                            </form>
+                                        </details>
+                                        <form method="post">
+                                            <?php echo court_csrf_input(); ?>
+                                            <input type="hidden" name="variant_id" value="<?php echo (int) $service['id']; ?>">
+                                            <input type="hidden" name="active" value="<?php echo !empty($service['active']) ? '0' : '1'; ?>">
+                                            <button class="archive-service-button danger" type="submit" name="action" value="set_variant_active"><?php echo court_icon($icons, 'trash'); ?> Archive</button>
+                                        </form>
+                                        <button class="session-manage-button" type="button" data-open-session-modal="<?php echo (int) $service['id']; ?>"><?php echo court_icon($icons, 'calendar'); ?> Sessions</button>
+                                    </div>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                        <footer><?php echo court_icon($icons, 'target'); ?> Use the Sort field inside Edit to reorder services. Only active services appear publicly.</footer>
+                    </article>
+                </section>
+
+                <section class="court-tab-panel" data-court-panel="details">
+                    <article class="court-info-card">
+                    <header>
+                        <h2>Court Details</h2>
+                        <button class="bookings-button primary" type="submit" form="courtDetailsForm">Save Details</button>
+                    </header>
+                    <form class="court-details-form court-details-form-static" id="courtDetailsForm" method="post">
+                        <?php echo court_csrf_input(); ?>
+                        <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
+                        <input type="hidden" name="slug" value="<?php echo court_h($courtSlug); ?>">
+                        <label><span>Court name</span><input type="text" name="name" value="<?php echo court_h($pageTitle); ?>" data-live-field="name" required></label>
+                        <label><span>Description</span><textarea name="description" data-live-field="description" rows="3"><?php echo court_h($subtitle); ?></textarea></label>
+                        <label><span>Base price</span><input type="number" name="base_price" step="0.01" min="0" value="<?php echo court_h((string) $basePrice); ?>" data-live-field="price"></label>
+                        <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $capacity; ?>" data-live-field="capacity"></label>
+                        <label><span>Status</span><select name="status" data-live-field="status"><option value="active" <?php echo ($court['status'] ?? '') === 'active' ? 'selected' : ''; ?>>Active</option><option value="inactive" <?php echo ($court['status'] ?? '') === 'inactive' ? 'selected' : ''; ?>>Inactive</option><option value="maintenance" <?php echo ($court['status'] ?? '') === 'maintenance' ? 'selected' : ''; ?>>Maintenance</option></select></label>
+                        <label><span>Operating hours</span><input type="text" name="operating_hours" value="<?php echo court_h($operatingHours); ?>" data-live-field="hours"></label>
+                        <label><span>Court type</span><input type="text" name="court_type" value="<?php echo court_h($courtType); ?>" data-live-field="type"></label>
+                        <button class="bookings-button primary" type="submit" name="action" value="update_court_details">Save Changes</button>
+                    </form>
+                    <div class="court-info-grid">
+                        <div class="court-info-title"><span><?php echo court_icon($icons, 'courts'); ?></span><div><strong data-preview-name><?php echo htmlspecialchars($pageTitle); ?></strong><small data-preview-description><?php echo htmlspecialchars($subtitle); ?></small></div></div>
+                        <p><small>Base Price</small><strong><span data-preview-price>₱<?php echo number_format($basePrice, 2); ?></span> / session</strong></p>
+                        <p><small>Capacity</small><strong><span data-preview-capacity><?php echo number_format($capacity); ?></span> Players</strong></p>
+                        <p><small>Status</small><strong class="dot-status" data-preview-status><?php echo court_h(ucfirst((string) ($court['status'] ?? 'inactive'))); ?></strong></p>
+                        <p><small>Type</small><strong data-preview-type><?php echo court_h($courtType); ?></strong></p>
+                        <p><small>Operating</small><strong data-preview-hours><?php echo court_h($operatingHours); ?></strong></p>
+                    </div>
+                    </article>
+                </section>
+
+                <section class="court-tab-panel" data-court-panel="photos">
+                    <article class="court-photo-card court-photo-card-full">
+                        <header>
+                            <div><h2>Photos</h2><p>Manage the hero image and gallery for <?php echo htmlspecialchars($pageTitle); ?>.</p></div>
+                            <button class="manage-photos-trigger" type="button" data-open-photo-modal><?php echo court_icon($icons, 'gear'); ?> Manage Photos</button>
+                        </header>
+                        <div class="photos-tab-grid">
+                            <div><h3>Hero Image</h3><div class="hero-photo"><img data-preview-hero src="<?php echo court_asset($heroImage); ?>" alt="<?php echo htmlspecialchars($pageTitle); ?>"><span>Hero Image</span></div></div>
+                            <div><h3>Gallery</h3><div class="gallery-grid"><?php foreach (array_slice($gallery, 0, 8) as $index => $photo): ?><img src="<?php echo court_asset($photo); ?>" alt="Court photo <?php echo $index + 1; ?>"><?php endforeach; ?></div></div>
+                        </div>
+                    </article>
+                </section>
+
+            </div>
+        </section>
+        <?php foreach ($services as $service): ?>
+            <?php
+                $serviceId = (int) $service['id'];
+                $serviceSessions = $sessionsByVariant[$serviceId] ?? [];
+            ?>
+            <div class="court-session-modal" id="sessionModal<?php echo $serviceId; ?>" aria-hidden="true" data-session-modal="<?php echo $serviceId; ?>">
+                <div class="court-session-modal-backdrop" data-close-session-modal></div>
+                <section class="court-session-modal-panel" role="dialog" aria-modal="true" aria-labelledby="sessionModalTitle<?php echo $serviceId; ?>">
+                    <header>
+                        <div><h2 id="sessionModalTitle<?php echo $serviceId; ?>">Manage Sessions</h2><p><?php echo court_h($service['name']); ?></p></div>
+                        <button type="button" data-close-session-modal aria-label="Close session manager">&times;</button>
+                    </header>
+
+                    <details class="session-create-panel">
+                        <summary><?php echo court_icon($icons, 'plus'); ?> Add Session</summary>
+                        <form class="session-edit-form" method="post">
+                            <?php echo court_csrf_input(); ?>
+                            <input type="hidden" name="variant_id" value="<?php echo $serviceId; ?>">
+                            <input type="hidden" name="booked_count" value="0">
+                            <label><span>Session Date</span><input type="date" name="session_date" value="<?php echo date('Y-m-d'); ?>" required></label>
+                            <label><span>Start Time</span><input type="time" name="start_time" value="09:00" required></label>
+                            <label><span>End Time</span><input type="time" name="end_time" value="10:00" required></label>
+                            <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) ($service['capacity'] ?? $capacity); ?>" required></label>
+                            <label><span>Status</span><select name="status"><option value="open">Available</option><option value="full">Full</option><option value="cancelled">Closed</option></select></label>
+                            <button class="bookings-button primary" type="submit" name="action" value="create_session">Create Session</button>
+                        </form>
+                    </details>
+
+                    <div class="session-list-table">
+                        <div class="session-list-head"><span>Date</span><span>Start Time</span><span>End Time</span><span>Capacity</span><span>Booked</span><span>Status</span><span>Actions</span></div>
+                        <?php foreach ($serviceSessions as $session): ?>
+                            <?php
+                                $rawStatus = (string) ($session['status'] ?? 'open');
+                                $statusLabel = $rawStatus === 'open' ? 'Available' : ($rawStatus === 'full' ? 'Full' : 'Closed');
+                                $statusTone = $rawStatus === 'open' ? 'success' : 'warning';
+                            ?>
+                            <article>
+                                <span><?php echo court_h($session['display_date'] ?? $session['session_date'] ?? ''); ?></span>
+                                <span><?php echo court_h((new DateTimeImmutable('1970-01-01 ' . (string) $session['start_time']))->format('h:i A')); ?></span>
+                                <span><?php echo court_h((new DateTimeImmutable('1970-01-01 ' . (string) $session['end_time']))->format('h:i A')); ?></span>
+                                <span><?php echo number_format((int) ($session['capacity'] ?? 0)); ?></span>
+                                <span><?php echo number_format((int) ($session['booked_count'] ?? 0)); ?> booked</span>
+                                <span><em class="status-pill status-<?php echo $statusTone; ?>"><?php echo court_h($statusLabel); ?></em></span>
+                                <span class="session-row-actions">
+                                    <details class="session-edit-panel">
+                                        <summary><?php echo court_icon($icons, 'edit'); ?> Edit</summary>
+                                        <form class="session-edit-form" method="post">
+                                            <?php echo court_csrf_input(); ?>
+                                            <input type="hidden" name="session_id" value="<?php echo (int) $session['id']; ?>">
+                                            <input type="hidden" name="variant_id" value="<?php echo $serviceId; ?>">
+                                            <input type="hidden" name="coach_user_id" value="<?php echo (int) ($session['coach_user_id'] ?? 0); ?>">
+                                            <input type="hidden" name="booked_count" value="<?php echo (int) ($session['booked_count'] ?? 0); ?>">
+                                            <label><span>Date</span><input type="date" name="session_date" value="<?php echo court_h($session['session_date']); ?>" required></label>
+                                            <label><span>Start</span><input type="time" name="start_time" value="<?php echo court_h(substr((string) $session['start_time'], 0, 5)); ?>" required></label>
+                                            <label><span>End</span><input type="time" name="end_time" value="<?php echo court_h(substr((string) $session['end_time'], 0, 5)); ?>" required></label>
+                                            <label><span>Capacity</span><input type="number" name="capacity" min="<?php echo max(1, (int) ($session['booked_count'] ?? 0)); ?>" value="<?php echo (int) $session['capacity']; ?>" required></label>
+                                            <label><span>Status</span><select name="status"><option value="open" <?php echo $rawStatus === 'open' ? 'selected' : ''; ?>>Available</option><option value="full" <?php echo $rawStatus === 'full' ? 'selected' : ''; ?>>Full</option><option value="cancelled" <?php echo $rawStatus === 'cancelled' ? 'selected' : ''; ?>>Closed</option></select></label>
+                                            <button type="submit" name="action" value="update_session">Save Session</button>
+                                        </form>
+                                    </details>
+                                    <form method="post">
+                                        <?php echo court_csrf_input(); ?>
+                                        <input type="hidden" name="session_id" value="<?php echo (int) $session['id']; ?>">
+                                        <input type="hidden" name="status" value="<?php echo $rawStatus === 'cancelled' ? 'open' : 'cancelled'; ?>">
+                                        <button class="icon-button danger" type="submit" name="action" value="set_session_status" aria-label="Archive session"><?php echo court_icon($icons, 'trash'); ?></button>
+                                    </form>
+                                </span>
                             </article>
                         <?php endforeach; ?>
+                        <?php if (!$serviceSessions): ?><p class="catalog-empty-state">No sessions created for this service yet.</p><?php endif; ?>
                     </div>
-                    <footer><?php echo court_icon($icons, 'target'); ?> Drag to reorder services</footer>
-                </article>
+                </section>
             </div>
+        <?php endforeach; ?>
+        <div class="court-photo-modal" id="courtPhotoModal" aria-hidden="true">
+            <div class="court-photo-modal-backdrop" data-close-photo-modal></div>
+            <section class="court-photo-modal-panel" role="dialog" aria-modal="true" aria-labelledby="courtPhotoModalTitle">
+                <header>
+                    <div><h2 id="courtPhotoModalTitle">Manage Photos</h2><p>Upload, set hero image, reorder, and soft delete photos for <?php echo court_h($pageTitle); ?>.</p></div>
+                    <button type="button" data-close-photo-modal aria-label="Close photo manager">&times;</button>
+                </header>
 
-            <aside class="court-preview-column">
-                <article class="court-photo-card">
-                    <header><h2>Photos</h2><button type="button"><?php echo court_icon($icons, 'gear'); ?> Manage Photos</button></header>
-                    <div class="hero-photo"><img src="<?php echo court_asset($heroImage); ?>" alt="<?php echo htmlspecialchars($pageTitle); ?>"><span>Hero Image</span></div>
-                    <div class="gallery-grid"><?php foreach ($gallery as $index => $photo): ?><img src="<?php echo court_asset($photo); ?>" alt="Court photo <?php echo $index + 1; ?>"><?php endforeach; ?></div>
-                </article>
+                <form class="court-photo-upload" method="post" enctype="multipart/form-data">
+                    <?php echo court_csrf_input(); ?>
+                    <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
+                    <label><span>Choose File</span><input type="file" name="court_photo" accept="image/*" required></label>
+                    <label><span>Sort Order</span><input type="number" name="sort_order" min="0" value="<?php echo count($mediaRows); ?>"></label>
+                    <label class="catalog-check"><input type="checkbox" name="is_hero" value="1"> Set as Hero Image</label>
+                    <button type="submit" name="action" value="upload_court_photo">Upload Photo</button>
+                </form>
 
-                <details class="website-preview-card">
-                    <summary>Website Preview</summary>
-                    <div class="website-preview">
-                        <div class="preview-copy"><h3><?php echo htmlspecialchars($pageTitle); ?></h3><strong>₱<?php echo number_format($basePrice, 2); ?> / session</strong><p><?php echo htmlspecialchars($subtitle); ?></p><div class="preview-stats"><span><?php echo court_icon($icons, 'users'); ?><b><?php echo number_format($capacity); ?></b><small>Capacity</small></span><span><?php echo court_icon($icons, 'courts'); ?><b>Indoor</b><small>Court</small></span><span><?php echo court_icon($icons, 'calendar'); ?><b>8AM - 10PM</b><small>Operating</small></span></div></div>
-                        <img src="<?php echo court_asset($heroImage); ?>" alt="<?php echo htmlspecialchars($pageTitle); ?> preview">
-                        <section><h4>Services</h4><div class="preview-services"><?php foreach (array_slice($services, 0, 4) as $service): ?><article><span><?php echo court_icon($icons, service_icon_name($service['name'])); ?></span><strong><?php echo htmlspecialchars($service['name']); ?></strong><b>₱<?php echo number_format((float) $service['price'], 0); ?></b><small><?php echo htmlspecialchars($service['category']); ?></small></article><?php endforeach; ?></div></section>
-                        <button type="button">Book now</button>
+                <?php if ($mediaRows): ?>
+                    <div class="court-media-list">
+                        <form id="photoOrderForm" method="post">
+                            <?php echo court_csrf_input(); ?>
+                            <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
+                        </form>
+                        <div class="court-media-grid">
+                            <?php foreach ($mediaRows as $media): ?>
+                                <article class="court-media-card" draggable="true" data-media-card>
+                                    <span class="media-drag-handle" aria-label="Sort handle">Drag</span>
+                                    <img src="<?php echo court_asset((string) $media['image_path']); ?>" alt="Court media">
+                                    <?php if (!empty($media['is_hero'])): ?><b>Hero Image</b><?php endif; ?>
+                                    <label><span>Sort</span><input form="photoOrderForm" type="number" name="media_order[<?php echo (int) $media['id']; ?>]" min="0" value="<?php echo (int) $media['sort_order']; ?>"></label>
+                                    <details class="media-action-menu">
+                                        <summary>Actions</summary>
+                                        <form method="post">
+                                            <?php echo court_csrf_input(); ?>
+                                            <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
+                                            <input type="hidden" name="media_id" value="<?php echo (int) $media['id']; ?>">
+                                            <button type="submit" name="action" value="set_hero_media" <?php echo !empty($media['is_hero']) ? 'disabled' : ''; ?>>Set as Hero</button>
+                                        </form>
+                                        <form method="post" enctype="multipart/form-data">
+                                            <?php echo court_csrf_input(); ?>
+                                            <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
+                                            <input type="hidden" name="media_id" value="<?php echo (int) $media['id']; ?>">
+                                            <label class="replace-photo-control"><span>Replace</span><input type="file" name="replacement_photo" accept="image/*" required></label>
+                                            <button type="submit" name="action" value="replace_court_media">Replace Photo</button>
+                                        </form>
+                                        <form method="post">
+                                            <?php echo court_csrf_input(); ?>
+                                            <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
+                                            <input type="hidden" name="media_id" value="<?php echo (int) $media['id']; ?>">
+                                            <button class="danger" type="submit" name="action" value="delete_court_media">Delete</button>
+                                        </form>
+                                    </details>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                        <footer>
+                            <button class="bookings-button ghost" type="button" data-close-photo-modal>Close</button>
+                            <button class="bookings-button primary" form="photoOrderForm" type="submit" name="action" value="update_media_order">Save Photo Order</button>
+                        </footer>
                     </div>
-                    <footer><span>This is how your court page looks on the public website.</span><a href="<?php echo court_public_url('courts.php#' . $courtSlug); ?>">View Full Page</a></footer>
-                </details>
-            </aside>
-        </section>
+                <?php else: ?>
+                    <p class="catalog-empty-state">No photos yet. Upload the first court photo above.</p>
+                <?php endif; ?>
+            </section>
+        </div>
         <?php endif; ?>
     </main>
 </div>
 
+<script>
+(function(){
+    const form = document.getElementById('courtDetailsForm');
+    if (!form) return;
+
+    const money = value => '₱' + Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const writeAll = (selector, value) => document.querySelectorAll(selector).forEach(node => { node.textContent = value; });
+    const sync = () => {
+        const data = new FormData(form);
+        writeAll('[data-preview-name]', data.get('name') || 'Court');
+        writeAll('[data-preview-description]', data.get('description') || 'Court description');
+        writeAll('[data-preview-price]', money(data.get('base_price')));
+        writeAll('[data-preview-capacity]', Number(data.get('capacity') || 0).toLocaleString('en-PH'));
+        writeAll('[data-preview-status]', String(data.get('status') || 'active').replace(/^\w/, letter => letter.toUpperCase()));
+        writeAll('[data-preview-type]', data.get('court_type') || 'Indoor');
+        writeAll('[data-preview-hours]', data.get('operating_hours') || '8AM - 10PM');
+    };
+    form.addEventListener('input', sync);
+    form.addEventListener('change', sync);
+})();
+(function(){
+    const tabs = document.querySelectorAll('[data-court-tab]');
+    const panels = document.querySelectorAll('[data-court-panel]');
+    if (!tabs.length || !panels.length) return;
+
+    const activate = key => {
+        tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.courtTab === key));
+        panels.forEach(panel => panel.classList.toggle('is-active', panel.dataset.courtPanel === key));
+    };
+
+    tabs.forEach(tab => tab.addEventListener('click', () => activate(tab.dataset.courtTab)));
+})();
+(function(){
+    const modal = document.getElementById('courtPhotoModal');
+    if (!modal) return;
+
+    const openButtons = document.querySelectorAll('[data-open-photo-modal]');
+    const closeButtons = modal.querySelectorAll('[data-close-photo-modal]');
+    const open = () => {
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('photo-modal-open');
+    };
+    const close = () => {
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('photo-modal-open');
+    };
+
+    openButtons.forEach(button => button.addEventListener('click', open));
+    closeButtons.forEach(button => button.addEventListener('click', close));
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && modal.classList.contains('is-open')) close();
+    });
+
+    const grid = modal.querySelector('.court-media-grid');
+    if (!grid) return;
+
+    let draggedCard = null;
+    const syncSortInputs = () => {
+        grid.querySelectorAll('[data-media-card]').forEach((card, index) => {
+            const input = card.querySelector('input[name^="media_order"]');
+            if (input) input.value = String(index * 10);
+        });
+    };
+
+    grid.addEventListener('dragstart', event => {
+        const card = event.target.closest('[data-media-card]');
+        if (!card) return;
+        draggedCard = card;
+        card.classList.add('is-dragging');
+        event.dataTransfer.effectAllowed = 'move';
+    });
+
+    grid.addEventListener('dragover', event => {
+        event.preventDefault();
+        const target = event.target.closest('[data-media-card]');
+        if (!draggedCard || !target || target === draggedCard) return;
+        const box = target.getBoundingClientRect();
+        const insertAfter = event.clientY > box.top + box.height / 2;
+        grid.insertBefore(draggedCard, insertAfter ? target.nextSibling : target);
+    });
+
+    grid.addEventListener('dragend', () => {
+        if (draggedCard) draggedCard.classList.remove('is-dragging');
+        draggedCard = null;
+        syncSortInputs();
+    });
+})();
+(function(){
+    const modals = document.querySelectorAll('[data-session-modal]');
+    if (!modals.length) return;
+
+    const closeAll = () => {
+        modals.forEach(modal => {
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+        });
+        document.body.classList.remove('session-modal-open');
+    };
+
+    document.querySelectorAll('[data-open-session-modal]').forEach(button => {
+        button.addEventListener('click', () => {
+            const modal = document.querySelector('[data-session-modal="' + button.dataset.openSessionModal + '"]');
+            if (!modal) return;
+            closeAll();
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('session-modal-open');
+        });
+    });
+
+    document.querySelectorAll('[data-close-session-modal]').forEach(button => {
+        button.addEventListener('click', closeAll);
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeAll();
+    });
+})();
+</script>
 <script src="<?php echo pickled_admin_asset_url('js/admin.js'); ?>"></script>
 </body>
 </html>

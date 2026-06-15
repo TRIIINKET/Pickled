@@ -6,7 +6,7 @@ pickled_init_csrf();
 $pageTitle  = 'Courts - Pickled';
 $activePage = 'courts.php';
 $basePath   = '../';
-$extraHead  = '<link rel="stylesheet" href="../assets/css/courts.css?v=20260615a"/>';
+$extraHead  = '<link rel="stylesheet" href="../assets/css/courts.css?v=20260615b"/>';
 
 function pickled_catalog_note(array $variant): string
 {
@@ -39,6 +39,29 @@ function pickled_catalog_option(array $variant): array
     $option['dateMode'] = 'coach';
   }
   return $option;
+}
+
+function pickled_court_image_path(string $path): string
+{
+  $path = str_replace('\\', '/', trim($path));
+  $path = preg_replace('#^(\.\./)?assets/#', '', $path) ?? $path;
+  return '../assets/' . ltrim($path, '/');
+}
+
+function pickled_court_media(int $courtId): array
+{
+  if ($courtId <= 0) {
+    return [];
+  }
+
+  try {
+    $stmt = Database::connection()->prepare("SELECT * FROM court_media WHERE court_id = :court_id AND status = 'active' ORDER BY is_hero DESC, sort_order ASC, id ASC");
+    $stmt->execute(['court_id' => $courtId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  } catch (Throwable $e) {
+    error_log('Public court media load failed: ' . $e->getMessage());
+    return [];
+  }
 }
 
 function pickled_public_time_range(string $start, string $end): string
@@ -110,8 +133,17 @@ $courtImages = [];
 foreach ($catalogCourts as $catalogCourt) {
   $slug = (string) $catalogCourt['slug'];
   $assets = $courtAssetDefaults[$slug] ?? $courtAssetDefaults['green'];
+  $mediaRows = pickled_court_media((int) ($catalogCourt['id'] ?? 0));
+  if ($mediaRows) {
+    $assets['image'] = pickled_court_image_path((string) $mediaRows[0]['image_path']);
+    $assets['thumbs'] = array_map(static fn(array $row): string => pickled_court_image_path((string) $row['image_path']), $mediaRows);
+  }
   $assets['title'] = strtoupper((string) $catalogCourt['name']);
   $assets['tag'] = $assets['tag'] ?? 'BOOK NOW';
+  $assets['description'] = trim((string) ($catalogCourt['description'] ?? '')) ?: ($slug === 'pink' ? 'Youth-friendly indoor court' : 'Main standard indoor court');
+  $assets['capacity'] = (int) ($catalogCourt['capacity'] ?? 0);
+  $assets['operating_hours'] = trim((string) ($catalogCourt['operating_hours'] ?? '')) ?: '8AM - 10PM';
+  $assets['court_type'] = trim((string) ($catalogCourt['court_type'] ?? '')) ?: 'Indoor';
   $courtImages[$slug] = $assets;
 }
 
@@ -144,6 +176,10 @@ foreach ($courtImages as $key => $courtImage) {
     'alt' => $courtImage['title'] . ' main view',
     'thumbAlt' => $courtImage['title'] . ' view',
     'thumbs' => $courtImage['thumbs'],
+    'description' => $courtImage['description'] ?? '',
+    'capacity' => $courtImage['capacity'] ?? 0,
+    'operatingHours' => $courtImage['operating_hours'] ?? '8AM - 10PM',
+    'courtType' => $courtImage['court_type'] ?? 'Indoor',
   ];
 }
 
@@ -207,6 +243,12 @@ foreach ($coachRows as $index => $coachRow) {
         <p class="court-kicker">PICKLE &amp;</p>
         <h2 id="selectedCourtTitle"><?= htmlspecialchars($defaultRate['court']) ?></h2>
         <p class="court-price"><span id="selectedCourtPrice">₱<?= number_format((float) $defaultRate['price'], 2) ?></span> <small>/ session</small></p>
+        <p class="court-description" id="selectedCourtDescription"><?= htmlspecialchars((string) ($defaultCourtAssets['description'] ?? '')) ?></p>
+        <div class="court-meta-row" aria-label="Selected court details">
+          <span><strong id="selectedCourtCapacity"><?= (int) ($defaultCourtAssets['capacity'] ?? 0) ?: '—' ?></strong> capacity</span>
+          <span><strong id="selectedCourtType"><?= htmlspecialchars((string) ($defaultCourtAssets['court_type'] ?? 'Indoor')) ?></strong> court</span>
+          <span><strong id="selectedCourtHours"><?= htmlspecialchars((string) ($defaultCourtAssets['operating_hours'] ?? '8AM - 10PM')) ?></strong></span>
+        </div>
 
         <div class="rate-list" aria-label="Court rates">
           <?php foreach (($courtRateCatalog[$defaultCourtKey] ?? []) as $index => $rate): ?>
@@ -830,16 +872,32 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     courtMainImage.src = button.dataset.gallerySrc;
   });
 
-  document.querySelectorAll('[data-jump-court]').forEach(button => {
-    button.addEventListener('click', () => {
-      document.getElementById('court-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      const courtKey = button.dataset.jumpCourt || defaultCourtKey;
+  function selectCourt(courtKey, shouldScroll){
       const gallery = courtGalleryCatalog[courtKey] || courtGalleryCatalog[defaultCourtKey];
       document.getElementById('selectedCourtTitle').textContent = gallery ? gallery.title : state.court;
+      if (gallery) {
+        document.getElementById('selectedCourtDescription').textContent = gallery.description || '';
+        document.getElementById('selectedCourtCapacity').textContent = gallery.capacity || '—';
+        document.getElementById('selectedCourtType').textContent = gallery.courtType || 'Indoor';
+        document.getElementById('selectedCourtHours').textContent = gallery.operatingHours || '8AM - 10PM';
+      }
       renderCourtGallery(courtKey);
       renderRateOptions(courtKey);
+      if (shouldScroll) {
+        document.getElementById('court-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+  }
+
+  document.querySelectorAll('[data-jump-court]').forEach(button => {
+    button.addEventListener('click', () => {
+      selectCourt(button.dataset.jumpCourt || defaultCourtKey, true);
     });
   });
+
+  const initialCourtHash = window.location.hash.replace('#', '');
+  if (initialCourtHash && courtGalleryCatalog[initialCourtHash]) {
+    selectCourt(initialCourtHash, false);
+  }
 
   rateList.addEventListener('click', event => {
     const button = event.target.closest('.rate-option');

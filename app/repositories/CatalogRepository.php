@@ -42,14 +42,10 @@ final class CatalogRepository
     public function createCourt(array $data): int
     {
         $stmt = Database::connection()->prepare(
-            'INSERT INTO courts (name, slug, status)
-             VALUES (:name, :slug, :status)'
+            'INSERT INTO courts (name, slug, status, description, base_price, capacity, operating_hours, court_type)
+             VALUES (:name, :slug, :status, :description, :base_price, :capacity, :operating_hours, :court_type)'
         );
-        $stmt->execute([
-            'name' => $data['name'],
-            'slug' => $data['slug'],
-            'status' => $data['status'],
-        ]);
+        $stmt->execute($this->courtParams($data));
 
         return (int) Database::connection()->lastInsertId();
     }
@@ -58,15 +54,17 @@ final class CatalogRepository
     {
         $stmt = Database::connection()->prepare(
             'UPDATE courts
-             SET name = :name, slug = :slug, status = :status
+             SET name = :name,
+                 slug = :slug,
+                 status = :status,
+                 description = :description,
+                 base_price = :base_price,
+                 capacity = :capacity,
+                 operating_hours = :operating_hours,
+                 court_type = :court_type
              WHERE id = :id'
         );
-        return $stmt->execute([
-            'id' => $id,
-            'name' => $data['name'],
-            'slug' => $data['slug'],
-            'status' => $data['status'],
-        ]);
+        return $stmt->execute($this->courtParams($data) + ['id' => $id]);
     }
 
     public function setCourtStatus(int $id, string $status): bool
@@ -114,7 +112,7 @@ final class CatalogRepository
         if (!$includeInactive) {
             $sql .= " AND v.active = 1 AND c.status = 'active'";
         }
-        $sql .= ' ORDER BY v.id ASC';
+        $sql .= ' ORDER BY ' . $this->variantOrderSql();
 
         $stmt = Database::connection()->prepare($sql);
         $stmt->execute(['court_slug' => $courtSlug]);
@@ -130,7 +128,7 @@ final class CatalogRepository
         if (!$includeInactive) {
             $sql .= " AND v.active = 1 AND c.status = 'active'";
         }
-        $sql .= ' ORDER BY v.id ASC';
+        $sql .= ' ORDER BY ' . $this->variantOrderSql();
 
         return Database::connection()->query($sql)->fetchAll() ?: [];
     }
@@ -143,7 +141,7 @@ final class CatalogRepository
         if (!$includeInactive) {
             $sql .= " WHERE v.active = 1 AND c.status = 'active'";
         }
-        $sql .= ' ORDER BY c.id ASC, v.id ASC';
+        $sql .= ' ORDER BY c.id ASC, ' . $this->variantOrderSql();
 
         return Database::connection()->query($sql)->fetchAll() ?: [];
     }
@@ -152,9 +150,9 @@ final class CatalogRepository
     {
         $stmt = Database::connection()->prepare(
             'INSERT INTO booking_variants
-                (court_id, slug, name, category, duration_label, price, participants_limit, capacity, image, active)
+                (court_id, slug, name, category, duration_label, price, participants_limit, capacity, image, active, sort_order)
              VALUES
-                (:court_id, :slug, :name, :category, :duration_label, :price, :participants_limit, :capacity, :image, :active)'
+                (:court_id, :slug, :name, :category, :duration_label, :price, :participants_limit, :capacity, :image, :active, :sort_order)'
         );
         $stmt->execute($this->variantParams($data));
 
@@ -175,7 +173,8 @@ final class CatalogRepository
                  participants_limit = :participants_limit,
                  capacity = :capacity,
                  image = :image,
-                 active = :active
+                 active = :active,
+                 sort_order = :sort_order
              WHERE id = :id'
         );
         return $stmt->execute($params);
@@ -220,6 +219,44 @@ final class CatalogRepository
             'capacity' => (int) $data['capacity'],
             'image' => $data['image'] ?? null,
             'active' => !empty($data['active']) ? 1 : 0,
+            'sort_order' => (int) ($data['sort_order'] ?? 0),
+        ];
+    }
+
+    private function variantOrderSql(): string
+    {
+        return $this->columnExists('booking_variants', 'sort_order') ? 'v.sort_order ASC, v.id ASC' : 'v.id ASC';
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        try {
+            $stmt = Database::connection()->prepare('
+                SELECT 1
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = :table_name
+                  AND COLUMN_NAME = :column_name
+                LIMIT 1
+            ');
+            $stmt->execute(['table_name' => $table, 'column_name' => $column]);
+            return (bool) $stmt->fetch();
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function courtParams(array $data): array
+    {
+        return [
+            'name' => $data['name'],
+            'slug' => $data['slug'],
+            'status' => $data['status'],
+            'description' => $data['description'] ?? null,
+            'base_price' => (float) ($data['base_price'] ?? 0),
+            'capacity' => (int) ($data['capacity'] ?? 1),
+            'operating_hours' => $data['operating_hours'] ?? null,
+            'court_type' => $data['court_type'] ?? null,
         ];
     }
 }

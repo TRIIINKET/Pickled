@@ -43,6 +43,11 @@ CREATE TABLE `courts` (
   `name` varchar(80) NOT NULL,
   `slug` varchar(80) NOT NULL,
   `status` varchar(40) NOT NULL,
+  `description` text DEFAULT NULL,
+  `base_price` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `capacity` int(10) unsigned NOT NULL DEFAULT 1,
+  `operating_hours` varchar(100) DEFAULT NULL,
+  `court_type` varchar(100) DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
@@ -118,6 +123,7 @@ CREATE TABLE `booking_variants` (
   `capacity` int(10) unsigned NOT NULL,
   `image` varchar(255) DEFAULT NULL,
   `active` tinyint(1) NOT NULL DEFAULT 1,
+  `sort_order` int(11) NOT NULL DEFAULT 0,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
@@ -132,6 +138,24 @@ CREATE TABLE `booking_variants` (
   CONSTRAINT `chk_booking_variants_capacity` CHECK (`capacity` > 0),
   CONSTRAINT `chk_booking_variants_active` CHECK (`active` in (0,1))
 ) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `court_media`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `court_media` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `court_id` int(10) unsigned NOT NULL,
+  `image_path` varchar(255) NOT NULL,
+  `image_type` varchar(50) NOT NULL DEFAULT 'gallery',
+  `is_hero` tinyint(1) NOT NULL DEFAULT 0,
+  `sort_order` int(11) NOT NULL DEFAULT 0,
+  `status` varchar(20) NOT NULL DEFAULT 'active',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_court_media_court` (`court_id`,`status`,`sort_order`),
+  CONSTRAINT `fk_court_media_court` FOREIGN KEY (`court_id`) REFERENCES `courts` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `sessions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

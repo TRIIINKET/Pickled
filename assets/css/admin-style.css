@@ -2148,6 +2148,7 @@ body.admin-dashboard-body {
 }
 
 .booking-filter-bar select,
+.booking-filter-bar input[type="search"],
 .booking-filter-bar input[type="date"],
 .booking-filter-bar button {
     min-height: 44px;
@@ -3530,7 +3531,7 @@ body.admin-dashboard-body {
 
 /* Court catalog manager */
 .court-manager-main .admin-topbar {
-    margin-bottom: 18px;
+    margin-bottom: 12px;
 }
 
 .court-manager-main .admin-topbar h1 {
@@ -3562,6 +3563,49 @@ body.admin-dashboard-body {
     font-weight: 750;
 }
 
+.court-manager-main .catalog-admin-panel {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.court-manager-main .catalog-admin-panel details {
+    min-width: 0;
+    box-shadow: 0 8px 18px rgba(31, 49, 31, 0.035);
+}
+
+.court-manager-main .catalog-admin-panel details[open] {
+    grid-column: 1 / -1;
+}
+
+.court-manager-main .catalog-admin-panel summary {
+    min-height: 52px;
+    padding: 12px 16px;
+    font-size: 15px;
+}
+
+.court-manager-main .catalog-admin-panel summary svg {
+    width: 17px;
+    height: 17px;
+}
+
+.court-manager-main .catalog-admin-form {
+    grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
+    gap: 10px;
+    padding: 12px 16px 16px;
+    border-top: 1px solid rgba(27, 69, 19, 0.08);
+}
+
+.court-manager-main .catalog-admin-form-wide,
+.court-manager-main .catalog-variant-form {
+    grid-template-columns: repeat(5, minmax(130px, 1fr));
+}
+
+.court-manager-main .catalog-admin-list {
+    padding: 12px 16px 16px;
+    border-top: 1px solid rgba(27, 69, 19, 0.08);
+}
+
 .court-breadcrumb svg {
     width: 15px;
     height: 15px;
@@ -3587,22 +3631,29 @@ body.admin-dashboard-body {
     gap: 34px;
 }
 
-.court-tabs a {
+.court-tabs a,
+.court-tabs button {
     position: relative;
     min-height: 44px;
     display: inline-flex;
     align-items: center;
+    border: 0;
+    background: transparent;
     color: #344054;
     font-size: 14px;
     font-weight: 850;
     text-decoration: none;
+    font-family: inherit;
+    cursor: pointer;
 }
 
-.court-tabs a.active {
+.court-tabs a.active,
+.court-tabs button.active {
     color: var(--green);
 }
 
-.court-tabs a.active::after {
+.court-tabs a.active::after,
+.court-tabs button.active::after {
     content: "";
     position: absolute;
     left: 0;
@@ -3615,8 +3666,20 @@ body.admin-dashboard-body {
 
 .court-editor-layout {
     display: grid;
-    grid-template-columns: minmax(0, 4fr) minmax(250px, 1fr);
-    gap: 22px;
+    gap: 18px;
+}
+
+.court-tab-panels,
+.court-tab-panel {
+    min-width: 0;
+}
+
+.court-tab-panel {
+    display: none;
+}
+
+.court-tab-panel.is-active {
+    display: block;
 }
 
 .court-editor-column,
@@ -3625,6 +3688,38 @@ body.admin-dashboard-body {
     align-content: start;
     gap: 18px;
     min-width: 0;
+}
+
+.court-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.court-stats-grid article {
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid rgba(17,24,39,.08);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 12px 28px rgba(17,24,39,.035);
+}
+
+.court-stats-grid span {
+    display: block;
+    color: #667085;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.court-stats-grid strong {
+    display: block;
+    margin-top: 8px;
+    color: #111827;
+    font-size: 18px;
+    font-weight: 950;
+    letter-spacing: -.03em;
+    overflow-wrap: anywhere;
 }
 
 .court-info-card,
@@ -3719,7 +3814,11 @@ details.private-preview-card[open] summary::after {
 
 .court-info-card button,
 .catalog-manager-card header button,
+.catalog-manager-card header a,
 .court-photo-card header button,
+.court-details-editor summary,
+.court-photo-manager summary,
+.service-edit-details summary,
 .service-actions button {
     min-height: 38px;
     display: inline-flex;
@@ -3734,11 +3833,190 @@ details.private-preview-card[open] summary::after {
     font: inherit;
     font-size: 13px;
     font-weight: 850;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.court-details-editor,
+.court-photo-manager,
+.service-edit-details,
+.inline-create-panel {
+    position: relative;
+}
+
+.court-details-editor summary,
+.court-photo-manager summary,
+.service-edit-details summary,
+.inline-create-panel summary {
+    list-style: none;
+}
+
+.court-details-editor summary::-webkit-details-marker,
+.court-photo-manager summary::-webkit-details-marker,
+.service-edit-details summary::-webkit-details-marker,
+.inline-create-panel summary::-webkit-details-marker {
+    display: none;
+}
+
+.court-details-form,
+.court-photo-upload,
+.court-media-list,
+.service-edit-form,
+.inline-create-panel .catalog-admin-form {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 10px);
+    z-index: 20;
+    width: min(720px, calc(100vw - 48px));
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid rgba(17,24,39,.10);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 22px 48px rgba(17,24,39,.14);
+}
+
+.inline-create-panel summary {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 14px;
+    border: 1px solid rgba(38,68,20,.16);
+    border-radius: 9px;
+    background: #fff;
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 850;
+    cursor: pointer;
+}
+
+.inline-create-panel .catalog-admin-form {
+    width: min(860px, calc(100vw - 48px));
+}
+
+.service-edit-form {
+    width: min(620px, calc(100vw - 48px));
+}
+
+.court-photo-upload,
+.court-media-list {
+    width: min(540px, calc(100vw - 48px));
+}
+
+.court-details-form label,
+.court-photo-upload label,
+.court-media-list label,
+.service-edit-form label {
+    display: grid;
+    gap: 7px;
+    color: #344054;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.court-details-form input,
+.court-details-form select,
+.court-details-form textarea,
+.court-photo-upload input,
+.court-media-list input,
+.service-edit-form input,
+.service-edit-form select,
+.service-edit-form textarea {
+    width: 100%;
+    min-height: 42px;
+    padding: 10px 12px;
+    border: 1px solid rgba(17,24,39,.14);
+    border-radius: 9px;
+    background: #fff;
+    color: #111827;
+    font: inherit;
+    font-size: 13px;
+}
+
+.court-details-form textarea,
+.service-edit-form textarea {
+    resize: vertical;
+}
+
+.court-details-form button,
+.court-photo-upload button,
+.court-media-list button,
+.service-edit-form button {
+    min-height: 42px;
+    border-radius: 9px;
+    background: var(--lime);
+    color: var(--green);
+    font-weight: 950;
+}
+
+.court-details-form-static {
+    position: static;
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 18px;
+    box-shadow: none;
+}
+
+.court-details-form-static label:nth-of-type(2) {
+    grid-column: span 2;
+}
+
+.court-media-list {
+    position: static;
+    width: 100%;
+    margin-top: 12px;
+    box-shadow: none;
+}
+
+.court-media-list article {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 64px 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.court-media-list img {
+    width: 64px;
+    height: 46px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.court-media-actions {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.court-media-actions form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.court-media-actions button {
+    min-height: 34px;
+    padding: 0 10px;
+    border: 1px solid rgba(38,68,20,.16);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--green);
+    font-weight: 850;
+}
+
+.court-media-actions button.danger {
+    color: var(--pink);
+    border-color: rgba(241,82,139,.22);
 }
 
 .court-info-grid {
     display: grid;
-    grid-template-columns: minmax(280px, 1.6fr) .85fr .75fr .55fr;
+    grid-template-columns: minmax(280px, 1.6fr) repeat(5, minmax(115px, .7fr));
     align-items: center;
     gap: 22px;
 }
@@ -3817,18 +4095,39 @@ details.private-preview-card[open] summary::after {
 
 .service-list {
     display: grid;
-    gap: 14px;
+    gap: 10px;
+}
+
+.service-table-head {
+    display: grid;
+    grid-template-columns: 42px minmax(220px, 1.35fr) minmax(140px, .75fr) minmax(105px, .5fr) minmax(110px, .55fr) minmax(100px, .5fr) minmax(240px, .95fr);
+    gap: 10px;
+    align-items: center;
+    padding: 0 14px 8px;
+    color: #667085;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.service-table-head span:first-child {
+    color: transparent;
+}
+
+.service-table-head span:last-child {
+    text-align: center;
 }
 
 .service-card {
     display: grid;
-    grid-template-columns: 58px minmax(180px, 1.3fr) .65fr .65fr .55fr auto;
+    grid-template-columns: 42px minmax(220px, 1.35fr) minmax(140px, .75fr) minmax(105px, .5fr) minmax(110px, .55fr) minmax(100px, .5fr) minmax(240px, .95fr);
     align-items: center;
-    gap: 18px;
-    min-height: 104px;
-    padding: 16px;
+    gap: 10px;
+    min-height: 66px;
+    padding: 10px 14px;
     border: 1px solid rgba(17,24,39,.08);
-    border-radius: 14px;
+    border-radius: 12px;
     background: #fff;
     transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
 }
@@ -3855,17 +4154,86 @@ details.private-preview-card[open] summary::after {
     font-weight: 650;
 }
 
+.service-table-list .service-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+}
+
+.service-table-list .service-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.service-table-list .service-main strong,
+.service-table-list .service-card p strong {
+    margin: 0;
+    font-size: 13px;
+}
+
+.service-table-list .service-main small {
+    margin-top: 3px;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.service-session-summary {
+    color: var(--green) !important;
+    font-weight: 900 !important;
+}
+
+.service-table-list .service-card p {
+    margin: 0;
+}
+
+.service-table-list .service-card p small {
+    display: none;
+}
+
+.service-table-list .status-pill {
+    min-height: 28px;
+    padding: 0 12px;
+    font-size: 11px;
+}
+
 .service-actions {
     display: flex;
     align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
     gap: 8px;
 }
 
-.service-actions button:last-child {
+.session-manage-button {
+    min-width: 104px;
+}
+
+.service-actions > form .icon-button {
     width: 38px;
     padding: 0;
     color: #344054;
     border-color: transparent;
+}
+
+.archive-service-button {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid rgba(241,82,139,.22);
+    border-radius: 9px;
+    background: #fff;
+    color: var(--pink);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 850;
+    cursor: pointer;
+}
+
+.service-actions form {
+    margin: 0;
 }
 
 .catalog-manager-card footer {
@@ -3884,6 +4252,80 @@ details.private-preview-card[open] summary::after {
     aspect-ratio: 16 / 8.2;
     border-radius: 12px;
     background: #eef0ee;
+}
+
+.court-photo-card .manage-photos-trigger {
+    min-width: 142px;
+}
+
+.court-photo-card .gallery-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.court-photo-card-full h3 {
+    margin: 0 0 12px;
+    color: #111827;
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.photos-tab-grid {
+    display: grid;
+    grid-template-columns: minmax(320px, .85fr) minmax(0, 1.15fr);
+    gap: 18px;
+}
+
+.photos-tab-grid .gallery-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-top: 0;
+}
+
+.schedule-table {
+    display: grid;
+    gap: 10px;
+}
+
+.schedule-table-head,
+.schedule-table article {
+    display: grid;
+    grid-template-columns: minmax(130px, .8fr) minmax(130px, .8fr) minmax(200px, 1.2fr) minmax(90px, .5fr) minmax(100px, .5fr) minmax(144px, .7fr);
+    gap: 12px;
+    align-items: center;
+}
+
+.schedule-table-head {
+    padding: 0 14px 8px;
+    color: #667085;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.schedule-table article {
+    min-height: 58px;
+    padding: 12px 14px;
+    border: 1px solid rgba(17,24,39,.08);
+    border-radius: 12px;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.schedule-table-head span:last-child,
+.schedule-actions {
+    text-align: center;
+}
+
+.schedule-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.schedule-actions form {
+    margin: 0;
 }
 
 .hero-photo img,
@@ -3934,6 +4376,29 @@ details.private-preview-card[open] summary::after {
     border: 1px solid rgba(17,24,39,.08);
     border-radius: 14px;
     background: #fff;
+}
+
+.court-preview-column .website-preview {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px;
+}
+
+.court-preview-column .website-preview > img {
+    min-height: 170px;
+    max-height: 220px;
+}
+
+.court-preview-column .preview-services {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.court-preview-column .preview-services article {
+    padding: 9px;
+}
+
+.court-preview-column .preview-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .preview-copy h3 {
@@ -4100,6 +4565,442 @@ details.private-preview-card[open] summary::after {
     text-decoration: none;
 }
 
+.court-photo-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    padding: 24px;
+}
+
+.court-photo-modal.is-open {
+    display: grid;
+    place-items: center;
+}
+
+.court-photo-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(17, 24, 39, .38);
+    backdrop-filter: blur(3px);
+}
+
+.court-photo-modal-panel {
+    position: relative;
+    z-index: 1;
+    width: min(980px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    padding: 22px;
+    border: 1px solid rgba(17,24,39,.10);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 30px 70px rgba(17,24,39,.22);
+}
+
+.court-photo-modal-panel > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.court-photo-modal-panel h2 {
+    margin: 0;
+    color: #111827;
+    font-size: 20px;
+    letter-spacing: -.03em;
+}
+
+.court-photo-modal-panel p {
+    margin: 6px 0 0;
+    color: #667085;
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.court-photo-modal-panel > header button {
+    width: 38px;
+    height: 38px;
+    border: 1px solid rgba(17,24,39,.10);
+    border-radius: 10px;
+    background: #f7f7f2;
+    color: #111827;
+    font-size: 24px;
+    line-height: 1;
+}
+
+.court-photo-modal .court-photo-upload,
+.court-photo-modal .court-media-list {
+    position: static;
+    width: 100%;
+    display: grid;
+    border: 1px solid rgba(17,24,39,.08);
+    box-shadow: none;
+}
+
+.court-photo-modal .court-photo-upload {
+    grid-template-columns: minmax(220px, 1.2fr) 140px minmax(170px, .7fr) 170px;
+    align-items: end;
+    margin-bottom: 18px;
+}
+
+.court-photo-modal .court-media-list {
+    padding: 0;
+    border: 0;
+}
+
+.court-media-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.court-media-card {
+    position: relative;
+    display: block;
+    grid-column: auto;
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid rgba(17,24,39,.08);
+    border-radius: 12px;
+    background: #fff;
+}
+
+.court-media-card.is-dragging {
+    opacity: .55;
+    transform: scale(.985);
+}
+
+.court-media-card img {
+    width: 100%;
+    aspect-ratio: 1.35 / 1;
+    border-radius: 10px;
+    object-fit: cover;
+}
+
+.court-media-card b,
+.media-drag-handle {
+    position: absolute;
+    top: 18px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 9px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.media-drag-handle {
+    left: 18px;
+    background: rgba(255,255,255,.92);
+    color: #344054;
+}
+
+.court-media-card b {
+    right: 18px;
+    background: #e6f6e3;
+    color: var(--green);
+}
+
+.court-media-card label {
+    margin-top: 10px;
+}
+
+.media-action-menu {
+    margin-top: 10px;
+}
+
+.media-action-menu summary {
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(38,68,20,.16);
+    border-radius: 9px;
+    color: var(--green);
+    font-size: 12px;
+    font-weight: 900;
+    list-style: none;
+    cursor: pointer;
+}
+
+.media-action-menu summary::-webkit-details-marker {
+    display: none;
+}
+
+.media-action-menu[open] {
+    position: relative;
+    z-index: 2;
+}
+
+.media-action-menu[open] summary {
+    margin-bottom: 8px;
+}
+
+.media-action-menu button {
+    width: 100%;
+    min-height: 34px;
+    margin-top: 6px;
+    border: 1px solid rgba(38,68,20,.16);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--green);
+    font-weight: 850;
+}
+
+.media-action-menu button.danger {
+    color: var(--pink);
+    border-color: rgba(241,82,139,.22);
+}
+
+.media-action-menu form {
+    margin: 0;
+}
+
+.replace-photo-control {
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px dashed rgba(38,68,20,.18);
+    border-radius: 8px;
+    background: #fbfcf8;
+}
+
+.replace-photo-control input {
+    min-height: 34px;
+    padding: 6px;
+    font-size: 11px;
+}
+
+.court-photo-modal .court-media-list footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+body.photo-modal-open {
+    overflow: hidden;
+}
+
+.court-session-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    padding: 24px;
+}
+
+.court-session-modal.is-open {
+    display: grid;
+    place-items: center;
+}
+
+.court-session-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(17, 24, 39, .38);
+    backdrop-filter: blur(3px);
+}
+
+.court-session-modal-panel {
+    position: relative;
+    z-index: 1;
+    width: min(1040px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    padding: 22px;
+    border: 1px solid rgba(17,24,39,.10);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 30px 70px rgba(17,24,39,.22);
+}
+
+.court-session-modal-panel > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.court-session-modal-panel h2 {
+    margin: 0;
+    color: #111827;
+    font-size: 20px;
+    letter-spacing: -.03em;
+}
+
+.court-session-modal-panel p {
+    margin: 6px 0 0;
+    color: #667085;
+    font-size: 13px;
+    font-weight: 750;
+}
+
+.court-session-modal-panel > header button {
+    width: 38px;
+    height: 38px;
+    border: 1px solid rgba(17,24,39,.10);
+    border-radius: 10px;
+    background: #f7f7f2;
+    color: #111827;
+    font-size: 24px;
+    line-height: 1;
+}
+
+.session-create-panel {
+    margin-bottom: 18px;
+    border: 1px solid rgba(17,24,39,.08);
+    border-radius: 12px;
+    background: #fff;
+}
+
+.session-create-panel > summary {
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 16px;
+    color: var(--green);
+    font-size: 14px;
+    font-weight: 900;
+    list-style: none;
+    cursor: pointer;
+}
+
+.session-create-panel > summary::-webkit-details-marker {
+    display: none;
+}
+
+.session-edit-form {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 16px;
+    border-top: 1px solid rgba(17,24,39,.08);
+}
+
+.session-edit-panel .session-edit-form {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 10px);
+    z-index: 30;
+    width: min(680px, calc(100vw - 64px));
+    border: 1px solid rgba(17,24,39,.10);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 22px 48px rgba(17,24,39,.14);
+}
+
+.session-edit-form label {
+    display: grid;
+    gap: 7px;
+    color: #344054;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.session-edit-form input,
+.session-edit-form select {
+    width: 100%;
+    min-height: 42px;
+    padding: 10px 12px;
+    border: 1px solid rgba(17,24,39,.14);
+    border-radius: 9px;
+    background: #fff;
+    color: #111827;
+    font: inherit;
+    font-size: 13px;
+}
+
+.session-edit-form button {
+    min-height: 42px;
+    border-radius: 9px;
+    background: var(--lime);
+    color: var(--green);
+    font-weight: 950;
+}
+
+.session-list-table {
+    display: grid;
+    gap: 10px;
+}
+
+.session-list-head,
+.session-list-table article {
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) minmax(105px, .65fr) minmax(105px, .65fr) minmax(90px, .55fr) minmax(95px, .6fr) minmax(110px, .65fr) minmax(150px, .8fr);
+    gap: 12px;
+    align-items: center;
+}
+
+.session-list-head {
+    padding: 0 14px 8px;
+    color: #667085;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.session-list-head span:last-child {
+    text-align: center;
+}
+
+.session-list-table article {
+    min-height: 58px;
+    padding: 12px 14px;
+    border: 1px solid rgba(17,24,39,.08);
+    border-radius: 12px;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.session-row-actions {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.session-row-actions form {
+    margin: 0;
+}
+
+.session-edit-panel {
+    position: relative;
+}
+
+.session-edit-panel summary {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 14px;
+    border: 1px solid rgba(38,68,20,.16);
+    border-radius: 9px;
+    background: #fff;
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 850;
+    list-style: none;
+    cursor: pointer;
+}
+
+.session-edit-panel summary::-webkit-details-marker {
+    display: none;
+}
+
+body.session-modal-open {
+    overflow: hidden;
+}
+
 .court-manager-main svg,
 .court-actions-row svg,
 .court-editor-layout svg {
@@ -4120,6 +5021,10 @@ details.private-preview-card[open] summary::after {
     .court-preview-column {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
+    .court-manager-main .catalog-admin-panel {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 920px) {
@@ -4133,9 +5038,64 @@ details.private-preview-card[open] summary::after {
     }
 
     .court-info-grid,
+    .court-stats-grid,
     .service-card,
     .website-preview,
     .court-preview-column {
+        grid-template-columns: 1fr;
+    }
+
+    .service-table-head {
+        display: none;
+    }
+
+    .service-table-list .service-card {
+        grid-template-columns: 42px minmax(0, 1fr) auto;
+        align-items: start;
+    }
+
+    .service-table-list .service-category-cell,
+    .service-table-list .service-card p {
+        grid-column: 2 / -1;
+    }
+
+    .service-table-list .service-card p small {
+        display: block;
+    }
+
+    .service-table-list .service-actions {
+        grid-column: 2 / -1;
+    }
+
+    .court-photo-modal .court-photo-upload,
+    .court-media-grid,
+    .session-edit-form,
+    .session-list-head,
+    .session-list-table article {
+        grid-template-columns: 1fr;
+    }
+
+    .court-photo-modal-panel,
+    .court-session-modal-panel {
+        width: min(100%, calc(100vw - 24px));
+        max-height: calc(100vh - 24px);
+        padding: 16px;
+    }
+
+    .session-list-head {
+        display: none;
+    }
+
+    .session-row-actions {
+        justify-content: flex-start;
+    }
+
+    .court-details-form,
+    .court-photo-upload,
+    .service-edit-form {
+        left: 0;
+        right: auto;
+        width: min(100%, calc(100vw - 32px));
         grid-template-columns: 1fr;
     }
 
@@ -4147,6 +5107,13 @@ details.private-preview-card[open] summary::after {
 
     .preview-services {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .court-manager-main .catalog-admin-panel,
+    .court-manager-main .catalog-admin-form,
+    .court-manager-main .catalog-admin-form-wide,
+    .court-manager-main .catalog-variant-form {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -4160,7 +5127,7 @@ details.private-preview-card[open] summary::after {
 
 .social-play-layout {
     display: grid;
-    grid-template-columns: minmax(0, 4fr) minmax(240px, 1fr);
+    grid-template-columns: minmax(0, 4fr) minmax(320px, .95fr);
     gap: 22px;
     align-items: start;
 }
@@ -4445,7 +5412,7 @@ details.private-preview-card[open] summary::after {
 
 .social-preview article {
     display: grid;
-    grid-template-columns: 48px minmax(0, 1fr) auto;
+    grid-template-columns: 44px minmax(0, 1fr);
     align-items: center;
     gap: 12px;
     padding: 14px;
@@ -4459,8 +5426,8 @@ details.private-preview-card[open] summary::after {
 }
 
 .social-preview article > span {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     display: grid;
     place-items: center;
     border-radius: 11px;
@@ -4482,7 +5449,9 @@ details.private-preview-card[open] summary::after {
 .social-preview strong {
     color: #111827;
     font-size: 13px;
+    line-height: 1.2;
     font-weight: 950;
+    overflow-wrap: anywhere;
 }
 
 .social-preview small {
@@ -4491,21 +5460,29 @@ details.private-preview-card[open] summary::after {
     font-size: 11px;
     line-height: 1.35;
     font-weight: 650;
+    overflow-wrap: anywhere;
 }
 
 .social-preview b {
+    grid-column: 2;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-top: 2px;
     color: var(--pink);
     font-size: 14px;
-    text-align: right;
+    text-align: left;
 }
 
 .social-preview b small {
+    margin: 0;
     color: var(--pink);
+    white-space: nowrap;
 }
 
 .social-preview button {
     width: 100%;
-    min-height: 40px;
+    min-height: 44px;
     margin-top: 14px;
     border-radius: 8px;
     background: var(--green);
@@ -4515,13 +5492,26 @@ details.private-preview-card[open] summary::after {
     font-weight: 950;
 }
 
+.social-preview-card footer {
+    align-items: stretch;
+}
+
+.social-preview-card footer span {
+    line-height: 1.35;
+}
+
+.social-preview-card footer a {
+    justify-content: center;
+    text-align: center;
+}
+
 @media (max-width: 1380px) {
     .social-play-layout {
         grid-template-columns: 1fr;
     }
 
     .social-content-column {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     }
 }
 
@@ -4573,7 +5563,7 @@ details.private-preview-card[open] summary::after {
 
 .private-admin-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 500px);
     gap: 22px;
     align-items: start;
 }
@@ -4590,6 +5580,7 @@ details.private-preview-card[open] summary::after {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 16px;
+    margin-bottom: 18px;
 }
 
 .private-admin-card,
@@ -4671,7 +5662,16 @@ details.private-preview-card[open] summary::after {
 }
 
 .private-contact-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: end;
+}
+
+.private-contact-grid label:nth-of-type(6) {
+    grid-column: span 2;
+}
+
+.private-contact-grid .bookings-button {
+    min-height: 56px;
 }
 
 .private-form-grid label.wide {
@@ -4680,6 +5680,7 @@ details.private-preview-card[open] summary::after {
 
 .private-form-grid label,
 .private-contact-grid label {
+    min-width: 0;
     display: grid;
     gap: 8px;
     color: #1f2937;
@@ -4689,7 +5690,10 @@ details.private-preview-card[open] summary::after {
 
 .private-form-grid input,
 .private-form-grid textarea,
-.private-contact-grid input {
+.private-form-grid select,
+.private-contact-grid input,
+.private-contact-grid select,
+.private-contact-grid textarea {
     width: 100%;
     min-height: 42px;
     border: 1px solid rgba(17,24,39,.14);
@@ -4703,7 +5707,8 @@ details.private-preview-card[open] summary::after {
     outline: none;
 }
 
-.private-form-grid textarea {
+.private-form-grid textarea,
+.private-contact-grid textarea {
     min-height: 104px;
     resize: vertical;
     line-height: 1.55;
@@ -4711,7 +5716,10 @@ details.private-preview-card[open] summary::after {
 
 .private-form-grid input:focus,
 .private-form-grid textarea:focus,
-.private-contact-grid input:focus {
+.private-form-grid select:focus,
+.private-contact-grid input:focus,
+.private-contact-grid select:focus,
+.private-contact-grid textarea:focus {
     border-color: rgba(38,68,20,.42);
     box-shadow: 0 0 0 3px rgba(221,226,85,.24);
 }
@@ -4925,6 +5933,10 @@ details.private-preview-card[open] summary::after {
     gap: 12px;
 }
 
+.operational-package-list {
+    gap: 14px;
+}
+
 .package-item {
     display: grid;
     grid-template-columns: 54px minmax(0, 1fr) 120px 58px 28px;
@@ -4935,6 +5947,107 @@ details.private-preview-card[open] summary::after {
     border: 1px solid rgba(17,24,39,.08);
     border-radius: 12px;
     background: #fff;
+}
+
+.operational-package-list .package-item {
+    grid-template-columns: 54px minmax(0, 1fr);
+    align-items: start;
+    min-height: 0;
+    padding: 18px;
+}
+
+.operational-package-list .package-item > form:first-of-type {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+    gap: 12px;
+    align-items: end;
+}
+
+.operational-package-list .package-item > form:last-of-type {
+    grid-column: 2;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+.operational-package-list .package-item label {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+    color: #1f2937;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.operational-package-list .package-item input,
+.operational-package-list .package-item select,
+.operational-package-list .package-item textarea {
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid rgba(17,24,39,.14);
+    border-radius: 8px;
+    background: #fff;
+    color: #111827;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 650;
+    padding: 8px 10px;
+}
+
+.operational-package-list .package-item textarea {
+    min-height: 64px;
+    resize: vertical;
+    line-height: 1.35;
+}
+
+.operational-package-list .package-item button {
+    width: auto;
+    min-height: 38px;
+    padding: 0 14px;
+    border: 1px solid rgba(38,68,20,.16);
+    border-radius: 9px;
+    color: var(--green);
+    white-space: nowrap;
+}
+
+.operational-package-list .package-item > form:last-of-type button {
+    color: #bb3a4d;
+    border-color: rgba(187,58,77,.18);
+}
+
+.operational-package-list .package-item > form:first-of-type button {
+    justify-self: start;
+}
+
+.private-row-actions form {
+    display: grid;
+    grid-template-columns: minmax(110px, .65fr) minmax(180px, 1fr) auto;
+    gap: 8px;
+    align-items: end;
+}
+
+.private-row-actions select,
+.private-row-actions textarea {
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid rgba(17,24,39,.14);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: #111827;
+    font: inherit;
+    font-size: 13px;
+}
+
+.private-row-actions textarea {
+    resize: vertical;
+    line-height: 1.35;
+}
+
+.private-row-actions button {
+    width: auto;
+    min-height: 38px;
+    padding: 0 12px;
+    border-color: rgba(38,68,20,.16);
 }
 
 .package-item > span {
@@ -5032,6 +6145,10 @@ details.private-preview-card[open] summary::after {
     .private-preview-card {
         position: static;
     }
+
+    .operational-package-list .package-item > form:first-of-type {
+        grid-template-columns: repeat(3, minmax(160px, 1fr));
+    }
 }
 
 @media (max-width: 1120px) {
@@ -5040,6 +6157,20 @@ details.private-preview-card[open] summary::after {
     .private-photo-strip,
     .private-preview-column {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .operational-package-list .package-item {
+        grid-template-columns: 1fr;
+    }
+
+    .operational-package-list .package-item > form:last-of-type {
+        grid-column: auto;
+        justify-content: flex-start;
+    }
+
+    .operational-package-list .package-item > span {
+        width: 46px;
+        height: 46px;
     }
 }
 
@@ -5060,6 +6191,16 @@ details.private-preview-card[open] summary::after {
     .private-site-gallery,
     .package-item {
         grid-template-columns: 1fr;
+    }
+
+    .private-contact-grid label:nth-of-type(6),
+    .operational-package-list .package-item > form:first-of-type,
+    .private-row-actions form {
+        grid-template-columns: 1fr;
+    }
+
+    .private-contact-grid label:nth-of-type(6) {
+        grid-column: auto;
     }
 
     .private-site-gallery .large,
@@ -5228,6 +6369,18 @@ details.private-preview-card[open] summary::after {
     font: inherit;
     font-size: 13px;
     font-weight: 850;
+}
+
+.reports-empty-state {
+    margin: 0;
+    padding: 18px;
+    border: 1px dashed rgba(38,68,20,.18);
+    border-radius: 12px;
+    background: #fbfaf6;
+    color: #667085;
+    font-size: 14px;
+    line-height: 1.5;
+    font-weight: 800;
 }
 
 .popular-service-list {

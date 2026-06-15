@@ -77,9 +77,9 @@ function reports_log_label(string $value): string {
     return ucwords(str_replace(['_', '-'], ' ', $value));
 }
 
-function reports_program_metric(?PDO $pdo, string $where, array $params, array $fallback): array {
+function reports_program_metric(?PDO $pdo, string $where, array $params): array {
     if (!$pdo) {
-        return $fallback;
+        return ['bookings' => 0, 'revenue' => 0.0];
     }
 
     $row = reports_rows($pdo, "
@@ -94,8 +94,8 @@ function reports_program_metric(?PDO $pdo, string $where, array $params, array $
     $revenue = (float) ($row['revenue'] ?? 0);
 
     return [
-        'bookings' => max($bookings, (int) $fallback['bookings']),
-        'revenue' => max($revenue, (float) $fallback['revenue']),
+        'bookings' => $bookings,
+        'revenue' => $revenue,
     ];
 }
 
@@ -138,7 +138,7 @@ $programs = [
         'short' => 'Court Green',
         'tone' => 'green',
         'icon' => 'target',
-        'metric' => reports_program_metric($pdo, "LOWER(bi.court) LIKE '%green%' AND (LOWER(bi.category) LIKE '%court%' OR LOWER(bi.name) LIKE '%rental%')", [], ['bookings' => 54, 'revenue' => 32000]),
+        'metric' => reports_program_metric($pdo, "LOWER(bi.court) LIKE '%green%' AND (LOWER(bi.category) LIKE '%court%' OR LOWER(bi.name) LIKE '%rental%')", []),
         'trend' => [18, 34, 24, 39, 28, 44, 36, 48, 43],
     ],
     'pink' => [
@@ -146,7 +146,7 @@ $programs = [
         'short' => 'Court Pink',
         'tone' => 'pink',
         'icon' => 'tag',
-        'metric' => reports_program_metric($pdo, "LOWER(bi.court) LIKE '%pink%' AND (LOWER(bi.category) LIKE '%court%' OR LOWER(bi.name) LIKE '%rental%')", [], ['bookings' => 30, 'revenue' => 18000]),
+        'metric' => reports_program_metric($pdo, "LOWER(bi.court) LIKE '%pink%' AND (LOWER(bi.category) LIKE '%court%' OR LOWER(bi.name) LIKE '%rental%')", []),
         'trend' => [20, 42, 25, 36, 22, 40, 30, 45, 38],
     ],
     'social' => [
@@ -154,7 +154,7 @@ $programs = [
         'short' => 'Social Play',
         'tone' => 'orange',
         'icon' => 'users',
-        'metric' => reports_program_metric($pdo, "LOWER(bi.category) LIKE '%social%' OR LOWER(bi.name) LIKE '%match%' OR LOWER(bi.name) LIKE '%tournament%'", [], ['bookings' => 24, 'revenue' => 12000]),
+        'metric' => reports_program_metric($pdo, "LOWER(bi.category) LIKE '%social%' OR LOWER(bi.name) LIKE '%match%' OR LOWER(bi.name) LIKE '%tournament%'", []),
         'trend' => [16, 28, 21, 34, 24, 42, 22, 35, 44],
     ],
     'private' => [
@@ -162,15 +162,15 @@ $programs = [
         'short' => 'Private Sessions',
         'tone' => 'purple',
         'icon' => 'trophy',
-        'metric' => reports_program_metric($pdo, "LOWER(bi.category) LIKE '%private%' OR LOWER(bi.name) LIKE '%private%'", [], ['bookings' => 16, 'revenue' => 10000]),
+        'metric' => reports_program_metric($pdo, "LOWER(bi.category) LIKE '%private%' OR LOWER(bi.name) LIKE '%private%'", []),
         'trend' => [12, 32, 43, 24, 35, 20, 30, 22, 36],
     ],
 ];
 
 $totalBookings = array_sum(array_map(fn($program) => (int) $program['metric']['bookings'], $programs));
 $totalRevenue = array_sum(array_map(fn($program) => (float) $program['metric']['revenue'], $programs));
-$activePlayers = max(156, (int) reports_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = 'player'", [], 156));
-$activeCoaches = max(4, (int) reports_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = 'coach'", [], 4));
+$activePlayers = (int) reports_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = 'player'", [], 0);
+$activeCoaches = (int) reports_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = 'coach'", [], 0);
 $platformFeedbackStats = $feedbackService->platformStats();
 $coachFeedbackSummary = $feedbackService->coachSummary();
 $feedbackRows = $feedbackService->allFeedback($feedbackRatingFilter, $feedbackSearch, 80);
@@ -199,14 +199,15 @@ try {
 $popularServices = [
     ['name' => 'Court Green Rental', 'bookings' => (int) $programs['green']['metric']['bookings'], 'tone' => 'green', 'icon' => 'target'],
     ['name' => 'Court Pink Rental', 'bookings' => (int) $programs['pink']['metric']['bookings'], 'tone' => 'pink', 'icon' => 'tag'],
-    ['name' => 'Open Match-Play', 'bookings' => max(24, (int) round($programs['social']['metric']['bookings'] * .6)), 'tone' => 'orange', 'icon' => 'users'],
-    ['name' => 'Weekly Tournament', 'bookings' => max(16, (int) round($programs['social']['metric']['bookings'] * .4)), 'tone' => 'purple', 'icon' => 'trophy'],
+    ['name' => 'Open Match-Play', 'bookings' => (int) round($programs['social']['metric']['bookings'] * .6), 'tone' => 'orange', 'icon' => 'users'],
+    ['name' => 'Weekly Tournament', 'bookings' => (int) round($programs['social']['metric']['bookings'] * .4), 'tone' => 'purple', 'icon' => 'trophy'],
 ];
+$popularServices = array_values(array_filter($popularServices, static fn(array $service): bool => (int) $service['bookings'] > 0));
 usort($popularServices, fn($a, $b) => $b['bookings'] <=> $a['bookings']);
 $popularTotal = max(1, array_sum(array_column($popularServices, 'bookings')));
 
 $recentBookings = reports_rows($pdo, "
-    SELECT b.reference, b.status, b.payment_status, b.created_at, u.name AS user_name,
+    SELECT b.reference, b.status, b.payment_status, b.total, b.created_at, u.name AS user_name,
            GROUP_CONCAT(DISTINCT bi.name ORDER BY bi.id SEPARATOR ', ') AS program_names
     FROM bookings b
     LEFT JOIN users u ON u.id = b.user_id
@@ -226,16 +227,6 @@ foreach ($recentBookings as $booking) {
         'badge' => pickled_booking_status_label($booking['status'] ?? 'New Booking'),
         'tone' => reports_status_key(($booking['status'] ?? '') . ' ' . ($booking['payment_status'] ?? '')),
         'icon' => 'calendar',
-    ];
-}
-
-if (!$activityFeed) {
-    $activityFeed = [
-        ['user' => 'John D.', 'activity' => 'booked Court Green Rental', 'time' => $today->format('M j, Y') . ' - 6:30 PM', 'badge' => 'New Booking', 'tone' => 'success', 'icon' => 'calendar'],
-        ['user' => 'Mia R.', 'activity' => 'joined Social Play Tournament', 'time' => $today->format('M j, Y') . ' - 5:15 PM', 'badge' => 'Registration', 'tone' => 'danger', 'icon' => 'users'],
-        ['user' => 'Coach Alex', 'activity' => 'accepted Private Coaching Session', 'time' => $today->format('M j, Y') . ' - 3:45 PM', 'badge' => 'Confirmed', 'tone' => 'warning', 'icon' => 'user'],
-        ['user' => 'Court Pink Kids Class', 'activity' => 'completed', 'time' => $today->format('M j, Y') . ' - 2:00 PM', 'badge' => 'Completed', 'tone' => 'neutral', 'icon' => 'clock'],
-        ['user' => 'Corporate Event', 'activity' => 'inquiry received', 'time' => $today->format('M j, Y') . ' - 11:20 AM', 'badge' => 'New Inquiry', 'tone' => 'success', 'icon' => 'calendar'],
     ];
 }
 ?>
@@ -269,9 +260,9 @@ if (!$activityFeed) {
         </header>
 
         <section class="reports-kpi-grid" aria-label="Reports summary metrics">
-            <article class="reports-kpi-card report-green"><div><?php echo reports_icon($icons, 'calendar'); ?></div><span>Total Bookings</span><strong><?php echo number_format($totalBookings); ?></strong><small>↑ 18% vs last 7 days</small></article>
-            <article class="reports-kpi-card report-pink"><div><?php echo reports_icon($icons, 'peso'); ?></div><span>Total Revenue</span><strong>₱<?php echo number_format($totalRevenue, 0); ?></strong><small>↑ 14% vs last 7 days</small></article>
-            <article class="reports-kpi-card report-orange"><div><?php echo reports_icon($icons, 'users'); ?></div><span>Active Players</span><strong><?php echo number_format($activePlayers); ?></strong><small>↑ 22% vs last 7 days</small></article>
+            <article class="reports-kpi-card report-green"><div><?php echo reports_icon($icons, 'calendar'); ?></div><span>Total Bookings</span><strong><?php echo number_format($totalBookings); ?></strong><small><?php echo $totalBookings > 0 ? 'Based on confirmed booking records' : 'No bookings yet'; ?></small></article>
+            <article class="reports-kpi-card report-pink"><div><?php echo reports_icon($icons, 'peso'); ?></div><span>Total Revenue</span><strong>₱<?php echo number_format($totalRevenue, 0); ?></strong><small><?php echo $totalRevenue > 0 ? 'From recorded booking items' : 'No revenue yet'; ?></small></article>
+            <article class="reports-kpi-card report-orange"><div><?php echo reports_icon($icons, 'users'); ?></div><span>Active Players</span><strong><?php echo number_format($activePlayers); ?></strong><small>Registered player accounts</small></article>
             <article class="reports-kpi-card report-purple"><div><?php echo reports_icon($icons, 'shield'); ?></div><span>Active Coaches</span><strong><?php echo number_format($activeCoaches); ?></strong><small>No change</small></article>
             <article class="reports-kpi-card report-green"><div><?php echo reports_icon($icons, 'star'); ?></div><span>Platform Rating</span><strong><?php echo number_format((float) $platformFeedbackStats['average_rating'], 1); ?></strong><small><?php echo number_format((int) $platformFeedbackStats['total_reviews']); ?> reviews</small></article>
         </section>
@@ -284,34 +275,45 @@ if (!$activityFeed) {
                         <?php $pct = (int) round(($service['bookings'] / $popularTotal) * 100); ?>
                         <article class="popular-service-item report-<?php echo $service['tone']; ?>"><b><?php echo $index + 1; ?></b><span><?php echo reports_icon($icons, $service['icon']); ?></span><div><strong><?php echo htmlspecialchars($service['name']); ?></strong><small><?php echo number_format($service['bookings']); ?> bookings</small></div><em><?php echo $pct; ?>%</em></article>
                     <?php endforeach; ?>
+                    <?php if (!$popularServices): ?>
+                        <p class="reports-empty-state">No booking activity yet. Popular services will appear after customers complete bookings.</p>
+                    <?php endif; ?>
                 </div>
             </article>
 
             <article class="reports-panel revenue-panel">
                 <header><h2>Revenue by Program</h2><button type="button">View details</button></header>
-                <div class="revenue-breakdown">
-                    <div class="reports-donut" aria-hidden="true"></div>
-                    <div class="revenue-list">
-                        <?php foreach ($programs as $program): ?>
-                            <?php $pct = $totalRevenue > 0 ? (int) round(((float) $program['metric']['revenue'] / $totalRevenue) * 100) : 0; ?>
-                            <article class="revenue-item report-<?php echo $program['tone']; ?>"><span></span><strong><?php echo htmlspecialchars($program['short']); ?></strong><i><b style="width: <?php echo min(100, max(5, $pct)); ?>%"></b></i><em>₱<?php echo number_format((float) $program['metric']['revenue'], 0); ?></em><small><?php echo $pct; ?>%</small></article>
-                        <?php endforeach; ?>
+                <?php if ($totalRevenue > 0): ?>
+                    <div class="revenue-breakdown">
+                        <div class="reports-donut" aria-hidden="true"></div>
+                        <div class="revenue-list">
+                            <?php foreach ($programs as $program): ?>
+                                <?php $pct = (int) round(((float) $program['metric']['revenue'] / $totalRevenue) * 100); ?>
+                                <article class="revenue-item report-<?php echo $program['tone']; ?>"><span></span><strong><?php echo htmlspecialchars($program['short']); ?></strong><i><b style="width: <?php echo min(100, $pct); ?>%"></b></i><em>₱<?php echo number_format((float) $program['metric']['revenue'], 0); ?></em><small><?php echo $pct; ?>%</small></article>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
-                </div>
+                <?php else: ?>
+                    <p class="reports-empty-state">No revenue data yet. Revenue breakdown will appear after paid or confirmed bookings.</p>
+                <?php endif; ?>
             </article>
         </section>
 
         <section class="reports-bottom-grid">
             <article class="reports-panel performance-panel">
                 <header><h2>Program Performance</h2></header>
-                <div class="program-performance-table">
-                    <div class="program-row head"><span>Program</span><span>Bookings</span><span>Revenue</span><span>Avg. Revenue / Booking</span><span>Trend</span></div>
-                    <?php foreach ($programs as $program): ?>
-                        <?php $avg = max(1, (int) $program['metric']['bookings']) ? ((float) $program['metric']['revenue'] / max(1, (int) $program['metric']['bookings'])) : 0; ?>
-                        <div class="program-row report-<?php echo $program['tone']; ?>"><span><i><?php echo reports_icon($icons, $program['icon']); ?></i><?php echo htmlspecialchars($program['name']); ?></span><span><?php echo number_format((int) $program['metric']['bookings']); ?></span><span>₱<?php echo number_format((float) $program['metric']['revenue'], 0); ?></span><span>₱<?php echo number_format($avg, 0); ?></span><span><svg class="trend-line" viewBox="0 0 120 52" aria-hidden="true"><?php $points = []; foreach ($program['trend'] as $pointIndex => $value) { $points[] = ($pointIndex * 15) . ',' . (52 - $value); } ?><polyline points="<?php echo implode(' ', $points); ?>"/></svg></span></div>
-                    <?php endforeach; ?>
-                    <div class="program-row total"><span>Total</span><span><?php echo number_format($totalBookings); ?></span><span>₱<?php echo number_format($totalRevenue, 0); ?></span><span>₱<?php echo number_format($totalRevenue / max(1, $totalBookings), 0); ?></span><span></span></div>
-                </div>
+                <?php if ($totalBookings > 0): ?>
+                    <div class="program-performance-table">
+                        <div class="program-row head"><span>Program</span><span>Bookings</span><span>Revenue</span><span>Avg. Revenue / Booking</span><span>Trend</span></div>
+                        <?php foreach ($programs as $program): ?>
+                            <?php $avg = (int) $program['metric']['bookings'] > 0 ? ((float) $program['metric']['revenue'] / (int) $program['metric']['bookings']) : 0; ?>
+                            <div class="program-row report-<?php echo $program['tone']; ?>"><span><i><?php echo reports_icon($icons, $program['icon']); ?></i><?php echo htmlspecialchars($program['name']); ?></span><span><?php echo number_format((int) $program['metric']['bookings']); ?></span><span>₱<?php echo number_format((float) $program['metric']['revenue'], 0); ?></span><span>₱<?php echo number_format($avg, 0); ?></span><span><svg class="trend-line" viewBox="0 0 120 52" aria-hidden="true"><?php $points = []; foreach ($program['trend'] as $pointIndex => $value) { $points[] = ($pointIndex * 15) . ',' . (52 - $value); } ?><polyline points="<?php echo implode(' ', $points); ?>"/></svg></span></div>
+                        <?php endforeach; ?>
+                        <div class="program-row total"><span>Total</span><span><?php echo number_format($totalBookings); ?></span><span>₱<?php echo number_format($totalRevenue, 0); ?></span><span>₱<?php echo number_format($totalRevenue / $totalBookings, 0); ?></span><span></span></div>
+                    </div>
+                <?php else: ?>
+                    <p class="reports-empty-state">No program performance yet. This table will populate after booking transactions are recorded.</p>
+                <?php endif; ?>
             </article>
 
             <article class="reports-panel report-export-panel">
@@ -320,21 +322,30 @@ if (!$activityFeed) {
                     <article>
                         <h3>Booking Report</h3>
                         <div class="mini-report-table"><span>Date</span><span>Reference</span><span>Player</span><span>Program</span><span>Amount</span><span>Status</span></div>
-                        <?php foreach (array_slice($recentBookings, 0, 3) ?: [['created_at' => '2026-05-24', 'reference' => 'PKL-001', 'user_name' => 'John D.', 'program_names' => 'Court Green Rental', 'payment_status' => 'Paid', 'status' => 'confirmed']] as $booking): ?>
-                            <div class="mini-report-table"><span><?php echo date('M j, Y', strtotime($booking['created_at'] ?? 'now')); ?></span><span><?php echo htmlspecialchars($booking['reference'] ?? 'PKL-001'); ?></span><span><?php echo htmlspecialchars($booking['user_name'] ?? 'Guest'); ?></span><span><?php echo htmlspecialchars($booking['program_names'] ?? 'Court Rental'); ?></span><span>₱<?php echo number_format(($totalRevenue / max(1, $totalBookings)), 0); ?></span><span><?php echo htmlspecialchars(pickled_booking_status_label($booking['status'] ?? 'confirmed')); ?></span></div>
-                        <?php endforeach; ?>
+                    <?php foreach (array_slice($recentBookings, 0, 3) as $booking): ?>
+                        <div class="mini-report-table"><span><?php echo date('M j, Y', strtotime($booking['created_at'] ?? 'now')); ?></span><span><?php echo htmlspecialchars($booking['reference'] ?? '-'); ?></span><span><?php echo htmlspecialchars($booking['user_name'] ?? 'Guest'); ?></span><span><?php echo htmlspecialchars($booking['program_names'] ?? 'Court Rental'); ?></span><span>₱<?php echo number_format((float) ($booking['total'] ?? 0), 0); ?></span><span><?php echo htmlspecialchars(pickled_booking_status_label($booking['status'] ?? 'pending')); ?></span></div>
+                    <?php endforeach; ?>
+                    <?php if (!$recentBookings): ?><p class="reports-empty-state">No booking report data yet.</p><?php endif; ?>
                     </article>
                     <article>
                         <h3>Revenue Report</h3>
                         <div class="mini-report-table three"><span>Month</span><span>Revenue</span><span>Bookings</span><span>Average Revenue</span></div>
-                        <div class="mini-report-table three"><span><?php echo $today->format('F Y'); ?></span><span>₱<?php echo number_format($totalRevenue, 0); ?></span><span><?php echo number_format($totalBookings); ?></span><span>₱<?php echo number_format($totalRevenue / max(1, $totalBookings), 0); ?></span></div>
+                        <?php if ($totalBookings > 0): ?>
+                            <div class="mini-report-table three"><span><?php echo $today->format('F Y'); ?></span><span>₱<?php echo number_format($totalRevenue, 0); ?></span><span><?php echo number_format($totalBookings); ?></span><span>₱<?php echo number_format($totalRevenue / $totalBookings, 0); ?></span></div>
+                        <?php else: ?>
+                            <p class="reports-empty-state">No revenue report data yet.</p>
+                        <?php endif; ?>
                     </article>
                     <article>
                         <h3>Program Report</h3>
-                        <?php foreach ($programs as $program): ?>
-                            <?php $pct = $totalBookings > 0 ? (int) round(((int) $program['metric']['bookings'] / $totalBookings) * 100) : 0; ?>
-                            <div class="mini-report-table three"><span><?php echo htmlspecialchars($program['short']); ?></span><span><?php echo number_format((int) $program['metric']['bookings']); ?> bookings</span><span>₱<?php echo number_format((float) $program['metric']['revenue'], 0); ?></span><span><?php echo $pct; ?>%</span></div>
-                        <?php endforeach; ?>
+                        <?php if ($totalBookings > 0): ?>
+                            <?php foreach ($programs as $program): ?>
+                                <?php $pct = (int) round(((int) $program['metric']['bookings'] / $totalBookings) * 100); ?>
+                                <div class="mini-report-table three"><span><?php echo htmlspecialchars($program['short']); ?></span><span><?php echo number_format((int) $program['metric']['bookings']); ?> bookings</span><span>₱<?php echo number_format((float) $program['metric']['revenue'], 0); ?></span><span><?php echo $pct; ?>%</span></div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <p class="reports-empty-state">No program report data yet.</p>
+                        <?php endif; ?>
                     </article>
                 </section>
             </article>
