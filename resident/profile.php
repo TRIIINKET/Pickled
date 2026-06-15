@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/booking-system.php';
+require_once __DIR__ . '/../database/Database.php';
 
 pickled_start_secure_session();
 pickled_init_csrf();
@@ -11,8 +12,47 @@ $activePage = 'profile.php';
 $basePath = '../';
 $csrfToken = pickled_csrf_token();
 $user = $_SESSION['user'] ?? [];
-$profile = $_SESSION['player_profile'] ?? [];
+$userId = (int) ($user['id'] ?? 0);
+$profile = [
+  'phone' => '',
+  'city' => '',
+  'province' => '',
+  'avatar' => 'avatars/default.png',
+];
 $message = '';
+
+if ($userId > 0) {
+  try {
+    $stmt = Database::connection()->prepare(
+      'SELECT u.id, u.name, u.email, u.role,
+              COALESCE(up.phone, \'\') AS phone,
+              COALESCE(up.city, \'\') AS city,
+              COALESCE(up.province, \'\') AS province,
+              COALESCE(up.avatar, \'avatars/default.png\') AS avatar
+       FROM users u
+       LEFT JOIN user_profiles up ON up.user_id = u.id
+       WHERE u.id = :id
+       LIMIT 1'
+    );
+    $stmt->execute(['id' => $userId]);
+    $row = $stmt->fetch();
+
+    if ($row) {
+      $user = pickled_session_user($row);
+      $_SESSION['user'] = $user;
+      $profile = [
+        'phone' => (string) $row['phone'],
+        'city' => (string) $row['city'],
+        'province' => (string) $row['province'],
+        'avatar' => (string) $row['avatar'],
+      ];
+      $_SESSION['player_profile'] = $profile;
+    }
+  } catch (Throwable $e) {
+    error_log('Profile load failed: ' . $e->getMessage());
+    $profile = array_merge($profile, $_SESSION['player_profile'] ?? []);
+  }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $submittedToken = $_POST['csrf_token'] ?? '';
@@ -21,24 +61,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   } elseif (($_POST['action'] ?? '') === 'update_profile') {
     $name = trim((string) ($_POST['name'] ?? ''));
     $email = trim((string) ($_POST['email'] ?? ''));
+    $avatar = trim((string) ($profile['avatar'] ?? 'avatars/default.png'));
+    $avatar = $avatar !== '' ? $avatar : 'avatars/default.png';
     $profile = [
       'phone' => trim((string) ($_POST['phone'] ?? '')),
       'city' => trim((string) ($_POST['city'] ?? '')),
       'province' => trim((string) ($_POST['province'] ?? '')),
+      'avatar' => $avatar,
     ];
 
-    if ($name !== '') {
-      $_SESSION['user']['name'] = $name;
-      $user['name'] = $name;
-    }
+    if ($userId <= 0 || $name === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+      $message = 'Please enter a valid name and email.';
+    } else {
+      try {
+        $pdo = Database::connection();
+        $pdo->beginTransaction();
 
-    if ($email !== '') {
-      $_SESSION['user']['email'] = $email;
-      $user['email'] = $email;
-    }
+        $stmt = $pdo->prepare(
+          'UPDATE users
+           SET name = :name, email = :email
+           WHERE id = :id AND role = :role'
+        );
+        $stmt->execute([
+          'name' => $name,
+          'email' => strtolower($email),
+          'id' => $userId,
+          'role' => 'player',
+        ]);
 
-    $_SESSION['player_profile'] = $profile;
-    $message = 'Profile changes saved.';
+        $stmt = $pdo->prepare(
+          'INSERT INTO user_profiles (user_id, phone, city, province, avatar)
+           VALUES (:user_id, :phone, :city, :province, :avatar)
+           ON DUPLICATE KEY UPDATE
+             phone = VALUES(phone),
+             city = VALUES(city),
+             province = VALUES(province),
+             avatar = VALUES(avatar)'
+        );
+        $stmt->execute([
+          'user_id' => $userId,
+          'phone' => $profile['phone'],
+          'city' => $profile['city'],
+          'province' => $profile['province'],
+          'avatar' => $profile['avatar'],
+        ]);
+
+        $pdo->commit();
+
+        $user['name'] = $name;
+        $user['email'] = strtolower($email);
+        $_SESSION['user'] = $user;
+        $_SESSION['player_profile'] = $profile;
+        $message = 'Profile changes saved.';
+      } catch (Throwable $e) {
+        if (isset($pdo) && $pdo->inTransaction()) {
+          $pdo->rollBack();
+        }
+        error_log('Profile update failed: ' . $e->getMessage());
+        $message = 'Unable to save profile changes right now.';
+      }
+    }
   }
 }
 

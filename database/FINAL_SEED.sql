@@ -33,10 +33,10 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS user_profiles (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id INT UNSIGNED NOT NULL,
-  phone VARCHAR(40) NULL,
-  city VARCHAR(120) NULL,
-  province VARCHAR(120) NULL,
-  avatar VARCHAR(255) NULL,
+  phone VARCHAR(40) NOT NULL DEFAULT '',
+  city VARCHAR(120) NOT NULL DEFAULT '',
+  province VARCHAR(120) NOT NULL DEFAULT '',
+  avatar VARCHAR(255) NOT NULL DEFAULT 'avatars/default.png',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -107,10 +107,27 @@ WHERE email = 'coach@example.com'
   AND role = 'coach';
 
 INSERT INTO user_profiles (user_id, phone, city, province, avatar)
-SELECT u.id, NULL, NULL, NULL, NULL
+SELECT u.id, '', '', '', 'avatars/default.png'
 FROM users u
 LEFT JOIN user_profiles up ON up.user_id = u.id
 WHERE up.user_id IS NULL;
+
+UPDATE user_profiles
+SET
+  phone = COALESCE(phone, ''),
+  city = COALESCE(city, ''),
+  province = COALESCE(province, ''),
+  avatar = COALESCE(avatar, 'avatars/default.png')
+WHERE phone IS NULL
+   OR city IS NULL
+   OR province IS NULL
+   OR avatar IS NULL;
+
+ALTER TABLE user_profiles
+  MODIFY phone VARCHAR(40) NOT NULL DEFAULT '',
+  MODIFY city VARCHAR(120) NOT NULL DEFAULT '',
+  MODIFY province VARCHAR(120) NOT NULL DEFAULT '',
+  MODIFY avatar VARCHAR(255) NOT NULL DEFAULT 'avatars/default.png';
 
 INSERT INTO coach_profiles (user_id, specialization, bio, experience, status, profile_image)
 SELECT u.id, seed.specialization, seed.bio, seed.experience, seed.status, seed.profile_image

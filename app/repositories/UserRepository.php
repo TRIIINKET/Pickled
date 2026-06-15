@@ -104,17 +104,14 @@ final class UserRepository
             'INSERT INTO user_profiles (user_id, phone, city, province, avatar)
              VALUES (:user_id, :phone, :city, :province, :avatar)
              ON DUPLICATE KEY UPDATE
-                phone = VALUES(phone),
-                city = VALUES(city),
-                province = VALUES(province),
-                avatar = VALUES(avatar)'
+                user_id = user_id'
         );
         $stmt->execute([
             'user_id' => $userId,
-            'phone' => $profile['phone'] ?? null,
-            'city' => $profile['city'] ?? null,
-            'province' => $profile['province'] ?? null,
-            'avatar' => $profile['avatar'] ?? null,
+            'phone' => $profile['phone'] ?? '',
+            'city' => $profile['city'] ?? '',
+            'province' => $profile['province'] ?? '',
+            'avatar' => $profile['avatar'] ?? 'avatars/default.png',
         ]);
     }
 }
