@@ -15,19 +15,6 @@ $coach = $_SESSION['user'];
 $coachId = (int) ($coach['id'] ?? 0);
 $coachName = $coach['name'] ?? 'Coach Mia';
 $notificationService = new NotificationService();
-$successMsg = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? '')) {
-        $successMsg = 'Invalid request. Please refresh and try again.';
-    } elseif (($_POST['action'] ?? '') === 'mark_all') {
-        $notificationService->markAllAsRead($coachId);
-        $successMsg = 'All notifications marked as read.';
-    } elseif (($_POST['action'] ?? '') === 'mark_read') {
-        $notificationService->markAsRead((int) ($_POST['notification_id'] ?? 0), $coachId);
-        $successMsg = 'Notification marked as read.';
-    }
-}
 
 $notifications = $notificationService->notificationsForUser($coachId, 80);
 $coachUnreadCount = $notificationService->unreadCount($coachId);
@@ -141,7 +128,7 @@ $pinned = [
         <header class="coach-topbar">
             <div><h1>Announcements</h1></div>
             <div class="coach-top-actions">
-                <button class="coach-date-pill" type="button"><?php echo announcements_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button>
+                <span class="coach-date-pill"><?php echo announcements_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></span>
                 <a class="coach-notification" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/announcements.php')); ?>" aria-label="Notifications"><?php echo announcements_icon($icons, 'bell'); ?><?php if ($coachUnreadCount > 0): ?><em><?php echo min($coachUnreadCount, 9); ?></em><?php endif; ?></a>
                 <details class="coach-top-profile">
                     <summary><span class="coach-photo small"><img src="<?php echo htmlspecialchars(pickled_asset_url('img/court/academy.png')); ?>" alt="<?php echo htmlspecialchars($coachName); ?>"></span><span><strong>Coach</strong><small>Pickleball Coach</small></span><b>⌄</b></summary>
@@ -152,24 +139,16 @@ $pinned = [
 
         <section class="page-intro page-first-section">
             <p>Stay updated with facility news, schedule changes, and coaching updates.</p>
-            <span><?php echo announcements_icon($icons, 'bell'); ?><?php echo number_format($coachUnreadCount); ?> Unread</span>
+            <span><?php echo announcements_icon($icons, $coachUnreadCount > 0 ? 'bell' : 'check'); ?><?php echo $coachUnreadCount > 0 ? number_format($coachUnreadCount) . ' unread' : 'All caught up'; ?></span>
         </section>
-        <?php if ($successMsg): ?><div class="alert alert-success"><?php echo htmlspecialchars($successMsg); ?></div><?php endif; ?>
 
-        <nav class="announcement-filters" aria-label="Announcement categories">
-            <a class="active" href="#">All</a><a href="#"><?php echo announcements_icon($icons, 'building'); ?>Facility</a><a href="#"><?php echo announcements_icon($icons, 'racket'); ?>Coaching</a><a href="#"><?php echo announcements_icon($icons, 'calendar'); ?>Schedule Changes</a><a href="#"><?php echo announcements_icon($icons, 'trophy'); ?>Events</a><a href="#"><?php echo announcements_icon($icons, 'alert'); ?>Urgent</a>
-        </nav>
+        <div class="announcement-status-strip" aria-label="Announcement status summary">
+            <span class="active">All</span><span><?php echo announcements_icon($icons, 'bell'); ?>Unread</span><span><?php echo announcements_icon($icons, 'check'); ?>Read</span>
+        </div>
 
         <section class="announcements-workspace">
             <div class="announcement-feed">
                 <?php if ($notifications): ?>
-                    <?php if ($coachUnreadCount > 0): ?>
-                        <form method="post" class="announcement-feed-card green">
-                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>">
-                            <input type="hidden" name="action" value="mark_all">
-                            <div class="announcement-card-body"><h2>Unread notifications</h2><p>You have <?php echo number_format($coachUnreadCount); ?> unread notification<?php echo $coachUnreadCount === 1 ? '' : 's'; ?>.</p><footer><button type="submit"><?php echo announcements_icon($icons, 'check'); ?>Mark all as read</button></footer></div>
-                        </form>
-                    <?php endif; ?>
                     <?php foreach ($notifications as $notification): ?>
                         <?php $unread = empty($notification['is_read']); ?>
                         <?php $notificationLink = announcements_safe_href($notification['link'] ?? null); ?>
@@ -179,7 +158,7 @@ $pinned = [
                                 <header><span><?php echo htmlspecialchars(announcements_type_label((string) $notification['type'])); ?></span><time><?php echo htmlspecialchars(date('M j, Y g:i A', strtotime((string) $notification['created_at']))); ?></time></header>
                                 <h2><?php echo htmlspecialchars($notification['title']); ?></h2>
                                 <p><?php echo htmlspecialchars($notification['message']); ?></p>
-                                <footer><strong>System</strong><?php if ($notificationLink !== ''): ?><a href="<?php echo htmlspecialchars($notificationLink); ?>">View details</a><?php endif; ?><?php if ($unread): ?><form method="post"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>"><input type="hidden" name="action" value="mark_read"><input type="hidden" name="notification_id" value="<?php echo (int) $notification['id']; ?>"><button type="submit"><?php echo announcements_icon($icons, 'check'); ?>Mark as read</button></form><?php endif; ?></footer>
+                                <footer><strong>System</strong><?php if ($notificationLink !== ''): ?><a href="<?php echo htmlspecialchars($notificationLink); ?>">View details</a><?php endif; ?></footer>
                             </div>
                             <em><?php echo $unread ? 'Unread' : 'Read'; ?></em>
                         </article>
@@ -193,9 +172,21 @@ $pinned = [
                             <h2><?php echo htmlspecialchars($title); ?></h2>
                             <p><?php echo htmlspecialchars($body); ?></p>
                             <p><?php echo htmlspecialchars($detail); ?></p>
-                            <footer><strong><img src="<?php echo htmlspecialchars(pickled_asset_url('img/LM-DGreen.png')); ?>" alt=""> <?php echo htmlspecialchars($team); ?></strong><button><?php echo announcements_icon($icons, 'check'); ?>Mark as read</button></footer>
+                            <footer><strong><img src="<?php echo htmlspecialchars(pickled_asset_url('img/LM-DGreen.png')); ?>" alt=""> <?php echo htmlspecialchars($team); ?></strong></footer>
                         </div>
                         <em><?php echo htmlspecialchars($badge); ?></em>
+                    </article>
+                <?php endforeach; ?>
+                <?php foreach ($pinned as [$title, $updated, $icon, $tone]): ?>
+                    <article class="announcement-feed-card <?php echo htmlspecialchars($tone); ?>">
+                        <i><?php echo announcements_icon($icons, $icon); ?></i>
+                        <div class="announcement-card-body">
+                            <header><span>Reference</span><time><?php echo htmlspecialchars($updated); ?></time></header>
+                            <h2><?php echo htmlspecialchars($title); ?></h2>
+                            <p>Important coaching reference available in the announcements feed.</p>
+                            <footer><strong>Admin Team</strong></footer>
+                        </div>
+                        <em>Read</em>
                     </article>
                 <?php endforeach; ?>
                 <?php endif; ?>
@@ -210,16 +201,6 @@ $pinned = [
                         <?php endforeach; ?>
                     </div>
                     <a class="side-card-link" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/schedule.php')); ?>">View full calendar <?php echo announcements_icon($icons, 'arrow'); ?></a>
-                </section>
-
-                <section class="coach-card pinned-card">
-                    <header><h2><?php echo announcements_icon($icons, 'pin'); ?>Pinned Announcements</h2></header>
-                    <div class="pinned-list">
-                        <?php foreach ($pinned as [$title, $updated, $icon, $tone]): ?>
-                            <a href="#"><i class="<?php echo htmlspecialchars($tone); ?>"><?php echo announcements_icon($icons, $icon); ?></i><span><strong><?php echo htmlspecialchars($title); ?></strong><small><?php echo htmlspecialchars($updated); ?></small></span><?php echo announcements_icon($icons, 'arrow'); ?></a>
-                        <?php endforeach; ?>
-                    </div>
-                    <a class="side-card-link" href="#">View all pinned <?php echo announcements_icon($icons, 'arrow'); ?></a>
                 </section>
             </aside>
         </section>

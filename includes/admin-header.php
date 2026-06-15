@@ -26,7 +26,7 @@ $bodyClass = $bodyClass ?? '';
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
     <link rel="preload" as="image" href="<?php echo htmlspecialchars(pickled_asset_url('img/WM-LPink.png'), ENT_QUOTES, 'UTF-8'); ?>">
     <link rel="stylesheet" href="<?php echo htmlspecialchars(pickled_asset_url('css/global-loader.css?v=20260611a'), ENT_QUOTES, 'UTF-8'); ?>">
-    <link rel="stylesheet" href="<?php echo pickled_admin_asset_url('css/admin-style.css?v=20260615g'); ?>">
+    <link rel="stylesheet" href="<?php echo pickled_admin_asset_url('css/admin-style.css?v=20260615l'); ?>">
     <script>document.documentElement.classList.add('global-loader-enabled');</script>
     <script src="<?php echo htmlspecialchars(pickled_asset_url('js/global-loader.js?v=20260611a'), ENT_QUOTES, 'UTF-8'); ?>"></script>
     <?php

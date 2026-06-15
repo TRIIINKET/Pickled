@@ -5,6 +5,11 @@ require_once __DIR__ . '/../../database/Database.php';
 
 final class SchedulingRepository
 {
+    public function __construct()
+    {
+        $this->ensureCoachTimeOffSchema();
+    }
+
     public function coaches(bool $activeOnly = true): array
     {
         $sql = "SELECT u.id, u.name, u.email, cp.specialization, cp.bio, cp.experience, cp.status
@@ -219,7 +224,20 @@ final class SchedulingRepository
             'start_time' => $startTime,
             'end_time' => $endTime,
         ]);
-        return (bool) $stmt->fetchColumn();
+        if (!$stmt->fetchColumn()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function coachAvailableForDatedSlot(int $coachUserId, int $dayOfWeek, string $startTime, string $endTime, string $sessionDate): bool
+    {
+        if (!$this->coachAvailableForSlot($coachUserId, $dayOfWeek, $startTime, $endTime)) {
+            return false;
+        }
+
+        return !$this->coachHasApprovedTimeOff($coachUserId, $sessionDate, $sessionDate);
     }
 
     public function availableCoachesForSlot(int $dayOfWeek, string $startTime, string $endTime, ?string $sessionDate = null): array
@@ -248,8 +266,16 @@ final class SchedulingRepository
                           AND s.status IN ('open', 'full')
                           AND :conflict_start_time < s.end_time
                           AND :conflict_end_time > s.start_time
+                      )
+                      AND NOT EXISTS (
+                        SELECT 1
+                        FROM coach_time_off_requests tor
+                        WHERE tor.coach_user_id = u.id
+                          AND tor.status = 'approved'
+                          AND :time_off_session_date BETWEEN tor.start_date AND tor.end_date
                       )";
             $params['session_date'] = $sessionDate;
+            $params['time_off_session_date'] = $sessionDate;
             $params['conflict_start_time'] = $startTime;
             $params['conflict_end_time'] = $endTime;
         }
@@ -359,6 +385,123 @@ final class SchedulingRepository
         return (bool) $stmt->fetchColumn();
     }
 
+    public function createTimeOffRequest(array $data): int
+    {
+        $stmt = Database::connection()->prepare(
+            'INSERT INTO coach_time_off_requests
+                (coach_user_id, start_date, end_date, reason, notes, status)
+             VALUES
+                (:coach_user_id, :start_date, :end_date, :reason, :notes, :status)'
+        );
+        $stmt->execute($this->timeOffParams($data));
+        return (int) Database::connection()->lastInsertId();
+    }
+
+    public function updateTimeOffRequest(int $id, array $data): bool
+    {
+        $params = $this->timeOffParams($data) + ['id' => $id];
+        $stmt = Database::connection()->prepare(
+            "UPDATE coach_time_off_requests
+             SET start_date = :start_date,
+                 end_date = :end_date,
+                 reason = :reason,
+                 notes = :notes,
+                 status = :status,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id
+               AND coach_user_id = :coach_user_id
+               AND status = 'pending'"
+        );
+        return $stmt->execute($params);
+    }
+
+    public function cancelTimeOffRequest(int $id, int $coachUserId): bool
+    {
+        $stmt = Database::connection()->prepare(
+            "UPDATE coach_time_off_requests
+             SET status = 'cancelled',
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id
+               AND coach_user_id = :coach_user_id
+               AND status = 'pending'"
+        );
+        return $stmt->execute(['id' => $id, 'coach_user_id' => $coachUserId]);
+    }
+
+    public function timeOffRequestByIdForCoach(int $id, int $coachUserId): ?array
+    {
+        $stmt = Database::connection()->prepare(
+            'SELECT *
+             FROM coach_time_off_requests
+             WHERE id = :id
+               AND coach_user_id = :coach_user_id
+             LIMIT 1'
+        );
+        $stmt->execute(['id' => $id, 'coach_user_id' => $coachUserId]);
+        $row = $stmt->fetch();
+        return $row ? $this->withTimeOffDisplayFields($row) : null;
+    }
+
+    public function timeOffRequestsForCoach(int $coachUserId): array
+    {
+        $stmt = Database::connection()->prepare(
+            'SELECT *
+             FROM coach_time_off_requests
+             WHERE coach_user_id = :coach_user_id
+             ORDER BY start_date ASC, id ASC'
+        );
+        $stmt->execute(['coach_user_id' => $coachUserId]);
+        return array_map([$this, 'withTimeOffDisplayFields'], $stmt->fetchAll() ?: []);
+    }
+
+    public function coachHasApprovedTimeOff(int $coachUserId, string $startDate, string $endDate, ?int $ignoreId = null): bool
+    {
+        $sql = "SELECT 1
+                FROM coach_time_off_requests
+                WHERE coach_user_id = :coach_user_id
+                  AND status = 'approved'
+                  AND :start_date <= end_date
+                  AND :end_date >= start_date";
+        $params = [
+            'coach_user_id' => $coachUserId,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ];
+        if ($ignoreId) {
+            $sql .= ' AND id <> :ignore_id';
+            $params['ignore_id'] = $ignoreId;
+        }
+        $sql .= ' LIMIT 1';
+
+        $stmt = Database::connection()->prepare($sql);
+        $stmt->execute($params);
+        return (bool) $stmt->fetchColumn();
+    }
+
+    private function ensureCoachTimeOffSchema(): void
+    {
+        try {
+            Database::connection()->exec(
+                "CREATE TABLE IF NOT EXISTS coach_time_off_requests (
+                    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    coach_user_id INT UNSIGNED NOT NULL,
+                    start_date DATE NOT NULL,
+                    end_date DATE NOT NULL,
+                    reason VARCHAR(80) NOT NULL,
+                    notes TEXT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                    admin_remarks TEXT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    KEY idx_time_off_coach_dates (coach_user_id, start_date, end_date),
+                    KEY idx_time_off_status (status)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
+        } catch (Throwable $e) {
+            error_log('Coach time off schema check failed: ' . $e->getMessage());
+        }
+    }
+
     public function incrementBookedCount(int $sessionId, int $quantity): bool
     {
         $stmt = Database::connection()->prepare(
@@ -424,6 +567,18 @@ final class SchedulingRepository
         ];
     }
 
+    private function timeOffParams(array $data): array
+    {
+        return [
+            'coach_user_id' => (int) $data['coach_user_id'],
+            'start_date' => $data['start_date'],
+            'end_date' => $data['end_date'],
+            'reason' => $data['reason'],
+            'notes' => $data['notes'] ?? null,
+            'status' => $data['status'] ?? 'pending',
+        ];
+    }
+
     private function withDisplayFields(array $row): array
     {
         $row['display_date'] = $this->displayDate((string) $row['session_date']);
@@ -436,6 +591,17 @@ final class SchedulingRepository
     {
         $row['time_range'] = $this->displayTimeRange((string) $row['start_time'], (string) $row['end_time']);
         $row['day_label'] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(int) $row['day_of_week']] ?? 'Day';
+        return $row;
+    }
+
+    private function withTimeOffDisplayFields(array $row): array
+    {
+        $start = (string) $row['start_date'];
+        $end = (string) $row['end_date'];
+        $row['date_range'] = $start === $end
+            ? $this->displayDate($start)
+            : $this->displayDate($start) . ' - ' . $this->displayDate($end);
+        $row['status_label'] = ucfirst((string) $row['status']);
         return $row;
     }
 

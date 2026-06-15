@@ -39,7 +39,6 @@ $icons = [
     'check' => '<path d="m20 6-11 11-5-5"/>',
     'x' => '<path d="M18 6 6 18M6 6l12 12"/>',
     'eye' => '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
-    'more' => '<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
     'court' => '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 4v16M4 12h16"/>',
 ];
 
@@ -114,7 +113,7 @@ $studentsToday = array_sum(array_map(static fn(array $session): int => (int) $se
         <header class="coach-topbar">
             <div><h1>My Schedule</h1></div>
             <div class="coach-top-actions">
-                <button class="coach-date-pill" type="button"><?php echo schedule_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button>
+                <span class="coach-date-pill"><?php echo schedule_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></span>
                 <a class="coach-notification" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/announcements.php')); ?>" aria-label="Announcements"><?php echo schedule_icon($icons, 'bell'); ?><em>4</em></a>
                 <details class="coach-top-profile">
                     <summary><span class="coach-photo small"><img src="<?php echo htmlspecialchars(pickled_asset_url('img/court/academy.png')); ?>" alt="<?php echo htmlspecialchars($coachName); ?>"></span><span><strong>Coach</strong><small>Pickleball Coach</small></span><b>⌄</b></summary>
@@ -137,8 +136,8 @@ $studentsToday = array_sum(array_map(static fn(array $session): int => (int) $se
             <div class="schedule-main-column">
                 <section class="coach-card calendar-card">
                     <div class="schedule-toolbar">
-                        <div class="schedule-tabs"><button>Today</button><button class="active">Week</button><button>Month</button></div>
-                        <div class="schedule-range"><button>‹</button><span><?php echo schedule_icon($icons, 'calendar'); ?> Jun 9 - Jun 15, 2026</span><button>›</button></div>
+                        <div class="schedule-tabs"><button type="button" disabled title="Calendar view switching is not connected yet.">Today</button><button class="active" type="button" disabled title="Current schedule view.">Week</button><button type="button" disabled title="Calendar view switching is not connected yet.">Month</button></div>
+                        <div class="schedule-range"><button type="button" disabled title="Week navigation is not connected yet.">‹</button><span><?php echo schedule_icon($icons, 'calendar'); ?> Jun 9 - Jun 15, 2026</span><button type="button" disabled title="Week navigation is not connected yet.">›</button></div>
                         <label class="schedule-search"><?php echo schedule_icon($icons, 'search'); ?><input type="search" placeholder="Search session..."></label>
                         <select><option>All Courts</option><option>Court Green</option><option>Court Pink</option></select>
                         <select><option>All Programs</option><option>Kids Class</option><option>Private Coaching</option><option>Social Play</option></select>
@@ -160,7 +159,7 @@ $studentsToday = array_sum(array_map(static fn(array $session): int => (int) $se
                     <div class="schedule-table">
                         <div class="schedule-row head"><span>Time</span><span>Program</span><span>Court</span><span>Students</span><span>Status</span><span>Action</span></div>
                         <?php foreach ($todaySessions as [$time, $program, $court, $count, $status, $tone]): ?>
-                            <div class="schedule-row <?php echo $program === 'Youth Development (Ages 11-17)' ? 'selected' : ''; ?>"><span><?php echo htmlspecialchars($time); ?></span><span><?php echo htmlspecialchars($program); ?></span><span><i class="<?php echo $tone; ?>"></i><?php echo htmlspecialchars($court); ?></span><span><?php echo htmlspecialchars($count); ?></span><span><em class="session-status <?php echo strtolower($status); ?>"><?php echo htmlspecialchars($status); ?></em></span><span><button><?php echo schedule_icon($icons, 'eye'); ?> View</button><button class="icon-only"><?php echo schedule_icon($icons, 'more'); ?></button></span></div>
+                            <div class="schedule-row <?php echo $program === 'Youth Development (Ages 11-17)' ? 'selected' : ''; ?>"><span><?php echo htmlspecialchars($time); ?></span><span><?php echo htmlspecialchars($program); ?></span><span><i class="<?php echo $tone; ?>"></i><?php echo htmlspecialchars($court); ?></span><span><?php echo htmlspecialchars($count); ?></span><span><em class="session-status <?php echo strtolower($status); ?>"><?php echo htmlspecialchars($status); ?></em></span><span><button type="button" disabled title="Session detail pages are not connected yet."><?php echo schedule_icon($icons, 'eye'); ?> View</button><button type="button" disabled title="Attendance saving is not connected yet."><?php echo schedule_icon($icons, 'check'); ?> Attendance</button></span></div>
                         <?php endforeach; ?>
                         <?php if (!$todaySessions): ?><div class="schedule-row"><span>No sessions today.</span><span></span><span></span><span></span><span></span><span></span></div><?php endif; ?>
                     </div>
@@ -177,9 +176,9 @@ $studentsToday = array_sum(array_map(static fn(array $session): int => (int) $se
                     <div><dt><?php echo schedule_icon($icons, 'students'); ?> Students</dt><dd><?php echo htmlspecialchars(isset($nextScheduleSession['booked_count']) ? ((int) $nextScheduleSession['booked_count'] . ' / ' . (int) $nextScheduleSession['capacity']) : '0'); ?></dd></div>
                     <div><dt><?php echo schedule_icon($icons, 'profile'); ?> Coach</dt><dd><?php echo htmlspecialchars($coachName); ?></dd></div>
                 </dl>
-                <section class="attendance-box"><h3>Attendance</h3><div><button class="active"><?php echo schedule_icon($icons, 'check'); ?> Present</button><button><?php echo schedule_icon($icons, 'x'); ?> Absent</button><button><?php echo schedule_icon($icons, 'clock'); ?> Late</button></div></section>
-                <section class="notes-box"><header><h3>Session Notes</h3><button>Edit</button></header><textarea rows="6">Focus on footwork and dinks today.
-Students showed good improvement on third shot drops.</textarea><button class="save-notes">Save Notes</button></section>
+                <section class="attendance-box"><h3>Attendance</h3><div><button class="active" type="button" disabled title="Attendance saving is not connected yet."><?php echo schedule_icon($icons, 'check'); ?> Present</button><button type="button" disabled title="Attendance saving is not connected yet."><?php echo schedule_icon($icons, 'x'); ?> Absent</button><button type="button" disabled title="Attendance saving is not connected yet."><?php echo schedule_icon($icons, 'clock'); ?> Late</button></div></section>
+                <section class="notes-box"><header><h3>Session Notes</h3></header><textarea rows="6" readonly>Focus on footwork and dinks today.
+Students showed good improvement on third shot drops.</textarea><button class="save-notes" type="button" disabled title="Session note saving is not connected yet.">Save Notes</button></section>
             </aside>
         </section>
 
