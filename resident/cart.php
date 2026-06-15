@@ -112,7 +112,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $quantity = max(1, (int) ($_POST['quantity'] ?? 1));
       $date = trim((string) ($_POST['date'] ?? (new DateTimeImmutable('+3 days'))->format('F j, Y')));
       $time = trim((string) ($_POST['time'] ?? 'Selected schedule'));
-      $result = pickled_add_to_cart($variantId, $quantity, $date, $time);
+      $coachUserId = empty($_POST['coach_user_id']) ? null : (int) $_POST['coach_user_id'];
+      $result = pickled_add_to_cart($variantId, $quantity, $date, $time, $coachUserId);
       header('Location: cart.php?' . ($result['ok'] ? 'added=1' : $result['code'] . '=1'));
       exit;
     }

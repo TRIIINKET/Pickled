@@ -108,19 +108,34 @@ function pickled_public_coach_schedule(array $availability): array
 {
   $dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   $days = [];
-  $slots = [];
+  $displaySlots = [];
+  $bookableSlots = [];
   foreach ($availability as $row) {
     if (($row['status'] ?? '') !== 'available') {
       continue;
     }
     $days[] = (string) $row['day_of_week'];
-    $slots[] = pickled_public_time_range((string) $row['start_time'], (string) $row['end_time']);
+    $start = (string) $row['start_time'];
+    $end = (string) $row['end_time'];
+    $displaySlots[] = pickled_public_time_range($start, $end);
+
+    $cursor = new DateTimeImmutable('1970-01-01 ' . $start);
+    $endAt = new DateTimeImmutable('1970-01-01 ' . $end);
+    while ($cursor < $endAt) {
+      $next = $cursor->modify('+1 hour');
+      if ($next > $endAt) {
+        break;
+      }
+      $bookableSlots[] = $cursor->format('h:i A') . ' - ' . $next->format('h:i A');
+      $cursor = $next;
+    }
   }
   $days = array_values(array_unique($days));
-  $slots = array_values(array_unique($slots));
+  $displaySlots = array_values(array_unique($displaySlots));
+  $bookableSlots = array_values(array_unique($bookableSlots));
   $dayText = $days ? implode(', ', array_map(static fn(string $day): string => $dayLabels[(int) $day] ?? 'Day', $days)) : 'No availability';
-  $slotText = $slots ? implode(', ', $slots) : 'No active slots';
-  return [$dayText . ' · ' . $slotText, implode(',', $days), implode('|', $slots)];
+  $slotText = $displaySlots ? implode(', ', $displaySlots) : 'No active slots';
+  return [$dayText . ' · ' . $slotText, implode(',', $days), implode('|', $bookableSlots)];
 }
 
 $catalogService = new CatalogService();
@@ -327,6 +342,7 @@ foreach ($coachRows as $index => $coachRow) {
             <input type="hidden" name="date" value="" />
             <input type="hidden" name="time" value="" />
             <input type="hidden" name="quantity" value="1" />
+            <input type="hidden" name="coach_user_id" value="" />
             <button class="court-cart-button" type="submit">Add to cart</button>
           </form>
         </div>
@@ -472,7 +488,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
           <span>Coach</span>
           <select id="coachSelect">
             <?php foreach ($coaches as $coach): ?>
-              <option value="<?= htmlspecialchars($coach[1]) ?>" data-schedule="<?= htmlspecialchars($coach[5]) ?>" data-days="<?= htmlspecialchars($coach[6]) ?>" data-slots="<?= htmlspecialchars($coach[7]) ?>"><?= htmlspecialchars($coach[1]) ?> · <?= htmlspecialchars($coach[5]) ?></option>
+              <option value="<?= (int) $coach[0] ?>" data-name="<?= htmlspecialchars($coach[1]) ?>" data-schedule="<?= htmlspecialchars($coach[5]) ?>" data-days="<?= htmlspecialchars($coach[6]) ?>" data-slots="<?= htmlspecialchars($coach[7]) ?>"><?= htmlspecialchars($coach[1]) ?> · <?= htmlspecialchars($coach[5]) ?></option>
             <?php endforeach; ?>
           </select>
           <small id="coachSchedule">Choose your preferred coach schedule.</small>
@@ -626,6 +642,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     feeRate: 0,
     paymentMethod: 'GCash',
     dateMode: <?= json_encode($defaultRate['dateMode'] ?? 'daily') ?>,
+    coachId: <?= json_encode((int) $defaultCoach[0]) ?>,
     coach: <?= json_encode($defaultCoach[1], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
     coachSchedule: <?= json_encode($defaultCoach[5], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
     coachDays: <?= json_encode($defaultCoach[6], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
@@ -874,7 +891,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     document.getElementById('summaryDate').textContent = state.date;
     document.getElementById('summaryCourt').textContent = needsCoach() ? state.coach : state.court;
     coachRow.hidden = !needsCoach();
-    coachSelect.value = state.coach;
+    coachSelect.value = String(state.coachId || '');
     coachSchedule.textContent = state.coachSchedule;
     loadAvailability();
     renderTimeLabels();
@@ -1072,6 +1089,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       courtCartForm.elements.date.value = state.date;
       courtCartForm.elements.time.value = state.selectedTimes[0] || '';
       courtCartForm.elements.quantity.value = state.qty;
+      courtCartForm.elements.coach_user_id.value = needsCoach() && state.coachId ? String(state.coachId) : '';
     });
   }
   function submitBookingToCart() {
@@ -1085,6 +1103,9 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       time: selectedTimes,
       quantity: String(state.qty)
     };
+    if (needsCoach() && state.coachId) {
+      fields.coach_user_id = String(state.coachId);
+    }
     form.method = 'post';
     form.action = 'cart.php';
     Object.keys(fields).forEach(name => {
@@ -1108,7 +1129,8 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
 
   coachSelect.addEventListener('change', event => {
     const selected = event.target.selectedOptions[0];
-    state.coach = event.target.value;
+    state.coachId = Number(event.target.value || 0);
+    state.coach = selected ? (selected.dataset.name || selected.textContent || 'Coach') : 'Coach';
     state.coachSchedule = selected ? selected.dataset.schedule : '';
     state.coachDays = selected ? selected.dataset.days : '1,3,5';
     state.coachSlots = selected ? selected.dataset.slots : '09:00 AM - 10:00 AM|10:00 AM - 11:00 AM|11:00 AM - 12:00 PM';

@@ -25,6 +25,16 @@ final class FeedbackService
         return $this->feedback->targetsForBooking($bookingId);
     }
 
+    public function canLeaveFeedback(int $bookingId, int $userId): bool
+    {
+        if ($bookingId <= 0 || $userId <= 0) {
+            return false;
+        }
+
+        return $this->feedback->bookingForUser($bookingId, $userId) !== null
+            && $this->feedback->bookingEligibleForFeedback($bookingId);
+    }
+
     public function submit(int $userId, int $bookingId, ?int $bookingItemId, int $rating, string $comment): int
     {
         $booking = $this->assertFeedbackBooking($bookingId, $userId);
@@ -111,8 +121,8 @@ final class FeedbackService
             throw new RuntimeException('Booking not found.');
         }
 
-        if (!$this->isCompleted((string) ($booking['status'] ?? ''))) {
-            throw new RuntimeException('Feedback can only be submitted after a booking is completed.');
+        if (!$this->feedback->bookingEligibleForFeedback((int) $booking['id'])) {
+            throw new RuntimeException('Feedback opens after the booking or session is completed.');
         }
 
         return $booking;
@@ -166,8 +176,4 @@ final class FeedbackService
         return substr($comment, 0, 2000);
     }
 
-    private function isCompleted(string $status): bool
-    {
-        return strtolower(trim($status)) === 'completed';
-    }
 }

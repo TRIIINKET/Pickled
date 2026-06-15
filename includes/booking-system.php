@@ -147,7 +147,7 @@ function pickled_cart_item_id(array $item, string $date, string $time): string {
     return substr(sha1($item['variant_id'] . '|' . $date . '|' . $time), 0, 14);
 }
 
-function pickled_add_to_cart(string $variantId, int $quantity, string $date, string $time): array {
+function pickled_add_to_cart(string $variantId, int $quantity, string $date, string $time, ?int $coachUserId = null): array {
     $_SESSION['cart'] = $_SESSION['cart'] ?? [];
     if ($variantId === '' || $date === '' || $time === '') {
         return ['ok' => false, 'code' => 'invalid'];
@@ -171,7 +171,8 @@ function pickled_add_to_cart(string $variantId, int $quantity, string $date, str
             $time,
             $_SESSION['cart_started_at'] ?? null,
             $_SESSION['cart_expires_at'] ?? null,
-            (float) $item['member_price']
+            (float) $item['member_price'],
+            $coachUserId
         );
     } catch (RuntimeException) {
         $result = ['ok' => false, 'code' => 'invalid'];

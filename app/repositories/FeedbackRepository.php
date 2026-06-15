@@ -52,6 +52,37 @@ final class FeedbackRepository
         return $feedback ?: null;
     }
 
+    public function bookingEligibleForFeedback(int $bookingId): bool
+    {
+        $stmt = $this->db()->prepare(
+            "SELECT 1
+             FROM bookings b
+             WHERE b.id = :booking_id
+               AND (
+                    LOWER(b.status) = 'completed'
+                    OR (
+                        LOWER(b.status) NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+                        AND LOWER(b.payment_status) IN ('paid', 'verified', 'approved', 'completed')
+                        AND EXISTS (
+                            SELECT 1
+                            FROM booking_items bi
+                            WHERE bi.booking_id = b.id
+                        )
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM booking_items bi
+                            WHERE bi.booking_id = b.id
+                              AND TIMESTAMP(bi.booking_date, bi.end_time) > NOW()
+                        )
+                    )
+               )
+             LIMIT 1"
+        );
+        $stmt->execute(['booking_id' => $bookingId]);
+
+        return (bool) $stmt->fetchColumn();
+    }
+
     public function targetsForBooking(int $bookingId): array
     {
         $stmt = $this->db()->prepare(
@@ -63,12 +94,12 @@ final class FeedbackRepository
                     bi.booking_date,
                     bi.start_time,
                     bi.end_time,
-                    s.coach_user_id,
+                    COALESCE(bi.coach_user_id, s.coach_user_id) AS coach_user_id,
                     coach.name AS coach_name,
                     coach.email AS coach_email
              FROM booking_items bi
              LEFT JOIN sessions s ON s.id = bi.session_id
-             LEFT JOIN users coach ON coach.id = s.coach_user_id
+             LEFT JOIN users coach ON coach.id = COALESCE(bi.coach_user_id, s.coach_user_id)
              WHERE bi.booking_id = :booking_id
              ORDER BY bi.id ASC'
         );
@@ -88,12 +119,12 @@ final class FeedbackRepository
                     bi.booking_date,
                     bi.start_time,
                     bi.end_time,
-                    s.coach_user_id,
+                    COALESCE(bi.coach_user_id, s.coach_user_id) AS coach_user_id,
                     coach.name AS coach_name,
                     coach.email AS coach_email
              FROM booking_items bi
              LEFT JOIN sessions s ON s.id = bi.session_id
-             LEFT JOIN users coach ON coach.id = s.coach_user_id
+             LEFT JOIN users coach ON coach.id = COALESCE(bi.coach_user_id, s.coach_user_id)
              WHERE bi.id = :booking_item_id
                AND bi.booking_id = :booking_id
              LIMIT 1'

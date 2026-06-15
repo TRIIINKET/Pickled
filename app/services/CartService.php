@@ -31,7 +31,7 @@ final class CartService
         ];
     }
 
-    public function addVariantForUser(int $userId, string $variantSlug, int $quantity, string $date, string $time, ?int $startedAt, ?int $expiresAt, ?float $unitPrice = null): array
+    public function addVariantForUser(int $userId, string $variantSlug, int $quantity, string $date, string $time, ?int $startedAt, ?int $expiresAt, ?float $unitPrice = null, ?int $requestedCoachUserId = null): array
     {
         if ($userId <= 0) {
             return ['ok' => false, 'code' => 'login'];
@@ -68,7 +68,7 @@ final class CartService
 
             $coachUserId = null;
             if ($this->requiresCoach($variant)) {
-                $coachUserId = $this->firstAvailableCoachId($sessionDate, $time, $userId);
+                $coachUserId = $this->availableCoachId($sessionDate, $time, $userId, $requestedCoachUserId);
                 if ($coachUserId === null) {
                     return ['ok' => false, 'code' => 'coach_unavailable'];
                 }
@@ -196,16 +196,26 @@ final class CartService
         return false;
     }
 
-    private function firstAvailableCoachId(string $date, string $time, int $userId): ?int
+    private function availableCoachId(string $date, string $time, int $userId, ?int $preferredCoachUserId = null): ?int
     {
         [$sessionDate, $startTime, $endTime] = $this->normalizeSlot($date, $time);
+        $availableCoachIds = [];
         foreach ((new SchedulingService())->availableCoachesForSlot($sessionDate, $time) as $coach) {
             $coachId = (int) ($coach['id'] ?? 0);
-            if ($coachId > 0 && !$this->carts->coachHasOverlap($coachId, $sessionDate, $startTime, $endTime, $userId)) {
+            if ($coachId <= 0 || $this->carts->coachHasOverlap($coachId, $sessionDate, $startTime, $endTime, $userId)) {
+                continue;
+            }
+            $availableCoachIds[] = $coachId;
+            if ($preferredCoachUserId !== null && $preferredCoachUserId > 0 && $coachId === $preferredCoachUserId) {
                 return $coachId;
             }
         }
-        return null;
+
+        if ($preferredCoachUserId !== null && $preferredCoachUserId > 0) {
+            return null;
+        }
+
+        return $availableCoachIds[0] ?? null;
     }
 
     private function normalizeSlot(string $date, string $time): array

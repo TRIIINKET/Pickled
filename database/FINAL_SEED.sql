@@ -10,6 +10,13 @@ USE pickled;
 
 SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS business_code_sequences (
+  entity VARCHAR(40) NOT NULL,
+  last_value INT UNSIGNED NOT NULL DEFAULT 0,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (entity)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================
 -- AUTH / USERS
 -- Source files: auth_user_management.sql, content-notes.txt
@@ -18,6 +25,8 @@ SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS users (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_code VARCHAR(50) NOT NULL,
+  is_verified TINYINT(1) NOT NULL DEFAULT 0,
   name VARCHAR(120) NOT NULL,
   email VARCHAR(160) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
@@ -25,9 +34,11 @@ CREATE TABLE IF NOT EXISTS users (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_users_user_code (user_code),
   UNIQUE KEY uq_users_email (email),
   KEY idx_users_role (role),
-  CONSTRAINT chk_users_role CHECK (role IN ('player', 'coach', 'admin'))
+  CONSTRAINT chk_users_role CHECK (role IN ('player', 'coach', 'admin')),
+  CONSTRAINT chk_users_is_verified CHECK (is_verified IN (0, 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS user_profiles (
@@ -90,7 +101,7 @@ DELIMITER ;
 
 CREATE TABLE IF NOT EXISTS password_reset (
   id INT NOT NULL AUTO_INCREMENT,
-  user_id INT NULL,
+  user_id INT UNSIGNED NULL,
   email VARCHAR(160) NOT NULL,
   token VARCHAR(128) NOT NULL,
   expires_at DATETIME NOT NULL,
@@ -102,8 +113,105 @@ CREATE TABLE IF NOT EXISTS password_reset (
   KEY idx_password_reset_email (email),
   KEY idx_password_reset_user_id (user_id),
   KEY idx_password_reset_expires_at (expires_at),
-  KEY idx_password_reset_used (used)
+  KEY idx_password_reset_used (used),
+  CONSTRAINT fk_password_reset_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP PROCEDURE IF EXISTS migrate_users_business_codes;
+
+DELIMITER //
+
+CREATE PROCEDURE migrate_users_business_codes()
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'users'
+      AND COLUMN_NAME = 'user_code'
+  ) THEN
+    ALTER TABLE users ADD COLUMN user_code VARCHAR(50) NULL AFTER id;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'users'
+      AND COLUMN_NAME = 'is_verified'
+  ) THEN
+    ALTER TABLE users ADD COLUMN is_verified TINYINT(1) NOT NULL DEFAULT 0 AFTER user_code;
+  END IF;
+
+  UPDATE users
+  SET user_code = CONCAT('USR-', LPAD(id, 6, '0'))
+  WHERE user_code IS NULL
+     OR TRIM(user_code) = ''
+     OR user_code NOT REGEXP '^USR-[0-9]{6}$';
+
+  ALTER TABLE users
+    MODIFY user_code VARCHAR(50) NOT NULL,
+    MODIFY is_verified TINYINT(1) NOT NULL DEFAULT 0;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'users'
+      AND COLUMN_NAME = 'user_code'
+      AND NON_UNIQUE = 0
+  ) THEN
+    ALTER TABLE users ADD UNIQUE KEY uq_users_user_code (user_code);
+  END IF;
+
+  INSERT INTO business_code_sequences (entity, last_value)
+  SELECT 'users', COALESCE(MAX(CAST(SUBSTRING(user_code, 5) AS UNSIGNED)), 0)
+  FROM users
+  WHERE user_code REGEXP '^USR-[0-9]{6}$'
+  ON DUPLICATE KEY UPDATE
+    last_value = GREATEST(last_value, VALUES(last_value));
+END//
+
+CALL migrate_users_business_codes()//
+DROP PROCEDURE IF EXISTS migrate_users_business_codes//
+
+DROP TRIGGER IF EXISTS trg_users_business_code_before_insert//
+CREATE TRIGGER trg_users_business_code_before_insert
+BEFORE INSERT ON users
+FOR EACH ROW
+BEGIN
+  DECLARE next_code_number INT UNSIGNED DEFAULT 0;
+
+  INSERT INTO business_code_sequences (entity, last_value)
+  VALUES ('users', 0)
+  ON DUPLICATE KEY UPDATE last_value = last_value;
+
+  IF NEW.user_code IS NULL OR TRIM(NEW.user_code) = '' THEN
+    UPDATE business_code_sequences
+    SET last_value = last_value + 1
+    WHERE entity = 'users';
+
+    SELECT last_value
+    INTO next_code_number
+    FROM business_code_sequences
+    WHERE entity = 'users';
+
+    SET NEW.user_code = CONCAT('USR-', LPAD(next_code_number, 6, '0'));
+  ELSEIF NEW.user_code REGEXP '^USR-[0-9]{6}$' THEN
+    UPDATE business_code_sequences
+    SET last_value = GREATEST(last_value, CAST(SUBSTRING(NEW.user_code, 5) AS UNSIGNED))
+    WHERE entity = 'users';
+  END IF;
+
+  IF NEW.is_verified IS NULL THEN
+    SET NEW.is_verified = 0;
+  END IF;
+END//
+
+DELIMITER ;
 
 -- Canonical login users. Passwords are stored as bcrypt hashes only.
 INSERT INTO users (name, email, password_hash, role)
@@ -347,6 +455,7 @@ WHERE NOT EXISTS (
 
 CREATE TABLE IF NOT EXISTS sessions (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  session_code VARCHAR(50) NOT NULL,
   variant_id INT UNSIGNED NOT NULL,
   coach_user_id INT UNSIGNED NULL,
   session_date DATE NOT NULL,
@@ -358,6 +467,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_sessions_session_code (session_code),
   UNIQUE KEY uq_sessions_variant_slot (variant_id, session_date, start_time, end_time),
   KEY idx_sessions_variant_date (variant_id, session_date),
   KEY idx_sessions_coach_date (coach_user_id, session_date),
@@ -397,6 +507,84 @@ CREATE TABLE IF NOT EXISTS coach_availability (
   CONSTRAINT chk_coach_availability_time_range CHECK (start_time < end_time),
   CONSTRAINT chk_coach_availability_status CHECK (status IN ('available', 'unavailable', 'leave'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP PROCEDURE IF EXISTS migrate_sessions_business_codes;
+
+DELIMITER //
+
+CREATE PROCEDURE migrate_sessions_business_codes()
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'sessions'
+      AND COLUMN_NAME = 'session_code'
+  ) THEN
+    ALTER TABLE sessions ADD COLUMN session_code VARCHAR(50) NULL AFTER id;
+  END IF;
+
+  UPDATE sessions
+  SET session_code = CONCAT('SES-', LPAD(id, 6, '0'))
+  WHERE session_code IS NULL
+     OR TRIM(session_code) = ''
+     OR session_code NOT REGEXP '^SES-[0-9]{6}$';
+
+  ALTER TABLE sessions
+    MODIFY session_code VARCHAR(50) NOT NULL;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'sessions'
+      AND COLUMN_NAME = 'session_code'
+      AND NON_UNIQUE = 0
+  ) THEN
+    ALTER TABLE sessions ADD UNIQUE KEY uq_sessions_session_code (session_code);
+  END IF;
+
+  INSERT INTO business_code_sequences (entity, last_value)
+  SELECT 'sessions', COALESCE(MAX(CAST(SUBSTRING(session_code, 5) AS UNSIGNED)), 0)
+  FROM sessions
+  WHERE session_code REGEXP '^SES-[0-9]{6}$'
+  ON DUPLICATE KEY UPDATE
+    last_value = GREATEST(last_value, VALUES(last_value));
+END//
+
+CALL migrate_sessions_business_codes()//
+DROP PROCEDURE IF EXISTS migrate_sessions_business_codes//
+
+DROP TRIGGER IF EXISTS trg_sessions_business_code_before_insert//
+CREATE TRIGGER trg_sessions_business_code_before_insert
+BEFORE INSERT ON sessions
+FOR EACH ROW
+BEGIN
+  DECLARE next_code_number INT UNSIGNED DEFAULT 0;
+
+  INSERT INTO business_code_sequences (entity, last_value)
+  VALUES ('sessions', 0)
+  ON DUPLICATE KEY UPDATE last_value = last_value;
+
+  IF NEW.session_code IS NULL OR TRIM(NEW.session_code) = '' THEN
+    UPDATE business_code_sequences
+    SET last_value = last_value + 1
+    WHERE entity = 'sessions';
+
+    SELECT last_value
+    INTO next_code_number
+    FROM business_code_sequences
+    WHERE entity = 'sessions';
+
+    SET NEW.session_code = CONCAT('SES-', LPAD(next_code_number, 6, '0'));
+  ELSEIF NEW.session_code REGEXP '^SES-[0-9]{6}$' THEN
+    UPDATE business_code_sequences
+    SET last_value = GREATEST(last_value, CAST(SUBSTRING(NEW.session_code, 5) AS UNSIGNED))
+    WHERE entity = 'sessions';
+  END IF;
+END//
+
+DELIMITER ;
 
 DROP TRIGGER IF EXISTS trg_coach_availability_no_overlap_insert;
 DROP TRIGGER IF EXISTS trg_coach_availability_no_overlap_update;
@@ -564,6 +752,7 @@ WHERE u.email = 'martina.coach@pickled.ph'
 
 CREATE TABLE IF NOT EXISTS private_inquiries (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  inquiry_code VARCHAR(50) NOT NULL,
   user_id INT UNSIGNED NOT NULL,
   private_package_id INT UNSIGNED NOT NULL,
   message TEXT NOT NULL,
@@ -572,6 +761,7 @@ CREATE TABLE IF NOT EXISTS private_inquiries (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_private_inquiries_inquiry_code (inquiry_code),
   KEY idx_private_inquiries_user_created (user_id, created_at),
   KEY idx_private_inquiries_package_created (private_package_id, created_at),
   KEY idx_private_inquiries_status_created (status, created_at),
@@ -585,6 +775,84 @@ CREATE TABLE IF NOT EXISTS private_inquiries (
     ON UPDATE CASCADE,
   CONSTRAINT chk_private_inquiries_status CHECK (status IN ('new', 'in_review', 'responded', 'closed', 'cancelled'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP PROCEDURE IF EXISTS migrate_private_inquiries_business_codes;
+
+DELIMITER //
+
+CREATE PROCEDURE migrate_private_inquiries_business_codes()
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'private_inquiries'
+      AND COLUMN_NAME = 'inquiry_code'
+  ) THEN
+    ALTER TABLE private_inquiries ADD COLUMN inquiry_code VARCHAR(50) NULL AFTER id;
+  END IF;
+
+  UPDATE private_inquiries
+  SET inquiry_code = CONCAT('INQ-', LPAD(id, 6, '0'))
+  WHERE inquiry_code IS NULL
+     OR TRIM(inquiry_code) = ''
+     OR inquiry_code NOT REGEXP '^INQ-[0-9]{6}$';
+
+  ALTER TABLE private_inquiries
+    MODIFY inquiry_code VARCHAR(50) NOT NULL;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'private_inquiries'
+      AND COLUMN_NAME = 'inquiry_code'
+      AND NON_UNIQUE = 0
+  ) THEN
+    ALTER TABLE private_inquiries ADD UNIQUE KEY uq_private_inquiries_inquiry_code (inquiry_code);
+  END IF;
+
+  INSERT INTO business_code_sequences (entity, last_value)
+  SELECT 'private_inquiries', COALESCE(MAX(CAST(SUBSTRING(inquiry_code, 5) AS UNSIGNED)), 0)
+  FROM private_inquiries
+  WHERE inquiry_code REGEXP '^INQ-[0-9]{6}$'
+  ON DUPLICATE KEY UPDATE
+    last_value = GREATEST(last_value, VALUES(last_value));
+END//
+
+CALL migrate_private_inquiries_business_codes()//
+DROP PROCEDURE IF EXISTS migrate_private_inquiries_business_codes//
+
+DROP TRIGGER IF EXISTS trg_private_inquiries_business_code_before_insert//
+CREATE TRIGGER trg_private_inquiries_business_code_before_insert
+BEFORE INSERT ON private_inquiries
+FOR EACH ROW
+BEGIN
+  DECLARE next_code_number INT UNSIGNED DEFAULT 0;
+
+  INSERT INTO business_code_sequences (entity, last_value)
+  VALUES ('private_inquiries', 0)
+  ON DUPLICATE KEY UPDATE last_value = last_value;
+
+  IF NEW.inquiry_code IS NULL OR TRIM(NEW.inquiry_code) = '' THEN
+    UPDATE business_code_sequences
+    SET last_value = last_value + 1
+    WHERE entity = 'private_inquiries';
+
+    SELECT last_value
+    INTO next_code_number
+    FROM business_code_sequences
+    WHERE entity = 'private_inquiries';
+
+    SET NEW.inquiry_code = CONCAT('INQ-', LPAD(next_code_number, 6, '0'));
+  ELSEIF NEW.inquiry_code REGEXP '^INQ-[0-9]{6}$' THEN
+    UPDATE business_code_sequences
+    SET last_value = GREATEST(last_value, CAST(SUBSTRING(NEW.inquiry_code, 5) AS UNSIGNED))
+    WHERE entity = 'private_inquiries';
+  END IF;
+END//
+
+DELIMITER ;
 
 -- ============================================================
 -- BOOKINGS / CART
@@ -621,6 +889,11 @@ CREATE TABLE IF NOT EXISTS bookings (
   CONSTRAINT chk_bookings_total CHECK (total >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+UPDATE bookings
+SET reference = CONCAT('PKL-', LPAD(id, 6, '0'))
+WHERE reference IS NULL
+   OR TRIM(reference) = '';
+
 CREATE TABLE IF NOT EXISTS booking_items (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   booking_id INT UNSIGNED NOT NULL,
@@ -651,6 +924,10 @@ CREATE TABLE IF NOT EXISTS booking_items (
   CONSTRAINT fk_booking_items_session
     FOREIGN KEY (session_id) REFERENCES sessions(id)
     ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_booking_items_coach_user
+    FOREIGN KEY (coach_user_id) REFERENCES users(id)
+    ON DELETE SET NULL
     ON UPDATE CASCADE,
   CONSTRAINT chk_booking_items_time_range CHECK (start_time < end_time),
   CONSTRAINT chk_booking_items_quantity CHECK (quantity > 0),
@@ -699,9 +976,214 @@ CREATE TABLE IF NOT EXISTS cart_items (
     FOREIGN KEY (session_id) REFERENCES sessions(id)
     ON DELETE CASCADE
     ON UPDATE CASCADE,
+  CONSTRAINT fk_cart_items_variant
+    FOREIGN KEY (variant_id) REFERENCES booking_variants(id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_cart_items_coach_user
+    FOREIGN KEY (coach_user_id) REFERENCES users(id)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
   CONSTRAINT chk_cart_items_quantity CHECK (quantity > 0),
   CONSTRAINT chk_cart_items_unit_price CHECK (unit_price >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP PROCEDURE IF EXISTS migrate_relationship_integrity;
+
+DELIMITER //
+
+CREATE PROCEDURE migrate_relationship_integrity()
+BEGIN
+  UPDATE password_reset pr
+  LEFT JOIN users existing_user ON existing_user.id = pr.user_id
+  JOIN users email_user ON LOWER(email_user.email) = LOWER(pr.email)
+  SET pr.user_id = email_user.id
+  WHERE pr.user_id IS NULL
+     OR pr.user_id <= 0
+     OR existing_user.id IS NULL;
+
+  UPDATE password_reset pr
+  LEFT JOIN users u ON u.id = pr.user_id
+  SET pr.user_id = NULL
+  WHERE pr.user_id IS NOT NULL
+    AND u.id IS NULL;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.KEY_COLUMN_USAGE
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'password_reset'
+      AND COLUMN_NAME = 'user_id'
+      AND REFERENCED_TABLE_NAME = 'users'
+  ) THEN
+    ALTER TABLE password_reset MODIFY user_id INT UNSIGNED NULL;
+    ALTER TABLE password_reset
+      ADD CONSTRAINT fk_password_reset_user
+      FOREIGN KEY (user_id) REFERENCES users(id)
+      ON DELETE SET NULL
+      ON UPDATE CASCADE;
+  END IF;
+
+  UPDATE booking_items bi
+  JOIN sessions s ON s.id = bi.session_id
+  SET bi.coach_user_id = s.coach_user_id
+  WHERE bi.coach_user_id IS NULL
+    AND s.coach_user_id IS NOT NULL;
+
+  UPDATE cart_items ci
+  JOIN sessions s ON s.id = ci.session_id
+  SET ci.coach_user_id = s.coach_user_id
+  WHERE ci.coach_user_id IS NULL
+    AND s.coach_user_id IS NOT NULL;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.KEY_COLUMN_USAGE
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'booking_items'
+      AND COLUMN_NAME = 'coach_user_id'
+      AND REFERENCED_TABLE_NAME = 'users'
+  ) THEN
+    ALTER TABLE booking_items
+      ADD CONSTRAINT fk_booking_items_coach_user
+      FOREIGN KEY (coach_user_id) REFERENCES users(id)
+      ON DELETE SET NULL
+      ON UPDATE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.KEY_COLUMN_USAGE
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'cart_items'
+      AND COLUMN_NAME = 'variant_id'
+      AND REFERENCED_TABLE_NAME = 'booking_variants'
+  ) THEN
+    ALTER TABLE cart_items
+      ADD CONSTRAINT fk_cart_items_variant
+      FOREIGN KEY (variant_id) REFERENCES booking_variants(id)
+      ON DELETE RESTRICT
+      ON UPDATE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.KEY_COLUMN_USAGE
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'cart_items'
+      AND COLUMN_NAME = 'coach_user_id'
+      AND REFERENCED_TABLE_NAME = 'users'
+  ) THEN
+    ALTER TABLE cart_items
+      ADD CONSTRAINT fk_cart_items_coach_user
+      FOREIGN KEY (coach_user_id) REFERENCES users(id)
+      ON DELETE SET NULL
+      ON UPDATE CASCADE;
+  END IF;
+END//
+
+CALL migrate_relationship_integrity()//
+DROP PROCEDURE IF EXISTS migrate_relationship_integrity//
+
+DROP TRIGGER IF EXISTS trg_password_reset_user_before_insert//
+CREATE TRIGGER trg_password_reset_user_before_insert
+BEFORE INSERT ON password_reset
+FOR EACH ROW
+BEGIN
+  IF (NEW.user_id IS NULL OR NEW.user_id = 0)
+     AND NEW.email IS NOT NULL
+     AND TRIM(NEW.email) <> '' THEN
+    SET NEW.user_id = (
+      SELECT u.id
+      FROM users u
+      WHERE LOWER(u.email) = LOWER(NEW.email)
+      LIMIT 1
+    );
+  END IF;
+END//
+
+DROP TRIGGER IF EXISTS trg_password_reset_user_before_update//
+CREATE TRIGGER trg_password_reset_user_before_update
+BEFORE UPDATE ON password_reset
+FOR EACH ROW
+BEGIN
+  IF (NEW.user_id IS NULL OR NEW.user_id = 0)
+     AND NEW.email IS NOT NULL
+     AND TRIM(NEW.email) <> '' THEN
+    SET NEW.user_id = (
+      SELECT u.id
+      FROM users u
+      WHERE LOWER(u.email) = LOWER(NEW.email)
+      LIMIT 1
+    );
+  END IF;
+END//
+
+DROP TRIGGER IF EXISTS trg_booking_items_coach_before_insert//
+CREATE TRIGGER trg_booking_items_coach_before_insert
+BEFORE INSERT ON booking_items
+FOR EACH ROW
+BEGIN
+  IF NEW.coach_user_id IS NULL
+     AND NEW.session_id IS NOT NULL THEN
+    SET NEW.coach_user_id = (
+      SELECT s.coach_user_id
+      FROM sessions s
+      WHERE s.id = NEW.session_id
+      LIMIT 1
+    );
+  END IF;
+END//
+
+DROP TRIGGER IF EXISTS trg_booking_items_coach_before_update//
+CREATE TRIGGER trg_booking_items_coach_before_update
+BEFORE UPDATE ON booking_items
+FOR EACH ROW
+BEGIN
+  IF NEW.coach_user_id IS NULL
+     AND NEW.session_id IS NOT NULL THEN
+    SET NEW.coach_user_id = (
+      SELECT s.coach_user_id
+      FROM sessions s
+      WHERE s.id = NEW.session_id
+      LIMIT 1
+    );
+  END IF;
+END//
+
+DROP TRIGGER IF EXISTS trg_cart_items_coach_before_insert//
+CREATE TRIGGER trg_cart_items_coach_before_insert
+BEFORE INSERT ON cart_items
+FOR EACH ROW
+BEGIN
+  IF NEW.coach_user_id IS NULL
+     AND NEW.session_id IS NOT NULL THEN
+    SET NEW.coach_user_id = (
+      SELECT s.coach_user_id
+      FROM sessions s
+      WHERE s.id = NEW.session_id
+      LIMIT 1
+    );
+  END IF;
+END//
+
+DROP TRIGGER IF EXISTS trg_cart_items_coach_before_update//
+CREATE TRIGGER trg_cart_items_coach_before_update
+BEFORE UPDATE ON cart_items
+FOR EACH ROW
+BEGIN
+  IF NEW.coach_user_id IS NULL
+     AND NEW.session_id IS NOT NULL THEN
+    SET NEW.coach_user_id = (
+      SELECT s.coach_user_id
+      FROM sessions s
+      WHERE s.id = NEW.session_id
+      LIMIT 1
+    );
+  END IF;
+END//
+
+DELIMITER ;
 
 -- No default booking/cart rows are inserted. These tables are runtime-owned.
 
@@ -713,6 +1195,7 @@ CREATE TABLE IF NOT EXISTS cart_items (
 
 CREATE TABLE IF NOT EXISTS payments (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  payment_code VARCHAR(50) NOT NULL,
   booking_id INT UNSIGNED NOT NULL,
   proof_image VARCHAR(255) NOT NULL,
   amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -724,6 +1207,7 @@ CREATE TABLE IF NOT EXISTS payments (
   remarks TEXT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_payments_payment_code (payment_code),
   KEY idx_payments_booking_created (booking_id, created_at),
   KEY idx_payments_status_created (status, created_at),
   KEY idx_payments_reference_number (reference_number),
@@ -739,6 +1223,84 @@ CREATE TABLE IF NOT EXISTS payments (
   CONSTRAINT chk_payments_amount CHECK (amount >= 0),
   CONSTRAINT chk_payments_status CHECK (status IN ('pending', 'approved', 'rejected'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP PROCEDURE IF EXISTS migrate_payments_business_codes;
+
+DELIMITER //
+
+CREATE PROCEDURE migrate_payments_business_codes()
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'payments'
+      AND COLUMN_NAME = 'payment_code'
+  ) THEN
+    ALTER TABLE payments ADD COLUMN payment_code VARCHAR(50) NULL AFTER id;
+  END IF;
+
+  UPDATE payments
+  SET payment_code = CONCAT('PAY-', LPAD(id, 6, '0'))
+  WHERE payment_code IS NULL
+     OR TRIM(payment_code) = ''
+     OR payment_code NOT REGEXP '^PAY-[0-9]{6}$';
+
+  ALTER TABLE payments
+    MODIFY payment_code VARCHAR(50) NOT NULL;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'payments'
+      AND COLUMN_NAME = 'payment_code'
+      AND NON_UNIQUE = 0
+  ) THEN
+    ALTER TABLE payments ADD UNIQUE KEY uq_payments_payment_code (payment_code);
+  END IF;
+
+  INSERT INTO business_code_sequences (entity, last_value)
+  SELECT 'payments', COALESCE(MAX(CAST(SUBSTRING(payment_code, 5) AS UNSIGNED)), 0)
+  FROM payments
+  WHERE payment_code REGEXP '^PAY-[0-9]{6}$'
+  ON DUPLICATE KEY UPDATE
+    last_value = GREATEST(last_value, VALUES(last_value));
+END//
+
+CALL migrate_payments_business_codes()//
+DROP PROCEDURE IF EXISTS migrate_payments_business_codes//
+
+DROP TRIGGER IF EXISTS trg_payments_business_code_before_insert//
+CREATE TRIGGER trg_payments_business_code_before_insert
+BEFORE INSERT ON payments
+FOR EACH ROW
+BEGIN
+  DECLARE next_code_number INT UNSIGNED DEFAULT 0;
+
+  INSERT INTO business_code_sequences (entity, last_value)
+  VALUES ('payments', 0)
+  ON DUPLICATE KEY UPDATE last_value = last_value;
+
+  IF NEW.payment_code IS NULL OR TRIM(NEW.payment_code) = '' THEN
+    UPDATE business_code_sequences
+    SET last_value = last_value + 1
+    WHERE entity = 'payments';
+
+    SELECT last_value
+    INTO next_code_number
+    FROM business_code_sequences
+    WHERE entity = 'payments';
+
+    SET NEW.payment_code = CONCAT('PAY-', LPAD(next_code_number, 6, '0'));
+  ELSEIF NEW.payment_code REGEXP '^PAY-[0-9]{6}$' THEN
+    UPDATE business_code_sequences
+    SET last_value = GREATEST(last_value, CAST(SUBSTRING(NEW.payment_code, 5) AS UNSIGNED))
+    WHERE entity = 'payments';
+  END IF;
+END//
+
+DELIMITER ;
 
 UPDATE bookings
 SET payment_method = 'GCash'
@@ -861,10 +1423,27 @@ BEGIN
     SELECT 1
     FROM bookings b
     WHERE b.id = NEW.booking_id
-      AND b.status = 'completed'
+      AND (
+        LOWER(b.status) = 'completed'
+        OR (
+          LOWER(b.status) NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+          AND LOWER(b.payment_status) IN ('paid', 'verified', 'approved', 'completed')
+          AND EXISTS (
+            SELECT 1
+            FROM booking_items bi
+            WHERE bi.booking_id = b.id
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM booking_items bi
+            WHERE bi.booking_id = b.id
+              AND TIMESTAMP(bi.booking_date, bi.end_time) > NOW()
+          )
+        )
+      )
     LIMIT 1
   ) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback requires a completed booking.';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback requires a completed booking or session.';
   END IF;
 
   IF NOT EXISTS (
@@ -888,7 +1467,7 @@ BEGIN
       SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback booking item must belong to the booking.';
     END IF;
 
-    SELECT s.coach_user_id
+    SELECT COALESCE(bi.coach_user_id, s.coach_user_id)
     INTO item_coach_user_id
     FROM booking_items bi
     LEFT JOIN sessions s ON s.id = bi.session_id
@@ -914,9 +1493,9 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM booking_items bi
-      JOIN sessions s ON s.id = bi.session_id
+      LEFT JOIN sessions s ON s.id = bi.session_id
       WHERE bi.booking_id = NEW.booking_id
-        AND s.coach_user_id = NEW.coach_user_id
+        AND COALESCE(bi.coach_user_id, s.coach_user_id) = NEW.coach_user_id
       LIMIT 1
     ) THEN
       SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback coach must be assigned to the booked session.';
@@ -934,10 +1513,27 @@ BEGIN
     SELECT 1
     FROM bookings b
     WHERE b.id = NEW.booking_id
-      AND b.status = 'completed'
+      AND (
+        LOWER(b.status) = 'completed'
+        OR (
+          LOWER(b.status) NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+          AND LOWER(b.payment_status) IN ('paid', 'verified', 'approved', 'completed')
+          AND EXISTS (
+            SELECT 1
+            FROM booking_items bi
+            WHERE bi.booking_id = b.id
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM booking_items bi
+            WHERE bi.booking_id = b.id
+              AND TIMESTAMP(bi.booking_date, bi.end_time) > NOW()
+          )
+        )
+      )
     LIMIT 1
   ) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback requires a completed booking.';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback requires a completed booking or session.';
   END IF;
 
   IF NOT EXISTS (
@@ -961,7 +1557,7 @@ BEGIN
       SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback booking item must belong to the booking.';
     END IF;
 
-    SELECT s.coach_user_id
+    SELECT COALESCE(bi.coach_user_id, s.coach_user_id)
     INTO item_coach_user_id
     FROM booking_items bi
     LEFT JOIN sessions s ON s.id = bi.session_id
@@ -987,9 +1583,9 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM booking_items bi
-      JOIN sessions s ON s.id = bi.session_id
+      LEFT JOIN sessions s ON s.id = bi.session_id
       WHERE bi.booking_id = NEW.booking_id
-        AND s.coach_user_id = NEW.coach_user_id
+        AND COALESCE(bi.coach_user_id, s.coach_user_id) = NEW.coach_user_id
       LIMIT 1
     ) THEN
       SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback coach must be assigned to the booked session.';

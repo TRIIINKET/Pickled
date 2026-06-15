@@ -51,10 +51,27 @@ BEGIN
     SELECT 1
     FROM bookings b
     WHERE b.id = NEW.booking_id
-      AND b.status = 'completed'
+      AND (
+        LOWER(b.status) = 'completed'
+        OR (
+          LOWER(b.status) NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+          AND LOWER(b.payment_status) IN ('paid', 'verified', 'approved', 'completed')
+          AND EXISTS (
+            SELECT 1
+            FROM booking_items bi
+            WHERE bi.booking_id = b.id
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM booking_items bi
+            WHERE bi.booking_id = b.id
+              AND TIMESTAMP(bi.booking_date, bi.end_time) > NOW()
+          )
+        )
+      )
     LIMIT 1
   ) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback requires a completed booking.';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback requires a completed booking or session.';
   END IF;
 
   IF NOT EXISTS (
@@ -78,7 +95,7 @@ BEGIN
       SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback booking item must belong to the booking.';
     END IF;
 
-    SELECT s.coach_user_id
+    SELECT COALESCE(bi.coach_user_id, s.coach_user_id)
     INTO item_coach_user_id
     FROM booking_items bi
     LEFT JOIN sessions s ON s.id = bi.session_id
@@ -104,9 +121,9 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM booking_items bi
-      JOIN sessions s ON s.id = bi.session_id
+      LEFT JOIN sessions s ON s.id = bi.session_id
       WHERE bi.booking_id = NEW.booking_id
-        AND s.coach_user_id = NEW.coach_user_id
+        AND COALESCE(bi.coach_user_id, s.coach_user_id) = NEW.coach_user_id
       LIMIT 1
     ) THEN
       SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback coach must be assigned to the booked session.';
@@ -124,10 +141,27 @@ BEGIN
     SELECT 1
     FROM bookings b
     WHERE b.id = NEW.booking_id
-      AND b.status = 'completed'
+      AND (
+        LOWER(b.status) = 'completed'
+        OR (
+          LOWER(b.status) NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+          AND LOWER(b.payment_status) IN ('paid', 'verified', 'approved', 'completed')
+          AND EXISTS (
+            SELECT 1
+            FROM booking_items bi
+            WHERE bi.booking_id = b.id
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM booking_items bi
+            WHERE bi.booking_id = b.id
+              AND TIMESTAMP(bi.booking_date, bi.end_time) > NOW()
+          )
+        )
+      )
     LIMIT 1
   ) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback requires a completed booking.';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback requires a completed booking or session.';
   END IF;
 
   IF NOT EXISTS (
@@ -151,7 +185,7 @@ BEGIN
       SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback booking item must belong to the booking.';
     END IF;
 
-    SELECT s.coach_user_id
+    SELECT COALESCE(bi.coach_user_id, s.coach_user_id)
     INTO item_coach_user_id
     FROM booking_items bi
     LEFT JOIN sessions s ON s.id = bi.session_id
@@ -177,9 +211,9 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM booking_items bi
-      JOIN sessions s ON s.id = bi.session_id
+      LEFT JOIN sessions s ON s.id = bi.session_id
       WHERE bi.booking_id = NEW.booking_id
-        AND s.coach_user_id = NEW.coach_user_id
+        AND COALESCE(bi.coach_user_id, s.coach_user_id) = NEW.coach_user_id
       LIMIT 1
     ) THEN
       SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Feedback coach must be assigned to the booked session.';

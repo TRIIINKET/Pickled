@@ -124,6 +124,7 @@ include __DIR__ . '/../includes/header.php';
       </div>
     <?php else: ?>
       <?php $statusKey = booking_detail_status_key((string) $booking['status']); ?>
+      <?php $feedbackEligible = $feedbackService->canLeaveFeedback((int) $booking['id'], $userId); ?>
       <section class="confirmation booking-history">
         <article class="booking-card" data-booking-status="<?= htmlspecialchars($statusKey) ?>">
           <div class="booking-card__header">
@@ -209,8 +210,8 @@ include __DIR__ . '/../includes/header.php';
             <?php endforeach; ?>
           </div>
 
-          <?php if ($statusKey === 'completed'): ?>
-            <section class="checkout-card">
+          <?php if ($feedback || $feedbackEligible): ?>
+            <section class="checkout-card" id="booking-feedback">
               <h2><?= $feedback ? 'Your Feedback' : 'Share Feedback' ?></h2>
               <?php if ($feedback): ?>
                 <p><strong>Current rating:</strong> <?= (int) $feedback['rating'] ?> / 5</p>
@@ -222,44 +223,46 @@ include __DIR__ . '/../includes/header.php';
                 <p>Tell us how the completed booking went.</p>
               <?php endif; ?>
 
-              <form method="post">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
-                <input type="hidden" name="action" value="<?= $feedback ? 'update_feedback' : 'submit_feedback' ?>" />
-                <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>" />
+              <?php if ($feedbackEligible): ?>
+                <form method="post">
+                  <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
+                  <input type="hidden" name="action" value="<?= $feedback ? 'update_feedback' : 'submit_feedback' ?>" />
+                  <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>" />
 
-                <?php if ($feedbackTargets): ?>
+                  <?php if ($feedbackTargets): ?>
+                    <label>
+                      Session or coach
+                      <select name="booking_item_id">
+                        <option value="">Overall booking</option>
+                        <?php foreach ($feedbackTargets as $target): ?>
+                          <option value="<?= (int) $target['booking_item_id'] ?>" <?= $feedback && (int) ($feedback['booking_item_id'] ?? 0) === (int) $target['booking_item_id'] ? 'selected' : '' ?>>
+                            <?= htmlspecialchars(feedback_target_label($target)) ?>
+                          </option>
+                        <?php endforeach; ?>
+                      </select>
+                    </label>
+                  <?php endif; ?>
+
                   <label>
-                    Session or coach
-                    <select name="booking_item_id">
-                      <option value="">Overall booking</option>
-                      <?php foreach ($feedbackTargets as $target): ?>
-                        <option value="<?= (int) $target['booking_item_id'] ?>" <?= $feedback && (int) ($feedback['booking_item_id'] ?? 0) === (int) $target['booking_item_id'] ? 'selected' : '' ?>>
-                          <?= htmlspecialchars(feedback_target_label($target)) ?>
-                        </option>
-                      <?php endforeach; ?>
+                    Rating
+                    <select name="rating" required>
+                      <?php for ($rating = 5; $rating >= 1; $rating--): ?>
+                        <option value="<?= $rating ?>" <?= $feedback && (int) $feedback['rating'] === $rating ? 'selected' : '' ?>><?= $rating ?> / 5</option>
+                      <?php endfor; ?>
                     </select>
                   </label>
-                <?php endif; ?>
 
-                <label>
-                  Rating
-                  <select name="rating" required>
-                    <?php for ($rating = 5; $rating >= 1; $rating--): ?>
-                      <option value="<?= $rating ?>" <?= $feedback && (int) $feedback['rating'] === $rating ? 'selected' : '' ?>><?= $rating ?> / 5</option>
-                    <?php endfor; ?>
-                  </select>
-                </label>
+                  <label>
+                    Comment
+                    <textarea name="comment" required><?= htmlspecialchars((string) ($feedback['comment'] ?? '')) ?></textarea>
+                  </label>
 
-                <label>
-                  Comment
-                  <textarea name="comment" required><?= htmlspecialchars((string) ($feedback['comment'] ?? '')) ?></textarea>
-                </label>
-
-                <button class="checkout-btn" type="submit"><?= $feedback ? 'Update feedback' : 'Submit feedback' ?></button>
-              </form>
+                  <button class="checkout-btn" type="submit"><?= $feedback ? 'Update feedback' : 'Submit feedback' ?></button>
+                </form>
+              <?php endif; ?>
             </section>
           <?php else: ?>
-            <div class="cart-message cart-message--warning">Feedback opens after this booking is marked completed.</div>
+            <div class="cart-message cart-message--warning">Feedback opens after this booking is completed or the paid scheduled time has ended.</div>
           <?php endif; ?>
         </article>
       </section>

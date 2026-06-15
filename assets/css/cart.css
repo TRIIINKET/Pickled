@@ -70,6 +70,10 @@
 .booking-filters button[data-booking-filter="completed"].is-selected{background:#f2f2f2;color:#6b6b6b;border-color:#d0d0d0}
 .booking-filters button[data-booking-filter="cancelled"].is-selected{background:#ffe7e9;color:#8f1d2f;border-color:#f0b2bb}
 .booking-card__meta{display:grid;gap:8px;font-size:14px;color:#35634f}
+.booking-card__actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.booking-action{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;padding:11px 16px;font-weight:900;border:1px solid rgba(36,95,73,.2)}
+.booking-action--secondary{background:#fff;color:#204f3b}
+.booking-action--feedback{background:#70e956;color:#10240e;border-color:#70e956}
 .booking-items{display:grid;gap:14px}
 .booking-item{display:flex;gap:14px;align-items:flex-start}
 .booking-item img{width:94px;height:74px;object-fit:cover;border-radius:10px;flex-shrink:0}

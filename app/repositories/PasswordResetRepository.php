@@ -147,7 +147,7 @@ final class PasswordResetRepository
         Database::connection()->exec(
             "CREATE TABLE IF NOT EXISTS password_reset (
               id INT NOT NULL AUTO_INCREMENT,
-              user_id INT NULL,
+              user_id INT UNSIGNED NULL,
               email VARCHAR(160) NOT NULL,
               token VARCHAR(128) NOT NULL,
               expires_at DATETIME NOT NULL,
@@ -159,7 +159,11 @@ final class PasswordResetRepository
               KEY idx_password_reset_email (email),
               KEY idx_password_reset_user_id (user_id),
               KEY idx_password_reset_expires_at (expires_at),
-              KEY idx_password_reset_used (used)
+              KEY idx_password_reset_used (used),
+              CONSTRAINT fk_password_reset_user
+                FOREIGN KEY (user_id) REFERENCES users(id)
+                ON DELETE SET NULL
+                ON UPDATE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
         );
     }
