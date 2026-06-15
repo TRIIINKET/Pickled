@@ -10,14 +10,19 @@ CREATE TABLE IF NOT EXISTS users (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS password_resets (
+CREATE TABLE IF NOT EXISTS password_reset (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  token_hash CHAR(64) NOT NULL UNIQUE,
+  user_id INT NULL,
+  email VARCHAR(160) NOT NULL,
+  token VARCHAR(128) NOT NULL UNIQUE,
   expires_at DATETIME NOT NULL,
+  used TINYINT(1) NOT NULL DEFAULT 0,
   used_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  KEY idx_password_reset_email (email),
+  KEY idx_password_reset_user_id (user_id),
+  KEY idx_password_reset_expires_at (expires_at),
+  KEY idx_password_reset_used (used)
 );
 
 CREATE TABLE IF NOT EXISTS carts (

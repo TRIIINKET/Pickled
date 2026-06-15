@@ -126,6 +126,8 @@
   color: var(--green, #264414);
   font-size: 13px;
   font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .player-profile-info {

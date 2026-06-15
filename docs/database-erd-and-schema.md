@@ -308,7 +308,7 @@ Important fields:
 | `status` | Coach state such as active, inactive, or leave. |
 | `created_at`, `updated_at` | Profile timestamps. |
 
-### Table: password_resets
+### Table: password_reset
 
 Purpose: Stores password reset requests for user accounts.
 
@@ -660,7 +660,7 @@ Important fields:
 
 - `users` to `user_profiles` is optional one-to-one. Login data stays in `users`; player details stay in `user_profiles`. Admin and coach users may have no `user_profiles` row.
 - `users` to `coach_profiles` is optional one-to-one. Only users with role `coach` should have coach profile rows.
-- `users` to `password_resets` is one-to-many. A user can request multiple resets over time.
+- `users` to `password_reset` is one-to-many. A user can request multiple resets over time.
 
 ### Court and Scheduling Relationships
 
@@ -723,7 +723,7 @@ The following entities are intentionally not part of the finalized ERD:
 
 ## F. Referential Integrity Recommendations
 
-- Use `ON DELETE CASCADE` for dependent rows that should not outlive their parent: `password_resets`, `cart_items`, and non-audit temporary records.
+- Use `ON DELETE CASCADE` for dependent rows that should not outlive their parent: `password_reset`, `cart_items`, and non-audit temporary records.
 - Use `ON DELETE RESTRICT` or soft deletes for `users`, `bookings`, `booking_items`, `payments`, `sessions`, `courts`, and `booking_variants` to preserve booking, payment, and audit history.
 - Keep `admin_logs.entity_type` and `admin_logs.entity_id` polymorphic, with integrity enforced at the application level.
 - Use unique constraints for `users.email`, `courts.slug`, `booking_variants.slug`, `carts.user_id`, and session slot uniqueness.

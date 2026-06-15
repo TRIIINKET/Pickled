@@ -11,7 +11,6 @@ require_once $frontendPath . '/includes/paths.php';
 $extraHead = '<link rel="stylesheet" href="' . htmlspecialchars(pickled_asset_url('css/login.css?v=20260615a')) . '"/>' . "\n" .
     '<script defer src="' . htmlspecialchars(pickled_asset_url('js/login.js?v=20260615a')) . '"></script>';
 $message = '';
-$resetLink = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? null)) {
@@ -19,9 +18,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
         if ($email) {
-            $token = (new AuthService())->issuePasswordReset($email);
-            if ($token) {
-                $resetLink = pickled_frontend_url('auth/reset-password.php?token=' . rawurlencode($token));
+            try {
+                $token = (new AuthService())->issuePasswordReset($email);
+                if ($token) {
+                    header('Location: ' . pickled_frontend_url('auth/reset-password.php?token=' . rawurlencode($token)));
+                    exit;
+                }
+            } catch (Throwable $e) {
+                error_log('Forgot password reset issue failed: ' . $e->getMessage());
             }
         }
         $message = 'If that email exists, a reset link has been created.';
@@ -36,8 +40,16 @@ include $frontendPath . '/includes/header.php';
     <form class="login-form" method="post">
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
       <?php if ($message): ?><div class="login-success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
-      <?php if ($resetLink): ?><div class="login-success">Demo reset link: <a href="<?= htmlspecialchars($resetLink) ?>">Open reset page</a></div><?php endif; ?>
-      <label><span>Email</span><input type="email" name="email" autocomplete="email" required /></label>
+      <div class="login-form-field">
+        <label for="resetEmail">Email</label>
+        <span class="login-field">
+          <input id="resetEmail" type="email" name="email" placeholder="Enter your email" autocomplete="email" required />
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 6h16v12H4z"></path>
+            <path d="m4 7 8 6 8-6"></path>
+          </svg>
+        </span>
+      </div>
       <button type="submit">Create reset link</button>
     </form>
     <div class="login-links"><a href="login.php">Back to login</a></div>

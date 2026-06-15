@@ -50,6 +50,29 @@ final class UserRepository
         $stmt->execute(['id' => $id, 'password_hash' => $passwordHash]);
     }
 
+    public function updatePasswordByEmail(string $email, string $passwordHash): void
+    {
+        $stmt = Database::connection()->prepare('UPDATE users SET password_hash = :password_hash WHERE email = :email');
+        $stmt->execute([
+            'email' => strtolower($email),
+            'password_hash' => $passwordHash,
+        ]);
+    }
+
+    public function findByResetId(int $resetId): ?array
+    {
+        $stmt = Database::connection()->prepare(
+            'SELECT u.*
+             FROM users u
+             INNER JOIN password_reset pr ON pr.user_id = u.id
+             WHERE pr.id = :reset_id
+             LIMIT 1'
+        );
+        $stmt->execute(['reset_id' => $resetId]);
+        $user = $stmt->fetch();
+        return $user ?: null;
+    }
+
     // Admin methods
     public function findAll(): ?array
     {

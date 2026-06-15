@@ -40,20 +40,52 @@ final class AuthService
         $token = bin2hex(random_bytes(32));
         $config = require __DIR__ . '/../../includes/config.php';
         $timezone = new DateTimeZone((string) ($config['timezone'] ?? 'Asia/Manila'));
-        $expiresAt = (new DateTimeImmutable('now', $timezone))->modify('+30 minutes');
-        $this->resets->create((int) $user['id'], hash('sha256', $token), $expiresAt);
+        $expiresAt = (new DateTimeImmutable('now', $timezone))->modify('+1 hour');
+        $this->resets->create((int) $user['id'], (string) $user['email'], $token, $expiresAt);
         return $token;
+    }
+
+    public function isPasswordResetTokenValid(string $token): bool
+    {
+        if ($token === '' || !preg_match('/\A[a-f0-9]{64}\z/i', $token)) {
+            return false;
+        }
+
+        return (bool) $this->resets->findValid($token);
     }
 
     public function resetPassword(string $token, string $password): bool
     {
-        $reset = $this->resets->findValid(hash('sha256', $token));
+        if ($token === '' || !preg_match('/\A[a-f0-9]{64}\z/i', $token)) {
+            return false;
+        }
+
+        $reset = $this->resets->findValid($token);
         if (!$reset) {
             return false;
         }
 
-        $this->users->updatePassword((int) $reset['user_id'], password_hash($password, PASSWORD_DEFAULT));
+        if (!empty($reset['user_id'])) {
+            $this->users->updatePassword((int) $reset['user_id'], password_hash($password, PASSWORD_DEFAULT));
+        } elseif (!empty($reset['email'])) {
+            $this->users->updatePasswordByEmail((string) $reset['email'], password_hash($password, PASSWORD_DEFAULT));
+        } else {
+            return false;
+        }
+
         $this->resets->markUsed((int) $reset['id']);
+        return true;
+    }
+
+    public function changePassword(int $userId, string $currentPassword, string $newPassword): bool
+    {
+        $user = $this->users->findById($userId);
+        if (!$user || !password_verify($currentPassword, (string) $user['password_hash'])) {
+            return false;
+        }
+
+        $this->users->updatePassword($userId, password_hash($newPassword, PASSWORD_DEFAULT));
+        $this->resets->markUsedForUser($userId, (string) ($user['email'] ?? ''));
         return true;
     }
 }

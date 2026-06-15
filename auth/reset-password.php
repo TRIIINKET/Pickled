@@ -13,6 +13,8 @@ $extraHead = '<link rel="stylesheet" href="' . htmlspecialchars(pickled_asset_ur
 $token = (string) ($_POST['token'] ?? $_GET['token'] ?? '');
 $error = '';
 $success = '';
+$auth = new AuthService();
+$tokenValid = $auth->isPasswordResetTokenValid($token);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = (string) ($_POST['password'] ?? '');
@@ -23,11 +25,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Password must be at least 6 characters.';
     } elseif ($password !== $confirm) {
         $error = 'Passwords do not match.';
-    } elseif (!(new AuthService())->resetPassword($token, $password)) {
+    } elseif (!$auth->resetPassword($token, $password)) {
         $error = 'This reset link is invalid or expired.';
     } else {
         $success = 'Password updated. You can now log in.';
+        $tokenValid = false;
     }
+} elseif (!$tokenValid) {
+    $error = 'This reset link is invalid or expired.';
 }
 
 include $frontendPath . '/includes/header.php';
@@ -38,6 +43,9 @@ include $frontendPath . '/includes/header.php';
     <?php if ($success): ?>
       <div class="login-success"><?= htmlspecialchars($success) ?></div>
       <div class="login-links"><a href="login.php">Go to login</a></div>
+    <?php elseif (!$tokenValid): ?>
+      <div class="login-error"><?= htmlspecialchars($error) ?></div>
+      <div class="login-links"><a href="forgot-password.php">Request a new reset link</a></div>
     <?php else: ?>
       <form class="login-form" method="post">
         <input type="hidden" name="token" value="<?= htmlspecialchars($token) ?>" />

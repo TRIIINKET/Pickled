@@ -31,23 +31,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     } elseif (($_POST['action'] ?? '') === 'update_admin_account') {
         $name = trim((string) ($_POST['name'] ?? ''));
         $email = trim((string) ($_POST['email'] ?? ''));
-        $password = (string) ($_POST['password'] ?? '');
-        $confirmPassword = (string) ($_POST['confirm_password'] ?? '');
 
         if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errorMsg = 'Please enter a valid name and email.';
-        } elseif ($password !== '' && strlen($password) < 6) {
-            $errorMsg = 'Password must be at least 6 characters.';
-        } elseif ($password !== $confirmPassword) {
-            $errorMsg = 'Password confirmation does not match.';
         } else {
             try {
                 if (!$pdo) {
                     $_SESSION['user']['name'] = $name;
                     $_SESSION['user']['email'] = $email;
-                } elseif ($password !== '') {
-                    $stmt = $pdo->prepare('UPDATE users SET name = ?, email = ?, password_hash = ? WHERE id = ? AND role = ?');
-                    $stmt->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT), (int) $admin['id'], 'admin']);
                 } else {
                     $stmt = $pdo->prepare('UPDATE users SET name = ?, email = ? WHERE id = ? AND role = ?');
                     $stmt->execute([$name, $email, (int) $admin['id'], 'admin']);
@@ -125,8 +116,6 @@ $dashboardNav = [
                     <input type="hidden" name="action" value="update_admin_account">
                     <label>Name<input type="text" name="name" value="<?php echo htmlspecialchars($admin['name'] ?? 'Admin'); ?>" required></label>
                     <label>Email<input type="email" name="email" value="<?php echo htmlspecialchars($admin['email'] ?? 'admin@example.com'); ?>" required></label>
-                    <label id="password">Password<input type="password" name="password" autocomplete="new-password" placeholder="Leave blank to keep current password"></label>
-                    <label>Confirm Password<input type="password" name="confirm_password" autocomplete="new-password" placeholder="Confirm new password"></label>
                     <div class="settings-actions"><button class="bookings-button primary" type="submit">Save Profile</button></div>
                 </form>
             </article>
@@ -136,7 +125,7 @@ $dashboardNav = [
                 <div class="settings-rules">
                     <p><strong>Role</strong><span>Super Admin</span></p>
                     <p><strong>Account Status</strong><span>Active</span></p>
-                    <p><strong>Password</strong><span>Change it using the password fields.</span></p>
+                    <p><strong>Password</strong><span><a href="<?php echo htmlspecialchars(pickled_frontend_url('auth/change-password.php'), ENT_QUOTES, 'UTF-8'); ?>">Change Password</a></span></p>
                 </div>
             </article>
         </section>

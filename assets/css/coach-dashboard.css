@@ -2121,8 +2121,20 @@ button {
     padding: 0 12px;
 }
 
-.password-summary button {
+.password-summary button,
+.password-summary a {
     min-width: 160px;
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 13px;
+    background: var(--lime);
+    color: var(--green);
+    font: inherit;
+    font-weight: 900;
+    text-decoration: none;
 }
 
 .coach-date-pill,

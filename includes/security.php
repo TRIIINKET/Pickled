@@ -87,6 +87,7 @@ function pickled_safe_redirect(string $redirect): string {
         'contact.php',
         'forgot-password.php',
         'reset-password.php',
+        'change-password.php',
     ];
 
     $redirect = trim($redirect);

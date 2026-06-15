@@ -174,24 +174,19 @@ INSERT INTO `courts` (`id`, `name`, `slug`) VALUES
 -- --------------------------------------------------------
 
 --
--- Table structure for table `password_resets`
+-- Table structure for table `password_reset`
 --
 
-CREATE TABLE `password_resets` (
+CREATE TABLE `password_reset` (
   `id` int(11) NOT NULL,
-  `user_id` int(11) NOT NULL,
-  `token_hash` char(64) NOT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `email` varchar(160) NOT NULL,
+  `token` varchar(128) NOT NULL,
   `expires_at` datetime NOT NULL,
+  `used` tinyint(1) NOT NULL DEFAULT 0,
   `used_at` datetime DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `password_resets`
---
-
-INSERT INTO `password_resets` (`id`, `user_id`, `token_hash`, `expires_at`, `used_at`, `created_at`) VALUES
-(1, 1, '9537d42b4b4bf1513e1ee173b8fb971ac457a95f3c7aaf3ccab5ffe94e24929e', '2026-05-18 12:47:14', NULL, '2026-05-18 20:17:14');
 
 -- --------------------------------------------------------
 
@@ -1594,12 +1589,15 @@ ALTER TABLE `courts`
   ADD UNIQUE KEY `slug` (`slug`);
 
 --
--- Indexes for table `password_resets`
+-- Indexes for table `password_reset`
 --
-ALTER TABLE `password_resets`
+ALTER TABLE `password_reset`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `token_hash` (`token_hash`),
-  ADD KEY `user_id` (`user_id`);
+  ADD UNIQUE KEY `uq_password_reset_token` (`token`),
+  ADD KEY `idx_password_reset_email` (`email`),
+  ADD KEY `idx_password_reset_user_id` (`user_id`),
+  ADD KEY `idx_password_reset_expires_at` (`expires_at`),
+  ADD KEY `idx_password_reset_used` (`used`);
 
 --
 -- Indexes for table `sessions`
@@ -1656,10 +1654,10 @@ ALTER TABLE `courts`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
--- AUTO_INCREMENT for table `password_resets`
+-- AUTO_INCREMENT for table `password_reset`
 --
-ALTER TABLE `password_resets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+ALTER TABLE `password_reset`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `sessions`
@@ -1708,12 +1706,6 @@ ALTER TABLE `carts`
 ALTER TABLE `cart_items`
   ADD CONSTRAINT `cart_items_ibfk_1` FOREIGN KEY (`cart_id`) REFERENCES `carts` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `cart_items_ibfk_2` FOREIGN KEY (`session_id`) REFERENCES `sessions` (`id`);
-
---
--- Constraints for table `password_resets`
---
-ALTER TABLE `password_resets`
-  ADD CONSTRAINT `password_resets_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `sessions`

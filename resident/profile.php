@@ -220,7 +220,7 @@ include __DIR__ . '/../includes/header.php';
             <strong>********</strong>
             <small>Last changed 2 months ago</small>
           </div>
-          <button class="player-profile-outline" type="button">Change Password</button>
+          <a class="player-profile-outline" href="<?= htmlspecialchars(pickled_frontend_url('auth/change-password.php')) ?>">Change Password</a>
         </div>
       </article>
     </section>

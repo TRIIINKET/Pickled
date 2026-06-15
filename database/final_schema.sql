@@ -91,22 +91,25 @@ CREATE TABLE `coach_profiles` (
   CONSTRAINT `fk_coach_profiles_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `password_resets`;
+DROP TABLE IF EXISTS `password_reset`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `password_resets` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `user_id` int(10) unsigned NOT NULL,
-  `token_hash` char(64) NOT NULL,
+CREATE TABLE `password_reset` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int DEFAULT NULL,
+  `email` varchar(160) NOT NULL,
+  `token` varchar(128) NOT NULL,
   `expires_at` datetime NOT NULL,
+  `used` tinyint(1) NOT NULL DEFAULT 0,
   `used_at` datetime DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_password_resets_token_hash` (`token_hash`),
-  KEY `idx_password_resets_user_id` (`user_id`),
-  KEY `idx_password_resets_expires_at` (`expires_at`),
-  CONSTRAINT `fk_password_resets_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  UNIQUE KEY `uq_password_reset_token` (`token`),
+  KEY `idx_password_reset_email` (`email`),
+  KEY `idx_password_reset_user_id` (`user_id`),
+  KEY `idx_password_reset_expires_at` (`expires_at`),
+  KEY `idx_password_reset_used` (`used`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `booking_variants`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

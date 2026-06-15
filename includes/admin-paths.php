@@ -62,7 +62,7 @@ function pickled_admin_account_menu(string $adminName, string $logoutCsrf, strin
             </summary>
             <div class="admin-account-popover">
                 <a href="' . pickled_admin_url('admin-profile.php') . '#profile">Profile</a>
-                <a href="' . pickled_admin_url('admin-profile.php') . '#password">Change Password</a>
+                <a href="../auth/change-password.php">Change Password</a>
                 <form method="post" action="' . pickled_admin_url('admin-logout.php') . '">
                     <input type="hidden" name="csrf_token" value="' . $csrf . '">
                     <button type="submit">Logout</button>

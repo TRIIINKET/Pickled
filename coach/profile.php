@@ -164,7 +164,7 @@ $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
 
                 <section class="coach-card profile-form-card security-card">
                     <header><h2><?php echo profile_icon($icons, 'shield'); ?>Security</h2><span><?php echo profile_icon($icons, 'check'); ?>Changes saved</span></header>
-                    <div class="password-summary"><label>Password<input type="password" value="password" readonly></label><button type="button">Change Password</button></div>
+                    <div class="password-summary"><label>Password<input type="password" value="password" readonly></label><a href="<?php echo htmlspecialchars(pickled_frontend_url('auth/change-password.php')); ?>">Change Password</a></div>
                 </section>
             </div>
         </section>
