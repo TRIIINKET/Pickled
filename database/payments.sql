@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS payments (
   booking_id INT UNSIGNED NOT NULL,
   proof_image VARCHAR(255) NOT NULL,
   amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  payment_method VARCHAR(80) NOT NULL,
+  payment_method VARCHAR(80) NOT NULL DEFAULT 'GCash',
   reference_number VARCHAR(120) NOT NULL,
   status VARCHAR(40) NOT NULL DEFAULT 'pending',
   reviewed_by INT UNSIGNED NULL,

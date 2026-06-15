@@ -576,7 +576,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   payment_fee DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  payment_method VARCHAR(80) NOT NULL,
+  payment_method VARCHAR(80) NOT NULL DEFAULT 'GCash',
   payment_status VARCHAR(80) NOT NULL DEFAULT 'pending',
   notes TEXT NULL,
   cancellation_label VARCHAR(120) NOT NULL,
@@ -692,7 +692,7 @@ CREATE TABLE IF NOT EXISTS payments (
   booking_id INT UNSIGNED NOT NULL,
   proof_image VARCHAR(255) NOT NULL,
   amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  payment_method VARCHAR(80) NOT NULL,
+  payment_method VARCHAR(80) NOT NULL DEFAULT 'GCash',
   reference_number VARCHAR(120) NOT NULL,
   status VARCHAR(40) NOT NULL DEFAULT 'pending',
   reviewed_by INT UNSIGNED NULL,
@@ -715,6 +715,29 @@ CREATE TABLE IF NOT EXISTS payments (
   CONSTRAINT chk_payments_amount CHECK (amount >= 0),
   CONSTRAINT chk_payments_status CHECK (status IN ('pending', 'approved', 'rejected'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+UPDATE bookings
+SET payment_method = 'GCash'
+WHERE payment_method IS NULL
+   OR TRIM(payment_method) = ''
+   OR LOWER(TRIM(payment_method)) <> 'gcash';
+
+UPDATE bookings
+SET payment_status = 'pending'
+WHERE payment_status IS NULL
+   OR LOWER(TRIM(payment_status)) IN ('pay on site', 'pay onsite', 'cash on site', 'cash');
+
+UPDATE payments
+SET payment_method = 'GCash'
+WHERE payment_method IS NULL
+   OR TRIM(payment_method) = ''
+   OR LOWER(TRIM(payment_method)) <> 'gcash';
+
+ALTER TABLE bookings
+  MODIFY payment_method VARCHAR(80) NOT NULL DEFAULT 'GCash';
+
+ALTER TABLE payments
+  MODIFY payment_method VARCHAR(80) NOT NULL DEFAULT 'GCash';
 
 -- ============================================================
 -- NOTIFICATIONS

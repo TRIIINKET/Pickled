@@ -20,6 +20,6 @@ return [
         'from_name' => 'PICKLED',
     ],
     'payment_methods' => [
-        'manual_online' => ['label' => 'Manual Online Payment', 'fee_rate' => 0.00],
+        'gcash' => ['label' => 'GCash', 'fee_rate' => 0.00],
     ],
 ];

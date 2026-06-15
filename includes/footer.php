@@ -26,7 +26,7 @@ require_once __DIR__ . '/paths.php';
           </a>
         </div>
         <div class="footer-payments" aria-label="Accepted payment methods">
-          <span>AMEX</span><span>Pay</span><span>G Pay</span><span>MC</span><span>shop</span><span>UP</span><span>VISA</span>
+          <span>GCash</span>
         </div>
       </section>
     </div>

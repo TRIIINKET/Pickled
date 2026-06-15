@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/BookingRepository.php';
 require_once __DIR__ . '/../repositories/PaymentRepository.php';
+require_once __DIR__ . '/../controllers/CheckoutController.php';
 require_once __DIR__ . '/BookingExpiryService.php';
 require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/AdminLogService.php';
@@ -55,7 +56,7 @@ final class PaymentService
             'booking_id' => $bookingId,
             'proof_image' => $proofPath,
             'amount' => (float) $booking['total'],
-            'payment_method' => (string) $booking['payment_method'],
+            'payment_method' => CheckoutController::GCASH_LABEL,
             'reference_number' => $referenceNumber,
             'status' => 'pending',
             'remarks' => null,

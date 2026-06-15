@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../database/Database.php';
+require_once __DIR__ . '/../controllers/CheckoutController.php';
 
 final class PaymentRepository
 {
@@ -17,7 +18,7 @@ final class PaymentRepository
             'booking_id' => (int) $data['booking_id'],
             'proof_image' => $data['proof_image'],
             'amount' => (float) $data['amount'],
-            'payment_method' => $data['payment_method'],
+            'payment_method' => CheckoutController::GCASH_LABEL,
             'reference_number' => $data['reference_number'],
             'status' => $data['status'] ?? 'pending',
             'remarks' => $data['remarks'] ?? null,

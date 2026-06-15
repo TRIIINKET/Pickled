@@ -26,6 +26,7 @@ final class CheckoutService
         }
 
         $subtotal = array_reduce($items, static fn(float $sum, array $item): float => $sum + ((float) $item['price'] * (int) $item['quantity']), 0.0);
+        CheckoutController::assertValidMethod($paymentMethod);
         $paymentFee = CheckoutController::feeFor($paymentMethod, $subtotal);
         $policy = pickled_cancellation_policy($this->firstBookingTimestamp($items));
         $booking = [

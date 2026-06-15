@@ -39,6 +39,10 @@ final class BookingRepository
             throw new RuntimeException('Your cart is empty. Add a booking before checkout.');
         }
         $bookingStatus = $this->normalizeBookingStatus((string) ($booking['status'] ?? 'pending'));
+        $paymentMethod = trim((string) ($booking['payment_method'] ?? 'GCash'));
+        if (strcasecmp($paymentMethod, 'GCash') !== 0) {
+            throw new RuntimeException('GCash is the only accepted payment method.');
+        }
 
         $pdo = Database::connection();
         $startedTransaction = !$pdo->inTransaction();
@@ -60,7 +64,7 @@ final class BookingRepository
                 'subtotal' => (float) ($booking['subtotal'] ?? 0),
                 'payment_fee' => (float) ($booking['payment_fee'] ?? 0),
                 'total' => (float) ($booking['total'] ?? 0),
-                'payment_method' => (string) ($booking['payment_method'] ?? 'Unknown'),
+                'payment_method' => 'GCash',
                 'payment_status' => $this->normalizePaymentStatus((string) ($booking['payment_status'] ?? 'pending')),
                 'notes' => trim((string) ($booking['notes'] ?? '')) ?: null,
                 'cancellation_label' => (string) ($booking['cancellation_policy']['label'] ?? $booking['cancellation_label'] ?? 'Standard cancellation policy'),
@@ -664,9 +668,6 @@ final class BookingRepository
         $status = strtolower(trim($status));
         if (str_contains($status, 'reject')) {
             return 'rejected';
-        }
-        if (str_contains($status, 'site')) {
-            return 'pay on site';
         }
         if (str_contains($status, 'complete') || str_contains($status, 'paid')) {
             return 'paid';

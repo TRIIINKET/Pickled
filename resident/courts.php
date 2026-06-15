@@ -543,9 +543,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
         <h2>Payment</h2>
         <fieldset class="payment-methods">
           <legend>Payment method *</legend>
-          <label><input type="radio" name="payment" value="Pay at Club" data-fee-rate="0" checked /> Pay at Club</label>
-          <label><input type="radio" name="payment" value="GCash" data-fee-rate="0" /> GCash</label>
-          <label><input type="radio" name="payment" value="Credit / Debit Card" data-fee-rate="0" /> Credit / Debit Card</label>
+          <label><input type="radio" name="payment" value="GCash" data-fee-rate="0" checked /> GCash</label>
         </fieldset>
         <div class="booking-breakdown">
           <span>Subtotal <strong id="formSubtotal">₱1,200.00</strong></span>
@@ -626,7 +624,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     selectedTimes: [],
     qty: 1,
     feeRate: 0,
-    paymentMethod: 'Pay at Club',
+    paymentMethod: 'GCash',
     dateMode: <?= json_encode($defaultRate['dateMode'] ?? 'daily') ?>,
     coach: <?= json_encode($defaultCoach[1], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
     coachSchedule: <?= json_encode($defaultCoach[5], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,

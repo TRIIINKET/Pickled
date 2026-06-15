@@ -263,9 +263,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
         <h2>Payment Method</h2>
         <fieldset class="social-payment-methods">
           <legend>Choose payment method *</legend>
-          <label><input type="radio" name="social_payment" value="Pay at Club" data-fee-rate="0" checked /> Pay at Club <span>No fee</span></label>
-          <label><input type="radio" name="social_payment" value="Credit / Debit Card" data-fee-rate="0.03" /> Credit / Debit Card <span>+3%</span></label>
-          <label><input type="radio" name="social_payment" value="Apple Pay / Google Pay" data-fee-rate="0.03" /> Apple Pay / Google Pay <span>+3%</span></label>
+          <label><input type="radio" name="social_payment" value="GCash" data-fee-rate="0" checked /> GCash <span>No fee</span></label>
         </fieldset>
         <div class="social-breakdown">
           <span>Subtotal <strong id="socialPaymentDisplaySubtotal">₱350.00</strong></span>
@@ -343,7 +341,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     qty: 1,
     price: 350,
     feeRate: 0,
-    paymentMethod: 'Pay at Club',
+    paymentMethod: 'GCash',
     name: '',
     email: ''
   };

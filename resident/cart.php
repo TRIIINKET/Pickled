@@ -23,8 +23,9 @@ $activePage = 'cart.php';
 $basePath   = '../';
 $message = '';
 $messageType = 'success';
-$selectedPayment = $_POST['payment_method'] ?? 'manual_online';
 $paymentMethods = CheckoutController::paymentMethods();
+$selectedPayment = (string) ($_POST['payment_method'] ?? CheckoutController::defaultPaymentMethod());
+$isSelectedPaymentValid = CheckoutController::isValidMethod($selectedPayment);
 $isCheckout = isset($_GET['checkout']) || ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'checkout');
 
 if (isset($_GET['added'])) {
@@ -121,8 +122,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($_SESSION['cart'])) {
       $message = 'Your cart is empty. Add a booking before checkout.';
       $messageType = 'warning';
-    } elseif (!isset($paymentMethods[$selectedPayment])) {
-      $message = 'Please choose a valid payment method.';
+    } elseif (!$isSelectedPaymentValid) {
+      $message = 'Please choose GCash as the payment method.';
       $messageType = 'warning';
     } elseif (empty($_POST['terms'])) {
       $message = 'Please agree to the booking terms before checkout.';
@@ -164,6 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $cartItems = $_SESSION['cart'] ?? [];
 $cartCount = pickled_cart_count();
 $cartTotal = pickled_cart_total();
+$selectedPayment = $isSelectedPaymentValid ? $selectedPayment : CheckoutController::defaultPaymentMethod();
 $paymentFee = CheckoutController::feeFor($selectedPayment, $cartTotal);
 $checkoutTotal = $cartTotal + $paymentFee;
 $displayTotal = $isCheckout ? $checkoutTotal : $cartTotal;
@@ -244,7 +246,7 @@ include __DIR__ . '/../includes/header.php';
             <p>Reference: <?= htmlspecialchars($_SESSION['last_booking']['reference']) ?></p>
             <p>Status: <?= htmlspecialchars($_SESSION['last_booking']['status']) ?> · <?= htmlspecialchars($_SESSION['last_booking']['cancellation_policy']['label']) ?></p>
             <p>Customer: <?= htmlspecialchars($_SESSION['last_booking']['customer_name'] ?? 'Guest') ?></p>
-            <p>Payment: <?= htmlspecialchars($_SESSION['last_booking']['payment_method'] ?? 'Manual Online Payment') ?> · <?= htmlspecialchars($_SESSION['last_booking']['payment_status'] ?? 'pending') ?></p>
+            <p>Payment: <?= htmlspecialchars($_SESSION['last_booking']['payment_method'] ?? 'GCash') ?> · <?= htmlspecialchars($_SESSION['last_booking']['payment_status'] ?? 'pending') ?></p>
             <p>Amount due: ₱<?= number_format((float) ($_SESSION['last_booking']['total'] ?? 0), 2) ?></p>
             <p><a class="btn btn-green btn-sm" href="booking-details.php?id=<?= (int) ($_SESSION['last_booking']['id'] ?? 0) ?>">Upload payment receipt</a></p>
             <?php if (!empty($_SESSION['last_booking']['items'])): $confirmedItem = reset($_SESSION['last_booking']['items']); ?>

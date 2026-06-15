@@ -55,7 +55,7 @@ function admin_rows(?PDO $pdo, string $sql, array $params = []): array {
 function admin_status_key(string $status): string {
     $status = strtolower(trim($status));
     if (str_contains($status, 'reject') || str_contains($status, 'cancel') || str_contains($status, 'expire')) return 'danger';
-    if (str_contains($status, 'pending') || str_contains($status, 'pay on site')) return 'warning';
+    if (str_contains($status, 'pending')) return 'warning';
     if (str_contains($status, 'complete') || str_contains($status, 'confirm') || str_contains($status, 'paid')) return 'success';
     return 'neutral';
 }

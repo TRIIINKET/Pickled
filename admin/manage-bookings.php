@@ -64,7 +64,7 @@ function booking_scalar(?PDO $pdo, string $sql, array $params = [], float|int $f
 function booking_status_key(string $status): string {
     $status = strtolower(trim($status));
     if (str_contains($status, 'cancel') || str_contains($status, 'reject')) return 'danger';
-    if (str_contains($status, 'pending') || str_contains($status, 'pay on site')) return 'warning';
+    if (str_contains($status, 'pending')) return 'warning';
     if (str_contains($status, 'complete')) return 'neutral';
     if (str_contains($status, 'confirm') || str_contains($status, 'paid')) return 'success';
     return 'neutral';

@@ -35,7 +35,7 @@ CREATE TABLE `bookings` (
   `subtotal` decimal(10,2) NOT NULL,
   `payment_fee` decimal(10,2) NOT NULL DEFAULT 0.00,
   `total` decimal(10,2) NOT NULL,
-  `payment_method` varchar(80) NOT NULL,
+  `payment_method` varchar(80) NOT NULL DEFAULT 'GCash',
   `payment_status` varchar(80) NOT NULL,
   `notes` text DEFAULT NULL,
   `cancellation_label` varchar(120) NOT NULL,
@@ -47,7 +47,7 @@ CREATE TABLE `bookings` (
 --
 
 INSERT INTO `bookings` (`id`, `user_id`, `reference`, `status`, `subtotal`, `payment_fee`, `total`, `payment_method`, `payment_status`, `notes`, `cancellation_label`, `created_at`) VALUES
-(1, 9, 'PKL-4D3F917B', 'Pending Payment', 500.00, 0.00, 500.00, 'Cash On Site', 'pay on site', '', 'Full credit eligible', '2026-05-18 20:40:50');
+(1, 9, 'PKL-4D3F917B', 'Pending Payment', 500.00, 0.00, 500.00, 'GCash', 'pending', '', 'Full credit eligible', '2026-05-18 20:40:50');
 
 -- --------------------------------------------------------
 

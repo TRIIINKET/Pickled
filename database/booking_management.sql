@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   payment_fee DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  payment_method VARCHAR(80) NOT NULL,
+  payment_method VARCHAR(80) NOT NULL DEFAULT 'GCash',
   payment_status VARCHAR(80) NOT NULL DEFAULT 'pending',
   notes TEXT NULL,
   cancellation_label VARCHAR(120) NOT NULL,
