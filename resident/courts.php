@@ -98,17 +98,19 @@ $coachRows = [];
 
 try {
   $catalogCourts = $catalogService->courts(false);
-  $standardCourtCatalog = [
-    'green' => ['green-court-rentals', 'green-lessons', 'green-private-coaching', 'green-training'],
-    'pink' => ['pink-base-rate', 'pink-kids-pickleball-class-ages-6-10', 'pink-youth-development-class-ages-11-17', 'pink-parent-child-session'],
-  ];
+  $hiddenCourtCatalogSlugs = array_flip([
+    'green-open-match-play',
+    'green-weekly-tournament',
+    'pink-foundational-ages-6-10',
+    'pink-youth-development-ages-11-17',
+    'pink-adult-beginner-bootcamp',
+    'pink-introductory-trial-class',
+    'pink-parent-child-trial',
+  ]);
   foreach ($catalogCourts as $catalogCourt) {
     $courtSlug = (string) $catalogCourt['slug'];
     $courtVariants = $catalogService->variantsForCourtSlug($courtSlug, false);
-    if (isset($standardCourtCatalog[$courtSlug])) {
-      $allowedSlugs = array_flip($standardCourtCatalog[$courtSlug]);
-      $courtVariants = array_values(array_filter($courtVariants, static fn(array $variant): bool => isset($allowedSlugs[(string) ($variant['slug'] ?? '')])));
-    }
+    $courtVariants = array_values(array_filter($courtVariants, static fn(array $variant): bool => !isset($hiddenCourtCatalogSlugs[(string) ($variant['slug'] ?? '')])));
     $courtRateCatalog[$courtSlug] = array_map('pickled_catalog_option', $courtVariants);
   }
   $coachRows = $schedulingService->coaches();

@@ -654,13 +654,18 @@ $defaultGallery = $courtSlug === 'pink'
     : ['img/court/court green-1.png', 'img/court/court green-2.png', 'img/court/court green-3.png', 'img/court/social play-1.png'];
 $socialGallery = ['img/court/social play-1.png', 'img/court/social play-2.png', 'img/court/social play-3.png', 'img/court/court green-1.png', 'img/court/court pink-1.webp'];
 
-$standardCourtCatalog = [
-    'green' => ['green-court-rentals', 'green-lessons', 'green-private-coaching', 'green-training'],
-    'pink' => ['pink-base-rate', 'pink-kids-pickleball-class-ages-6-10', 'pink-youth-development-class-ages-11-17', 'pink-parent-child-session'],
+$hiddenCourtCatalogSlugs = [
+    'green-open-match-play',
+    'green-weekly-tournament',
+    'pink-foundational-ages-6-10',
+    'pink-youth-development-ages-11-17',
+    'pink-adult-beginner-bootcamp',
+    'pink-introductory-trial-class',
+    'pink-parent-child-trial',
 ];
-if (!$isSocialPlay && isset($standardCourtCatalog[$courtSlug])) {
-    $allowedCatalogSlugs = array_flip($standardCourtCatalog[$courtSlug]);
-    $services = array_values(array_filter($services, static fn(array $service): bool => isset($allowedCatalogSlugs[(string) ($service['slug'] ?? '')])));
+if (!$isSocialPlay) {
+    $hiddenCatalogSlugs = array_flip($hiddenCourtCatalogSlugs);
+    $services = array_values(array_filter($services, static fn(array $service): bool => !isset($hiddenCatalogSlugs[(string) ($service['slug'] ?? '')])));
 }
 
 $activeServices = array_values(array_filter($services, static fn(array $service): bool => !empty($service['active'])));
@@ -959,24 +964,72 @@ $dashboardNav = [
                     <article class="catalog-manager-card">
                         <header>
                             <div><h2>Services</h2><p>Manage the services and offers for <?php echo htmlspecialchars($pageTitle); ?>.</p></div>
-                            <details class="inline-create-panel">
-                                <summary><?php echo court_icon($icons, 'plus'); ?> Add New Service</summary>
-                                <form class="catalog-admin-form catalog-admin-form-wide" method="post">
-                                    <?php echo court_csrf_input(); ?>
-                                    <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
-                                    <label><span>Name</span><input type="text" name="name" placeholder="Court Rental" required></label>
-                                    <label><span>Slug</span><input type="text" name="slug" placeholder="<?php echo court_h($courtSlug); ?>-court-rental" required></label>
-                                    <label><span>Category</span><input type="text" name="category" placeholder="Court Reservation" required></label>
-                                    <label><span>Duration</span><input type="text" name="duration_label" placeholder="1 hour" required></label>
-                                    <label><span>Price</span><input type="number" name="price" step="0.01" min="0" value="0.00" required></label>
-                                    <label><span>Limit</span><input type="number" name="participants_limit" min="1" value="1" required></label>
-                                    <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $capacity; ?>" required></label>
-                                    <label><span>Sort</span><input type="number" name="sort_order" min="0" value="<?php echo count($services) * 10; ?>"></label>
-                                    <label class="catalog-check"><input type="checkbox" name="active" value="1" checked> Active</label>
-                                    <button class="bookings-button primary" type="submit" name="action" value="create_variant">Add Service</button>
-                                </form>
-                            </details>
+                            <button class="service-add-toggle" type="button" data-service-add-toggle><?php echo court_icon($icons, 'plus'); ?> Add New Service</button>
                         </header>
+                        <div class="service-add-panel" data-service-add-panel>
+                            <form class="service-edit-form service-add-form" method="post">
+                                <?php echo court_csrf_input(); ?>
+                                <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
+                                <header class="service-editor-header">
+                                    <h3>Add New Service</h3>
+                                    <p>Create a service that players can choose during booking.</p>
+                                </header>
+                                <section class="service-form-section">
+                                    <h4>Basic Information</h4>
+                                    <div class="service-field-grid">
+                                        <label><span>Service Name</span><input type="text" name="name" placeholder="Court Rental" data-service-name required></label>
+                                        <label><span>Category</span><select name="category" data-service-category required>
+                                            <?php foreach (court_category_options() as $value => $label): ?>
+                                                <option value="<?php echo court_h($value); ?>"><?php echo court_h($label); ?></option>
+                                            <?php endforeach; ?>
+                                        </select></label>
+                                        <label class="service-field-wide"><span>Description</span><textarea name="description" rows="3" placeholder="Optional description"></textarea></label>
+                                    </div>
+                                </section>
+                                <section class="service-form-section">
+                                    <h4>Pricing &amp; Booking Rules</h4>
+                                    <div class="service-field-grid">
+                                        <label><span>Pricing Type</span><select name="pricing_type" data-pricing-type required>
+                                            <?php foreach (court_pricing_type_options() as $value => $label): ?>
+                                                <option value="<?php echo court_h($value); ?>"><?php echo court_h($label); ?></option>
+                                            <?php endforeach; ?>
+                                        </select></label>
+                                        <label><span>Price</span><input type="number" name="price" step="0.01" min="0.01" placeholder="0.00" required><small class="field-help">Amount charged for this service.</small></label>
+                                        <label><span>Duration</span><select name="duration_choice" data-duration-select required>
+                                            <?php foreach (court_duration_options() as $option): ?>
+                                                <option value="<?php echo court_h($option); ?>" <?php echo $option === '1 Hour' ? 'selected' : ''; ?>><?php echo court_h($option); ?></option>
+                                            <?php endforeach; ?>
+                                            <option value="custom">Custom</option>
+                                        </select><input type="hidden" name="duration_label" value="1 Hour" data-duration-custom></label>
+                                        <label data-participants-field><span>Participants Limit</span><input type="number" name="participants_limit" min="1" value="1" required><small class="field-help">Maximum number of participants allowed, if applicable.</small></label>
+                                        <label><span>Coach Required</span><select name="coach_required" data-coach-required required>
+                                            <?php foreach (court_coach_required_options() as $value => $label): ?>
+                                                <option value="<?php echo court_h($value); ?>"><?php echo court_h($label); ?></option>
+                                            <?php endforeach; ?>
+                                        </select></label>
+                                    </div>
+                                </section>
+                                <section class="service-form-section">
+                                    <h4>Visibility</h4>
+                                    <div class="service-field-grid service-field-grid-small">
+                                        <label><span>Status</span><select name="active" required><option value="1" selected>Active</option><option value="0">Inactive</option></select></label>
+                                    </div>
+                                </section>
+                                <details class="service-form-section service-advanced-settings">
+                                    <summary>Show Advanced Settings</summary>
+                                    <div class="service-field-grid">
+                                        <label><span>Slug</span><input type="text" name="slug" placeholder="<?php echo court_h($courtSlug); ?>-court-rental" data-service-slug required><small class="field-help">Auto-generates from the service name unless edited.</small></label>
+                                        <label><span>Sort Order</span><input type="number" name="sort_order" min="0" value="<?php echo count($services) * 10; ?>"></label>
+                                        <label class="session-capacity-field is-hidden"><span>Session Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $capacity; ?>" required><small class="field-help">Default capacity used when creating scheduled sessions. Mostly used for Social Play or event-based services.</small></label>
+                                    </div>
+                                </details>
+                                <input type="hidden" name="image" value="">
+                                <div class="service-form-actions">
+                                    <button class="bookings-button ghost service-cancel-button" type="button" data-close-add-service>Cancel</button>
+                                    <button class="bookings-button primary" type="submit" name="action" value="create_variant">Add Service</button>
+                                </div>
+                            </form>
+                        </div>
                         <div class="service-list service-table-list">
                             <div class="service-table-head"><span></span><span>Service</span><span>Category</span><span>Price</span><span>Duration</span><span>Status</span><span>Actions</span></div>
                             <?php foreach ($services as $service): ?>
@@ -1294,6 +1347,13 @@ $dashboardNav = [
         const toggle = card.querySelector('[data-service-edit-toggle]');
         if (toggle) toggle.setAttribute('aria-expanded', 'false');
     };
+    const closeAddPanel = () => {
+        const manager = document.querySelector('.catalog-manager-card.is-adding');
+        if (!manager) return;
+        manager.classList.remove('is-adding');
+        const toggle = manager.querySelector('[data-service-add-toggle]');
+        if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    };
     const closeOtherCards = activeCard => {
         document.querySelectorAll('[data-service-card].is-editing').forEach(card => {
             if (card !== activeCard) closeCard(card);
@@ -1363,14 +1423,28 @@ $dashboardNav = [
             const card = button.closest('[data-service-card]');
             if (!card) return;
             const willOpen = !card.classList.contains('is-editing');
+            closeAddPanel();
             closeOtherCards(card);
             card.classList.toggle('is-editing', willOpen);
             button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
         });
     });
 
-    document.querySelectorAll('.service-edit-form').forEach(form => {
+    document.querySelectorAll('[data-service-add-toggle]').forEach(button => {
+        button.setAttribute('aria-expanded', 'false');
+        button.addEventListener('click', () => {
+            const manager = button.closest('.catalog-manager-card');
+            if (!manager) return;
+            const willOpen = !manager.classList.contains('is-adding');
+            closeOtherCards(null);
+            manager.classList.toggle('is-adding', willOpen);
+            button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        });
+    });
+
+    document.querySelectorAll('.service-edit-form, .service-add-form').forEach(form => {
         const card = form.closest('[data-service-card]');
+        const manager = form.closest('.catalog-manager-card');
         const nameInput = form.querySelector('[data-service-name]');
         const slugInput = form.querySelector('[data-service-slug]');
         const durationSelect = form.querySelector('[data-duration-select]');
@@ -1418,6 +1492,24 @@ $dashboardNav = [
                 closeCard(card);
             });
         });
+
+        form.querySelectorAll('[data-close-add-service]').forEach(button => {
+            button.addEventListener('click', () => {
+                form.reset();
+                slugTouched = false;
+                if (durationSelect && durationCustom) durationSelect.dispatchEvent(new Event('change'));
+                serviceRules(form);
+                if (manager) {
+                    manager.classList.remove('is-adding');
+                    const toggle = manager.querySelector('[data-service-add-toggle]');
+                    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+                }
+            });
+        });
+
+        if (form.classList.contains('service-add-form')) {
+            return;
+        }
 
         form.addEventListener('submit', async event => {
             event.preventDefault();

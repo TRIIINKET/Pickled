@@ -3819,6 +3819,7 @@ details.private-preview-card[open] summary::after {
 .court-details-editor summary,
 .court-photo-manager summary,
 .service-edit-toggle,
+.service-add-toggle,
 .service-actions button {
     min-height: 38px;
     display: inline-flex;
@@ -3838,27 +3839,23 @@ details.private-preview-card[open] summary::after {
 }
 
 .court-details-editor,
-.court-photo-manager,
-.inline-create-panel {
+.court-photo-manager {
     position: relative;
 }
 
 .court-details-editor summary,
-.court-photo-manager summary,
-.inline-create-panel summary {
+.court-photo-manager summary {
     list-style: none;
 }
 
 .court-details-editor summary::-webkit-details-marker,
-.court-photo-manager summary::-webkit-details-marker,
-.inline-create-panel summary::-webkit-details-marker {
+.court-photo-manager summary::-webkit-details-marker {
     display: none;
 }
 
 .court-details-form,
 .court-photo-upload,
-.court-media-list,
-.inline-create-panel .catalog-admin-form {
+.court-media-list {
     position: absolute;
     right: 0;
     top: calc(100% + 10px);
@@ -3872,26 +3869,6 @@ details.private-preview-card[open] summary::after {
     border-radius: 14px;
     background: #fff;
     box-shadow: 0 22px 48px rgba(17,24,39,.14);
-}
-
-.inline-create-panel summary {
-    min-height: 38px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 0 14px;
-    border: 1px solid rgba(38,68,20,.16);
-    border-radius: 9px;
-    background: #fff;
-    color: var(--green);
-    font-size: 13px;
-    font-weight: 850;
-    cursor: pointer;
-}
-
-.inline-create-panel .catalog-admin-form {
-    width: min(860px, calc(100vw - 48px));
 }
 
 .court-photo-upload,
@@ -4348,10 +4325,23 @@ details.private-preview-card[open] summary::after {
     transition: max-height .25s ease, opacity .22s ease, margin-top .22s ease;
 }
 
+.service-add-panel {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height .25s ease, opacity .22s ease, margin-bottom .22s ease;
+}
+
 .service-card.is-editing .service-edit-panel {
     max-height: 1800px;
     opacity: 1;
     margin-top: 12px;
+}
+
+.catalog-manager-card.is-adding .service-add-panel {
+    max-height: 1800px;
+    opacity: 1;
+    margin-bottom: 16px;
 }
 
 .service-edit-form {
@@ -4362,6 +4352,11 @@ details.private-preview-card[open] summary::after {
     border: 1px solid rgba(17,24,39,.08);
     border-radius: 12px;
     background: #fbfcf8;
+}
+
+.service-add-form {
+    margin-top: 12px;
+    border-color: rgba(38,68,20,.14);
 }
 
 .service-edit-form .service-form-section {
