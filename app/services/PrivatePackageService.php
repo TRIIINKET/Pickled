@@ -7,12 +7,11 @@ final class PrivatePackageService
 {
     private const STATUSES = ['active', 'inactive', 'archived'];
     private const CATEGORIES = [
-        'Private Coaching',
         'Birthday Event',
         'Corporate Event',
-        'Family Package',
         'Team Building',
-        'School Activity',
+        'Family Package',
+        'Private Coaching',
         'Custom Package',
     ];
 

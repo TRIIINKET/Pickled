@@ -2262,8 +2262,7 @@ body.admin-dashboard-body {
 }
 
 .row-actions a,
-.row-actions > button,
-.row-more summary {
+.row-actions > button {
     min-height: 36px;
     display: inline-flex;
     align-items: center;
@@ -2278,58 +2277,6 @@ body.admin-dashboard-body {
     font-size: 12px;
     font-weight: 900;
     text-decoration: none;
-}
-
-.row-more {
-    position: relative;
-}
-
-.row-more summary {
-    width: 36px;
-    padding: 0;
-    list-style: none;
-    cursor: pointer;
-}
-
-.row-more summary::-webkit-details-marker {
-    display: none;
-}
-
-.row-more div {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    z-index: 30;
-    width: 190px;
-    padding: 8px;
-    border: 1px solid rgba(17,24,39,.10);
-    border-radius: 12px;
-    background: #fff;
-    box-shadow: 0 18px 42px rgba(17,24,39,.14);
-}
-
-.row-more div a,
-.row-more div button {
-    width: 100%;
-    min-height: 36px;
-    justify-content: flex-start;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: #111827;
-    font-size: 13px;
-    font-weight: 800;
-    text-align: left;
-}
-
-.row-more div a:hover,
-.row-more div button:hover {
-    background: rgba(221,226,85,.20);
-    color: var(--green);
-}
-
-.row-more form {
-    margin: 0;
 }
 
 .row-actions svg {
@@ -2590,12 +2537,48 @@ body.admin-dashboard-body {
     gap: 10px;
 }
 
+.drawer-actions .drawer-note-section {
+    padding-top: 18px;
+    border-top: 1px solid rgba(17,24,39,.08);
+}
+
+.drawer-actions .drawer-note-section p {
+    display: block;
+    margin: 6px 0 12px;
+    color: #667085;
+    font-size: 12px;
+    font-weight: 750;
+}
+
+.drawer-actions textarea {
+    width: 100%;
+    min-height: 82px;
+    border: 1px solid rgba(17,24,39,.14);
+    border-radius: 10px;
+    padding: 12px;
+    color: #111827;
+    font: inherit;
+    font-weight: 650;
+    resize: vertical;
+}
+
+.drawer-action-buttons {
+    display: grid;
+    gap: 10px;
+}
+
 .drawer-actions button {
     min-height: 44px;
+    border: 0;
     border-radius: 10px;
     background: #f7f7f2;
     color: #111827;
     font-weight: 900;
+}
+
+.drawer-actions button:disabled {
+    cursor: not-allowed;
+    opacity: .52;
 }
 
 .drawer-actions .approve {
@@ -2606,6 +2589,12 @@ body.admin-dashboard-body {
 .drawer-actions .reject {
     background: #ffe5ee;
     color: #b60f52;
+}
+
+.drawer-terminal-badge {
+    justify-content: center;
+    min-height: 44px;
+    width: 100%;
 }
 
 @media (max-width: 1180px) {
@@ -2761,6 +2750,12 @@ body.admin-dashboard-body {
 .user-stat.orange div { background: rgba(246,136,6,.16); }
 .user-stat.purple { color: #8148bd; }
 .user-stat.purple div { background: rgba(129,72,189,.16); }
+
+.social-stat-grid .user-stat,
+.private-kpi-grid .user-stat {
+    grid-template-columns: 1fr;
+    column-gap: 0;
+}
 
 .coach-stat-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2980,6 +2975,18 @@ body.admin-dashboard-body {
     min-width: 36px;
     padding: 0;
     color: #344054;
+}
+
+.booking-management-row {
+    min-width: 1290px;
+    grid-template-columns: 120px 180px 160px 140px 150px 130px 70px 120px 130px 110px 120px;
+}
+
+.booking-management-row .row-actions > a {
+    width: 100%;
+    min-width: 112px;
+    justify-content: center;
+    padding: 0 12px;
 }
 
 .player-profile-panel {
@@ -4281,6 +4288,16 @@ details.private-preview-card[open] summary::after {
     font-size: 11px;
 }
 
+.social-format-table .service-table-head,
+.social-format-table .service-card {
+    grid-template-columns: 42px minmax(240px, 1.6fr) minmax(110px, .6fr) minmax(110px, .65fr) minmax(110px, .65fr) minmax(100px, .55fr) minmax(190px, .85fr);
+}
+
+.social-format-row .service-actions,
+.social-session-row .social-row-actions {
+    justify-content: flex-end;
+}
+
 .service-actions {
     display: flex;
     align-items: center;
@@ -5109,6 +5126,147 @@ body.photo-modal-open {
     font-weight: 900;
 }
 
+.social-events-panel {
+    display: grid;
+    gap: 16px;
+}
+
+.social-event-list {
+    display: grid;
+    gap: 14px;
+}
+
+.social-event-card {
+    overflow: hidden;
+    border: 1px solid rgba(17,24,39,.08);
+    border-radius: 14px;
+    background: #fff;
+}
+
+.social-event-card[open] {
+    border-color: rgba(38,68,20,.18);
+    box-shadow: 0 12px 26px rgba(17,24,39,.04);
+}
+
+.social-event-card summary {
+    min-height: 88px;
+    display: grid;
+    grid-template-columns: 28px minmax(220px, 1.35fr) minmax(110px, .7fr) minmax(110px, .7fr) minmax(120px, .8fr) minmax(90px, .55fr);
+    align-items: center;
+    gap: 16px;
+    padding: 18px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.social-event-card summary::-webkit-details-marker {
+    display: none;
+}
+
+.social-event-toggle {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: #eef8e9;
+    color: var(--green);
+    font-size: 18px;
+    font-weight: 950;
+    transform: rotate(-90deg);
+    transition: transform .2s ease;
+}
+
+.social-event-card[open] .social-event-toggle {
+    transform: rotate(0deg);
+}
+
+.social-event-title strong,
+.social-event-card summary b {
+    display: block;
+    color: #111827;
+    font-weight: 950;
+}
+
+.social-event-title strong {
+    font-size: 17px;
+    letter-spacing: -.02em;
+}
+
+.social-event-title small,
+.social-event-card summary small,
+.social-event-meta small {
+    display: block;
+    color: #667085;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.social-event-title small {
+    margin-top: 5px;
+}
+
+.social-event-card summary b {
+    margin-top: 6px;
+    font-size: 14px;
+}
+
+.social-event-body {
+    display: grid;
+    gap: 16px;
+    padding: 0 18px 18px 74px;
+}
+
+.social-event-actions,
+.social-event-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.social-event-actions form {
+    margin: 0;
+}
+
+.social-event-actions button {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 14px;
+    border: 1px solid rgba(17,24,39,.12);
+    border-radius: 9px;
+    background: #fff;
+    color: var(--green);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.social-event-actions .archive-service-button {
+    color: var(--pink);
+}
+
+.social-event-meta {
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #fbfcf8;
+}
+
+.social-event-meta span {
+    min-width: 150px;
+}
+
+.social-event-meta b {
+    display: block;
+    margin-top: 4px;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 900;
+}
+
 .social-type-list {
     display: grid;
     gap: 14px;
@@ -5214,7 +5372,7 @@ body.photo-modal-open {
 
 .social-session-row {
     display: grid;
-    grid-template-columns: minmax(130px, 1fr) minmax(150px, 1.1fr) minmax(150px, 1.05fr) minmax(110px, .8fr) minmax(70px, .55fr) minmax(70px, .55fr) minmax(90px, .6fr) minmax(130px, .8fr);
+    grid-template-columns: minmax(150px, 1.15fr) minmax(120px, .8fr) minmax(150px, 1fr) minmax(110px, .75fr) minmax(85px, .55fr) minmax(80px, .5fr) minmax(90px, .55fr) minmax(190px, .9fr);
     align-items: center;
     gap: 14px;
     min-height: 62px;
@@ -5245,6 +5403,158 @@ body.photo-modal-open {
     vertical-align: middle;
 }
 
+.social-session-table.compact .social-session-row {
+    grid-template-columns: minmax(110px, .8fr) minmax(140px, 1fr) minmax(110px, .75fr) minmax(90px, .6fr) minmax(90px, .55fr) minmax(150px, .8fr);
+}
+
+.social-session-empty {
+    padding: 18px;
+    color: #667085;
+    font-size: 13px;
+    font-weight: 750;
+}
+
+.social-row-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.social-row-actions form {
+    margin: 0;
+}
+
+.social-row-actions button {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    border: 1px solid rgba(17,24,39,.12);
+    border-radius: 9px;
+    background: #fff;
+    color: var(--green);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.social-row-actions .archive-service-button {
+    color: var(--pink);
+}
+
+.social-panel-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 980;
+    pointer-events: none;
+    background: rgba(17,24,39,.22);
+    opacity: 0;
+    transition: opacity .22s ease;
+}
+
+.social-panel-backdrop.is-open {
+    pointer-events: auto;
+    opacity: 1;
+}
+
+.social-slide-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 990;
+    width: min(460px, 100%);
+    height: 100vh;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0;
+    padding: 24px;
+    background: #fff;
+    box-shadow: -20px 0 60px rgba(17,24,39,.18);
+    transform: translateX(105%);
+    transition: transform .25s ease;
+}
+
+.social-slide-panel.is-open {
+    transform: translateX(0);
+}
+
+.social-slide-panel > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid rgba(17,24,39,.08);
+}
+
+.social-slide-panel > header span {
+    color: #667085;
+    font-size: 12px;
+    font-weight: 850;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.social-slide-panel > header h2 {
+    margin: 4px 0 0;
+    color: #111827;
+    font-size: 24px;
+    letter-spacing: -.03em;
+}
+
+.social-slide-panel > header button {
+    width: 42px;
+    height: 42px;
+    border: 1px solid rgba(17,24,39,.1);
+    border-radius: 10px;
+    background: #fff;
+    color: #111827;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.social-slide-panel .service-edit-form {
+    overflow-y: auto;
+    margin-top: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.social-slide-panel .service-edit-form label {
+    display: grid;
+    gap: 8px;
+    color: #344054;
+    font-size: 13px;
+    font-weight: 850;
+}
+
+.social-slide-panel .service-edit-form input,
+.social-slide-panel .service-edit-form select {
+    width: 100%;
+    min-height: 46px;
+    border: 1px solid rgba(17,24,39,.14);
+    border-radius: 10px;
+    background: #fff;
+    color: #111827;
+    font: inherit;
+    font-weight: 700;
+    padding: 10px 12px;
+}
+
+.social-slide-panel footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 12px;
+}
+
 .social-chip,
 .court-chip {
     min-height: 25px;
@@ -5264,21 +5574,6 @@ body.photo-modal-open {
 
 .court-chip {
     background: #e6f6e3;
-    color: var(--green);
-}
-
-.social-row-actions {
-    display: flex;
-    gap: 8px;
-}
-
-.social-row-actions button {
-    width: 28px;
-    height: 28px;
-    display: grid;
-    place-items: center;
-    border-radius: 8px;
-    background: transparent;
     color: var(--green);
 }
 
@@ -5434,10 +5729,15 @@ body.photo-modal-open {
     }
 
     .social-type-card,
+    .social-event-card summary,
     .social-session-row {
         grid-template-columns: 1fr;
         align-items: start;
         padding: 16px;
+    }
+
+    .social-event-body {
+        padding: 0 16px 16px;
     }
 
     .social-type-card > p {
@@ -5541,6 +5841,33 @@ body.photo-modal-open {
 .private-admin-card header > div:last-child {
     display: flex;
     gap: 10px;
+}
+
+.private-package-toolbar {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(150px, .36fr) minmax(180px, .44fr) auto;
+    gap: 12px;
+    align-items: center;
+    margin: 18px 0;
+}
+
+.private-package-toolbar input,
+.private-package-toolbar select {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid rgba(17,24,39,.12);
+    border-radius: 10px;
+    background: #fff;
+    color: #111827;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 750;
+    padding: 0 13px;
+}
+
+.private-package-toolbar button {
+    min-height: 42px;
+    white-space: nowrap;
 }
 
 .private-admin-card button,
@@ -5871,10 +6198,69 @@ body.photo-modal-open {
 }
 
 .operational-package-list .package-item {
-    grid-template-columns: 54px minmax(190px, 1.35fr) minmax(118px, .7fr) minmax(100px, .55fr) minmax(110px, .6fr) minmax(120px, .65fr) minmax(105px, .55fr) auto;
+    grid-template-columns: 54px minmax(260px, 1.55fr) minmax(112px, .62fr) minmax(96px, .5fr) minmax(104px, .55fr) minmax(120px, .65fr) minmax(96px, .48fr) 178px;
     align-items: center;
     min-height: 0;
     padding: 18px;
+}
+
+.operational-package-list .package-item > span:first-child {
+    width: 54px;
+    height: 54px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: #e6f6e3;
+    color: var(--green);
+}
+
+.private-package-main {
+    min-width: 0;
+}
+
+.private-package-main strong {
+    display: block;
+    color: #111827;
+    font-size: 15px;
+    font-weight: 950;
+}
+
+.private-package-main small {
+    display: block;
+    margin-top: 5px;
+    color: #667085;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.private-package-main p {
+    margin: 7px 0 0;
+    color: #344054;
+    font-size: 12px;
+    line-height: 1.4;
+    font-weight: 650;
+}
+
+.operational-package-list .package-item > p {
+    margin: 0;
+}
+
+.operational-package-list .package-item > p small,
+.operational-package-list .package-item > p b {
+    display: block;
+}
+
+.operational-package-list .package-item > p small {
+    color: #667085;
+    font-size: 11px;
+    font-weight: 850;
+}
+
+.operational-package-list .package-item > p b {
+    margin-top: 6px;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 900;
 }
 
 .private-package-card.is-editing {
@@ -5948,6 +6334,19 @@ body.photo-modal-open {
     border-radius: 9px;
     color: var(--green);
     white-space: nowrap;
+}
+
+.private-package-actions {
+    display: grid;
+    grid-template-columns: 82px 82px;
+    gap: 8px;
+    justify-content: end;
+}
+
+.private-package-actions button,
+.private-package-actions form,
+.private-package-actions form button {
+    width: 100%;
 }
 
 .operational-package-list .package-item > form:last-of-type button {
@@ -6103,8 +6502,21 @@ body.photo-modal-open {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .private-package-toolbar {
+        grid-template-columns: minmax(0, 1fr) minmax(150px, .5fr);
+    }
+
+    .private-package-toolbar button {
+        grid-column: 1 / -1;
+    }
+
     .operational-package-list .package-item {
         grid-template-columns: 1fr;
+    }
+
+    .private-package-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        justify-content: stretch;
     }
 
     .operational-package-list .package-item > form:last-of-type {

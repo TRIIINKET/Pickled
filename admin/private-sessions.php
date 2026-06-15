@@ -22,6 +22,7 @@ $todayLabel = $today->format('M j, Y (D)');
 $successMsg = '';
 $errorMsg = '';
 $packageStatusFilter = trim((string) ($_GET['package_status'] ?? ''));
+$packageCategoryFilter = trim((string) ($_GET['package_category'] ?? ''));
 $inquiryStatusFilter = trim((string) ($_GET['inquiry_status'] ?? ''));
 $search = trim((string) ($_GET['q'] ?? ''));
 
@@ -57,6 +58,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 try {
     $coachProfiles = $packageService->coachProfiles();
     $packages = $packageService->allPackages($packageStatusFilter !== '' ? $packageStatusFilter : null, $search, 100);
+    if ($packageCategoryFilter !== '') {
+        $packages = array_values(array_filter($packages, static fn(array $package): bool => (string) ($package['category'] ?? '') === $packageCategoryFilter));
+    }
     $inquiries = $inquiryService->allInquiries($inquiryStatusFilter !== '' ? $inquiryStatusFilter : null, $search, 100);
 } catch (Throwable $e) {
     error_log('Private packages admin load failed: ' . $e->getMessage());
@@ -83,6 +87,14 @@ function private_label(string $value): string {
     return ucwords(str_replace('_', ' ', strtolower($value)));
 }
 
+function private_excerpt(string $value, int $limit = 105): string {
+    $value = trim(preg_replace('/\s+/', ' ', $value) ?? $value);
+    if (strlen($value) <= $limit) {
+        return $value;
+    }
+    return rtrim(substr($value, 0, max(0, $limit - 3))) . '...';
+}
+
 function private_icon(array $icons, string $name): string {
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['target']) . '</svg>';
 }
@@ -96,7 +108,7 @@ function private_status_options(string $selected, array $statuses): string {
 }
 
 function private_category_options(string $selected): string {
-    $categories = ['Private Coaching', 'Birthday Event', 'Corporate Event', 'Family Package', 'Team Building', 'School Activity', 'Custom Package'];
+    $categories = ['Birthday Event', 'Corporate Event', 'Team Building', 'Family Package', 'Private Coaching', 'Custom Package'];
     $html = '';
     foreach ($categories as $category) {
         $html .= '<option value="' . private_h($category) . '"' . ($selected === $category ? ' selected' : '') . '>' . private_h($category) . '</option>';
@@ -159,16 +171,22 @@ $dashboardNav = [
         <?php if ($errorMsg !== ''): ?><p class="status-pill status-danger"><?php echo private_h($errorMsg); ?></p><?php endif; ?>
 
         <section class="private-kpi-grid" aria-label="Private packages metrics">
-            <article class="user-stat green"><div><?php echo private_icon($icons, 'target'); ?></div><span>Active Packages</span><strong><?php echo number_format($activePackages); ?></strong><small>Available to players</small></article>
-            <article class="user-stat pink"><div><?php echo private_icon($icons, 'mail'); ?></div><span>Pending Inquiries</span><strong><?php echo number_format($newInquiries); ?></strong><small>Need attention</small></article>
-            <article class="user-stat orange"><div><?php echo private_icon($icons, 'check'); ?></div><span>Confirmed Bookings</span><strong><?php echo number_format($confirmedBookings); ?></strong><small>Approved workflows</small></article>
-            <article class="user-stat purple"><div><?php echo private_icon($icons, 'peso'); ?></div><span>Revenue</span><strong>PHP <?php echo number_format($activePackageValue, 0); ?></strong><small>Active package value</small></article>
+            <article class="user-stat green"><span>Active Packages</span><strong><?php echo number_format($activePackages); ?></strong><small>Available to players</small></article>
+            <article class="user-stat pink"><span>Pending Inquiries</span><strong><?php echo number_format($newInquiries); ?></strong><small>Need attention</small></article>
+            <article class="user-stat orange"><span>Confirmed Bookings</span><strong><?php echo number_format($confirmedBookings); ?></strong><small>Approved workflows</small></article>
+            <article class="user-stat purple"><span>Revenue</span><strong>PHP <?php echo number_format($activePackageValue, 0); ?></strong><small>Active package value</small></article>
         </section>
 
         <section class="private-admin-layout private-admin-layout-full">
             <div class="private-editor-column">
                 <article class="private-admin-card">
-                    <header><div><h2>Package Catalog</h2><p>Manage private packages players can inquire about.</p></div><button class="service-add-toggle" type="button" data-private-add-toggle><?php echo private_icon($icons, 'plus'); ?> Add Package</button></header>
+                    <header><div><h2>Package Catalog</h2><p>Manage private packages players can inquire about.</p></div></header>
+                    <form class="private-package-toolbar" method="get">
+                        <input type="search" name="q" value="<?php echo private_h($search); ?>" placeholder="Search packages">
+                        <select name="package_status"><option value="">All statuses</option><?php echo private_status_options($packageStatusFilter, ['active', 'inactive', 'archived']); ?></select>
+                        <select name="package_category"><option value="">All categories</option><?php echo private_category_options($packageCategoryFilter); ?></select>
+                        <button class="service-add-toggle" type="button" data-private-add-toggle><?php echo private_icon($icons, 'plus'); ?> Add Package</button>
+                    </form>
                     <div class="private-package-add-panel" data-private-add-panel>
                         <form class="service-edit-form private-package-form" method="post">
                             <input type="hidden" name="csrf_token" value="<?php echo private_h(pickled_csrf_token()); ?>">
@@ -198,22 +216,17 @@ $dashboardNav = [
                             <div class="service-form-actions"><button class="bookings-button ghost service-cancel-button" type="button" data-private-add-cancel>Cancel</button><button class="bookings-button primary" type="submit">Create Package</button></div>
                         </form>
                     </div>
-                    <form class="booking-filter-bar" method="get">
-                        <select name="package_status"><option value="">All package statuses</option><?php echo private_status_options($packageStatusFilter, ['active', 'inactive', 'archived']); ?></select>
-                        <input type="search" name="q" value="<?php echo private_h($search); ?>" placeholder="Search packages or coaches">
-                        <button type="submit">Filter</button>
-                    </form>
                     <div class="package-list operational-package-list">
                         <?php foreach ($packages as $package): ?>
                             <article class="package-item package-green private-package-card" data-private-package-card>
                                 <span><?php echo private_icon($icons, 'target'); ?></span>
-                                <div><strong><?php echo private_h($package['title']); ?></strong><small><?php echo private_h($package['category'] ?? 'Private Coaching'); ?></small></div>
+                                <div class="private-package-main"><strong><?php echo private_h($package['title']); ?></strong><small><?php echo private_h($package['category'] ?? 'Private Coaching'); ?></small><p><?php echo private_h(private_excerpt((string) ($package['description'] ?? ''))); ?></p></div>
                                 <p><small>Price</small><b>PHP <?php echo number_format((float) $package['price'], 2); ?></b></p>
                                 <p><small>Duration</small><b><?php echo private_h($package['duration']); ?></b></p>
                                 <p><small>Capacity</small><b><?php echo !empty($package['capacity']) ? number_format((int) $package['capacity']) . ' Guests' : 'Flexible'; ?></b></p>
                                 <p><small>Coach</small><b><?php echo private_h($package['coach_name'] ?? 'Optional'); ?></b></p>
                                 <p><small>Status</small><em class="status-pill status-<?php echo ($package['status'] ?? '') === 'active' ? 'success' : 'warning'; ?>"><?php echo private_h(private_label((string) $package['status'])); ?></em></p>
-                                <div class="service-actions"><button class="service-edit-toggle" type="button" data-private-package-toggle><?php echo private_icon($icons, 'edit'); ?> Edit</button>
+                                <div class="service-actions private-package-actions"><button class="service-edit-toggle" type="button" data-private-package-toggle><?php echo private_icon($icons, 'edit'); ?> Edit</button>
                                 <form method="post">
                                     <input type="hidden" name="csrf_token" value="<?php echo private_h(pickled_csrf_token()); ?>">
                                     <input type="hidden" name="action" value="set_package_status">
@@ -349,6 +362,13 @@ $dashboardNav = [
             if (form) form.reset();
             const card = button.closest('[data-private-package-card]');
             if (card) card.classList.remove('is-editing');
+        });
+    });
+
+    document.querySelectorAll('.private-package-toolbar select').forEach(select => {
+        select.addEventListener('change', () => {
+            const form = select.closest('form');
+            if (form) form.submit();
         });
     });
 })();
