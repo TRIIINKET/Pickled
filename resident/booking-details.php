@@ -92,6 +92,10 @@ function payment_proof_url(string $path): string {
   return '../' . ltrim($path, '/');
 }
 
+function payment_proof_is_image(string $path): bool {
+  return (bool) preg_match('/\.(jpe?g|png|webp)$/i', $path);
+}
+
 function feedback_target_label(array $target): string {
   $label = (string) ($target['court'] ?? 'Session') . ' - ' . (string) ($target['name'] ?? 'Booking');
   if (!empty($target['coach_name'])) {
@@ -166,8 +170,8 @@ include __DIR__ . '/../includes/header.php';
                 <input type="text" name="reference_number" required />
               </label>
               <label>
-                Receipt Image
-                <input type="file" name="proof_image" accept="image/png,image/jpeg,image/webp" required />
+                Receipt Image or PDF
+                <input type="file" name="proof_image" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf" required />
               </label>
               <button class="checkout-btn" type="submit">Submit receipt</button>
             </form>
@@ -179,9 +183,13 @@ include __DIR__ . '/../includes/header.php';
             <div class="booking-items">
               <?php foreach ($payments as $payment): ?>
                 <div class="booking-item">
-                  <img src="<?= htmlspecialchars(payment_proof_url((string) $payment['proof_image'])) ?>" alt="Payment receipt" />
+                  <?php $proofPath = (string) $payment['proof_image']; ?>
+                  <?php if (payment_proof_is_image($proofPath)): ?>
+                    <img src="<?= htmlspecialchars(payment_proof_url($proofPath)) ?>" alt="Payment receipt" />
+                  <?php endif; ?>
                   <div>
                     <strong><?= htmlspecialchars(ucfirst((string) $payment['status'])) ?> receipt</strong>
+                    <p><a href="<?= htmlspecialchars(payment_proof_url($proofPath)) ?>" target="_blank" rel="noopener">View proof of payment</a></p>
                     <p>Reference No: <?= htmlspecialchars($payment['reference_number']) ?></p>
                     <p>Amount: &#8369;<?= number_format((float) $payment['amount'], 2) ?> - <?= htmlspecialchars($payment['payment_method']) ?></p>
                     <p>Uploaded: <?= htmlspecialchars($payment['created_at']) ?></p>

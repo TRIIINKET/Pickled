@@ -1,0 +1,163 @@
+.security-settings-page {
+  min-height: 100vh;
+  padding: calc(var(--nav-h) + 34px) clamp(16px, 4vw, 48px) 64px;
+  background:
+    linear-gradient(180deg, rgba(246, 239, 225, .94), rgba(255, 255, 255, .9)),
+    var(--cream, #f6efe1);
+  color: #172033;
+}
+
+.security-settings-shell {
+  width: min(100%, 780px);
+  margin: 0 auto;
+  display: grid;
+  gap: 18px;
+}
+
+.security-settings-header,
+.security-settings-card {
+  border: 1px solid rgba(38, 68, 20, .12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 14px 32px rgba(38, 68, 20, .08);
+}
+
+.security-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 24px;
+}
+
+.security-settings-header p,
+.security-settings-card__header p {
+  margin: 0;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.security-settings-header > div > p {
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.security-settings-header h1,
+.security-settings-card__header h2 {
+  margin: 0;
+  color: var(--green, #264414);
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.security-settings-header h1 {
+  font-size: clamp(24px, 4vw, 32px);
+}
+
+.security-settings-header a,
+.security-settings-actions a {
+  color: var(--green, #264414);
+  font-size: 14px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.security-settings-card {
+  padding: clamp(20px, 4vw, 28px);
+}
+
+.security-settings-card__header {
+  margin-bottom: 18px;
+}
+
+.security-settings-card__header h2 {
+  margin-bottom: 6px;
+  font-size: 22px;
+}
+
+.security-settings-alert {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.security-settings-alert--success {
+  border: 1px solid rgba(38, 68, 20, .14);
+  background: #eef8e8;
+  color: var(--green, #264414);
+}
+
+.security-settings-alert--error {
+  border: 1px solid rgba(217, 45, 32, .22);
+  background: #fff1f1;
+  color: #b42318;
+}
+
+.security-settings-form {
+  display: grid;
+  gap: 16px;
+}
+
+.security-settings-field {
+  display: grid;
+  gap: 8px;
+}
+
+.security-settings-field label {
+  color: #344054;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.security-settings-field .login-field {
+  margin: 0;
+  border-color: rgba(38, 68, 20, .16);
+  background: #fff;
+}
+
+.security-settings-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(38, 68, 20, .12);
+}
+
+.security-settings-actions button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border: 1px solid var(--green, #264414);
+  border-radius: 7px;
+  background: var(--green, #264414);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .security-settings-page {
+    padding: calc(var(--nav-h) + 22px) 14px 56px;
+  }
+
+  .security-settings-header,
+  .security-settings-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .security-settings-actions button {
+    width: 100%;
+  }
+}

@@ -88,6 +88,22 @@ final class EmailService
         return $this->send($to, 'Verify Your Email - PICKLED', $html);
     }
 
+    public function sendPasswordResetOtp(string $to, string $name, string $otp): bool
+    {
+        $safeOtp = htmlspecialchars($otp, ENT_QUOTES, 'UTF-8');
+        $html = $this->emailFrame(
+            'Password Reset',
+            'Reset Your PICKLED Password',
+            '<p>Hi ' . htmlspecialchars($this->displayName(['name' => $name]), ENT_QUOTES, 'UTF-8') . ',</p>
+             <p>Use this one-time password to reset your PICKLED account password.</p>
+             <div style="font-size:34px;letter-spacing:8px;font-weight:900;color:#264414;background:#F6EFE1;border:1px solid rgba(38,68,20,.14);border-radius:12px;padding:18px 20px;text-align:center;">' . $safeOtp . '</div>
+             <p><strong>This code will expire in 10 minutes.</strong></p>
+             <p>If you did not request this, you may ignore this email.</p>'
+        );
+
+        return $this->send($to, 'Reset Your PICKLED Password', $html);
+    }
+
     public function sendLoginNotification(array $user): bool
     {
         $timezone = $this->timezone();
@@ -114,6 +130,7 @@ final class EmailService
     {
         $name = $this->displayName($user);
         $reference = (string) ($booking['reference'] ?? 'N/A');
+        $bookingStatus = (string) ($booking['status'] ?? 'pending');
         $paymentStatus = (string) ($booking['payment_status'] ?? 'pending');
         $total = number_format((float) ($booking['total'] ?? 0), 2);
         $itemsHtml = $this->renderBookingItemsHtml($booking['items'] ?? []);
@@ -121,9 +138,11 @@ final class EmailService
             'Booking Confirmation',
             'Booking Confirmation - PICKLED',
             '<p>Hi ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . ',</p>
-             <p>Your booking has been created. Please keep this confirmation for your records.</p>
+             <p>Your booking request has been received.</p>
              <div style="background:#F6EFE1;border:1px solid rgba(38,68,20,.12);border-radius:12px;padding:16px;margin:18px 0;">
+               <p style="margin:0 0 8px;"><strong>Customer name:</strong> ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '</p>
                <p style="margin:0 0 8px;"><strong>Booking reference:</strong> ' . htmlspecialchars($reference, ENT_QUOTES, 'UTF-8') . '</p>
+               <p style="margin:0 0 8px;"><strong>Booking status:</strong> ' . htmlspecialchars(ucfirst($bookingStatus), ENT_QUOTES, 'UTF-8') . '</p>
                <p style="margin:0 0 8px;"><strong>Payment status:</strong> ' . htmlspecialchars(ucfirst($paymentStatus), ENT_QUOTES, 'UTF-8') . '</p>
                <p style="margin:0;"><strong>Total amount:</strong> PHP ' . htmlspecialchars($total, ENT_QUOTES, 'UTF-8') . '</p>
              </div>
@@ -131,6 +150,22 @@ final class EmailService
         );
 
         return $this->send((string) ($user['email'] ?? ''), 'Booking Confirmation - PICKLED', $html);
+    }
+
+    public function sendBookingIssue(array $user, string $message = ''): bool
+    {
+        $name = $this->displayName($user);
+        $safeMessage = htmlspecialchars($message !== '' ? $message : 'Your booking or payment could not be completed.', ENT_QUOTES, 'UTF-8');
+        $html = $this->emailFrame(
+            'Booking Issue',
+            'Booking Issue - PICKLED',
+            '<p>Hi ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . ',</p>
+             <p>Your booking or payment could not be completed.</p>
+             <div style="margin:18px 0;padding:16px;background:#fff1f1;border-left:4px solid #b42318;border-radius:10px;">' . $safeMessage . '</div>
+             <p>Please try again or contact PICKLED if you need help completing your booking.</p>'
+        );
+
+        return $this->send((string) ($user['email'] ?? ''), 'Booking Issue - PICKLED', $html);
     }
 
     public function sendPaymentApproved(array $user, array $booking): bool
@@ -146,7 +181,7 @@ final class EmailService
             'Payment Rejected',
             $user,
             $booking,
-            'Your payment was rejected. Please review the reason below and upload a new receipt if needed.',
+            'Your payment was rejected. Please review the reason below and contact PICKLED if you need help.',
             '<div style="margin-top:16px;padding:14px 16px;background:#fff1f1;border-left:4px solid #b42318;border-radius:10px;"><strong>Reason:</strong><br>' . $safeReason . '</div>'
         );
         return $this->send((string) ($user['email'] ?? ''), 'Payment Rejected - PICKLED', $html);
@@ -158,26 +193,27 @@ final class EmailService
         $email = trim((string) ($contact['email'] ?? ''));
         $subject = trim((string) ($contact['subject'] ?? 'Contact Inquiry'));
         $message = trim((string) ($contact['message'] ?? ''));
-        $phone = trim((string) ($contact['phone'] ?? ''));
         $adminEmail = (string) ($this->config['admin_email'] ?? $this->config['username'] ?? 'pickled.shopph@gmail.com');
+        $submittedAt = (new DateTimeImmutable('now', $this->timezone()))->format('F j, Y g:i A');
 
         $adminHtml = $this->emailFrame(
             'Contact Inquiry',
             'New Contact Inquiry',
-            '<p><strong>Name:</strong> ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '</p>
-             <p><strong>Email:</strong> ' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '</p>
-             <p><strong>Phone:</strong> ' . htmlspecialchars($phone, ENT_QUOTES, 'UTF-8') . '</p>
+            '<p><strong>Full Name:</strong> ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '</p>
+             <p><strong>Email Address:</strong> ' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '</p>
              <p><strong>Subject:</strong> ' . htmlspecialchars($subject, ENT_QUOTES, 'UTF-8') . '</p>
+             <p><strong>Date/time submitted:</strong> ' . htmlspecialchars($submittedAt, ENT_QUOTES, 'UTF-8') . '</p>
              <div style="margin-top:18px;padding:16px;background:#F6EFE1;border-radius:12px;">' . nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8')) . '</div>'
         );
-        $adminSent = $this->send($adminEmail, 'Contact Form - ' . $subject, $adminHtml, null, $email);
+        $adminSent = $this->send($adminEmail, '[Contact Inquiry] ' . $subject, $adminHtml, null, $email);
 
         $confirmationHtml = $this->emailFrame(
             'Message Received',
-            'We received your message',
+            'We Received Your Inquiry - PICKLED',
             '<p>Hi ' . htmlspecialchars($name !== '' ? $name : 'there', ENT_QUOTES, 'UTF-8') . ',</p>
-             <p>Thanks for contacting PICKLED. We received your inquiry and will get back to you through email.</p>
-             <p><strong>Subject:</strong> ' . htmlspecialchars($subject, ENT_QUOTES, 'UTF-8') . '</p>'
+             <p>Thank you for contacting PICKLED. We received your inquiry and will get back to you soon.</p>
+             <p><strong>Subject:</strong> ' . htmlspecialchars($subject, ENT_QUOTES, 'UTF-8') . '</p>
+             <div style="margin-top:18px;padding:16px;background:#F6EFE1;border-radius:12px;">' . nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8')) . '</div>'
         );
         $senderSent = filter_var($email, FILTER_VALIDATE_EMAIL)
             ? $this->send($email, 'We Received Your Inquiry - PICKLED', $confirmationHtml)
@@ -191,6 +227,7 @@ final class EmailService
         $name = $this->displayName($user);
         $reference = (string) ($booking['reference'] ?? 'N/A');
         $total = number_format((float) ($booking['total'] ?? 0), 2);
+        $paymentStatus = (string) ($booking['payment_status'] ?? '');
 
         return $this->emailFrame(
             $heading,
@@ -199,6 +236,7 @@ final class EmailService
              <p>' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</p>
              <div style="background:#F6EFE1;border:1px solid rgba(38,68,20,.12);border-radius:12px;padding:16px;margin:18px 0;">
                <p style="margin:0 0 8px;"><strong>Booking reference:</strong> ' . htmlspecialchars($reference, ENT_QUOTES, 'UTF-8') . '</p>
+               <p style="margin:0 0 8px;"><strong>Payment status:</strong> ' . htmlspecialchars(ucfirst($paymentStatus ?: $heading), ENT_QUOTES, 'UTF-8') . '</p>
                <p style="margin:0;"><strong>Total amount:</strong> PHP ' . htmlspecialchars($total, ENT_QUOTES, 'UTF-8') . '</p>
              </div>' . $extraHtml
         );
@@ -216,12 +254,16 @@ final class EmailService
             $name = htmlspecialchars((string) ($item['name'] ?? 'Session'), ENT_QUOTES, 'UTF-8');
             $date = htmlspecialchars((string) ($item['booking_date'] ?? $item['date'] ?? ''), ENT_QUOTES, 'UTF-8');
             $time = htmlspecialchars((string) ($item['booking_time'] ?? $item['time'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $start = htmlspecialchars((string) ($item['start_time'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $end = htmlspecialchars((string) ($item['end_time'] ?? ''), ENT_QUOTES, 'UTF-8');
             $quantity = (int) ($item['quantity'] ?? 1);
             $price = number_format((float) ($item['unit_price'] ?? $item['price'] ?? 0), 2);
+            $timeLine = $time !== '' ? $time : trim($start . ($end !== '' ? ' - ' . $end : ''));
             $html .= '<div style="border:1px solid rgba(38,68,20,.12);border-radius:12px;padding:14px 16px;margin-bottom:10px;">'
                 . '<strong style="color:#264414;">' . $court . ' - ' . $name . '</strong>'
-                . '<p style="margin:8px 0 0;">' . $date . ' ' . $time . '</p>'
-                . '<p style="margin:6px 0 0;color:#667085;">Qty: ' . $quantity . ' - PHP ' . htmlspecialchars($price, ENT_QUOTES, 'UTF-8') . '</p>'
+                . '<p style="margin:8px 0 0;"><strong>Date:</strong> ' . $date . '</p>'
+                . '<p style="margin:6px 0 0;"><strong>Time:</strong> ' . htmlspecialchars($timeLine, ENT_QUOTES, 'UTF-8') . '</p>'
+                . '<p style="margin:6px 0 0;color:#667085;"><strong>Quantity:</strong> ' . $quantity . ' - PHP ' . htmlspecialchars($price, ENT_QUOTES, 'UTF-8') . '</p>'
                 . '</div>';
         }
 

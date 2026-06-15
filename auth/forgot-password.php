@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../app/services/AuthService.php';
+require_once __DIR__ . '/../app/services/EmailService.php';
+
 pickled_start_secure_session();
 pickled_init_csrf();
 
@@ -17,18 +19,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = 'Invalid request. Please refresh and try again.';
     } else {
         $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
+        $_SESSION['password_reset_otp'] = [
+            'email' => strtolower((string) ($email ?: ($_POST['email'] ?? ''))),
+            'user_id' => 0,
+            'attempts' => 0,
+        ];
+
         if ($email) {
             try {
-                $token = (new AuthService())->issuePasswordReset($email);
-                if ($token) {
-                    header('Location: ' . pickled_frontend_url('auth/reset-password.php?token=' . rawurlencode($token)));
-                    exit;
+                $issued = (new AuthService())->issuePasswordResetOtp($email);
+                if ($issued) {
+                    $user = $issued['user'];
+                    $_SESSION['password_reset_otp'] = [
+                        'email' => (string) ($user['email'] ?? $email),
+                        'user_id' => (int) ($user['id'] ?? $user['user_id'] ?? 0),
+                        'attempts' => 0,
+                    ];
+
+                    (new EmailService())->sendPasswordResetOtp(
+                        (string) ($user['email'] ?? $email),
+                        (string) ($user['name'] ?? 'Member'),
+                        (string) $issued['otp']
+                    );
                 }
             } catch (Throwable $e) {
-                error_log('Forgot password reset issue failed: ' . $e->getMessage());
+                error_log('Forgot password OTP issue failed: ' . $e->getMessage());
             }
         }
-        $message = 'If that email exists, a reset link has been created.';
+
+        $_SESSION['flash'] = [
+            'type' => 'success',
+            'message' => 'If the email is registered, a reset code has been sent.',
+        ];
+        header('Location: verify-reset-otp.php');
+        exit;
     }
 }
 
@@ -37,9 +61,10 @@ include $frontendPath . '/includes/header.php';
 <main class="login-page">
   <section class="login-panel">
     <h1>RESET PASSWORD</h1>
+    <p class="login-subtitle">Enter your account email and we will send a 6-digit reset code.</p>
     <form class="login-form" method="post">
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
-      <?php if ($message): ?><div class="login-success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
+      <?php if ($message): ?><div class="login-error"><?= htmlspecialchars($message) ?></div><?php endif; ?>
       <div class="login-form-field">
         <label for="resetEmail">Email</label>
         <span class="login-field">
@@ -50,7 +75,7 @@ include $frontendPath . '/includes/header.php';
           </svg>
         </span>
       </div>
-      <button type="submit">Create reset link</button>
+      <button type="submit">Send reset code</button>
     </form>
     <div class="login-links"><a href="login.php">Back to login</a></div>
   </section>

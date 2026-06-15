@@ -13,9 +13,6 @@ require_once __DIR__ . '/../app/services/PrivatePackageService.php';
 pickled_start_secure_session();
 pickled_init_csrf();
 
-$currentUser = $_SESSION['user'] ?? null;
-$isPlayer = is_array($currentUser) && (($currentUser['role'] ?? '') === 'player');
-
 $packageService = new PrivatePackageService();
 $packages = [];
 $errorMsg = '';
@@ -75,7 +72,6 @@ include __DIR__ . '/../includes/header.php';
         <div class="private-package-grid">
           <?php foreach ($packages as $package): ?>
             <?php
-              $packageId = (int) ($package['id'] ?? $package['package_id'] ?? 0);
               $packageTitle = $package['title'] ?? $package['name'] ?? 'Private Package';
               $packageCategory = $package['category'] ?? 'Private Package';
               $packageDescription = $package['description'] ?? 'A private event package tailored for your group.';
@@ -88,6 +84,8 @@ include __DIR__ . '/../includes/header.php';
                 ? number_format($packageCapacity) . (str_contains(strtolower((string) $packageCategory), 'coaching') ? ' Players' : ' Guests')
                 : 'Custom Capacity';
               $isPremiumPackage = $packagePrice >= 10000 || str_contains(strtolower((string) $packageCategory), 'event');
+              $inquirySubject = 'Private Package Inquiry - ' . (string) $packageTitle;
+              $inquiryUrl = 'contact.php?subject=' . rawurlencode($inquirySubject);
             ?>
 
             <article class="private-package-card<?= $isPremiumPackage ? ' private-package-card--premium' : '' ?>">
@@ -106,21 +104,7 @@ include __DIR__ . '/../includes/header.php';
                 <span><?= private_h($coachLabel) ?></span>
               </div>
 
-              <?php if ($isPlayer): ?>
-                <form method="post">
-                  <input type="hidden" name="csrf_token" value="<?= private_h(pickled_csrf_token()) ?>">
-                  <input type="hidden" name="private_package_id" value="<?= $packageId ?>">
-
-                  <label>
-                    Inquiry message
-                    <textarea name="message" rows="4" required placeholder="Tell us your preferred date, group size, and goals."></textarea>
-                  </label>
-
-                  <button class="private-service__button" type="submit">Inquire About Package</button>
-                </form>
-              <?php else: ?>
-                <a href="../auth/login.php?redirect=resident/private.php" class="private-service__button">Inquire About Package</a>
-              <?php endif; ?>
+              <a href="<?= private_h($inquiryUrl) ?>" class="private-service__button">Inquire About Package</a>
             </article>
           <?php endforeach; ?>
         </div>

@@ -53,6 +53,88 @@ final class PasswordResetRepository
         }
     }
 
+    public function createOtp(int $userId, string $email, string $otpHash, DateTimeImmutable $expiresAt): void
+    {
+        try {
+            $this->markUsedForUser($userId, $email);
+
+            $columns = [];
+            $params = [];
+
+            if ($this->hasColumn('user_id')) {
+                $columns['user_id'] = ':user_id';
+                $params['user_id'] = $userId;
+            }
+
+            if ($this->hasColumn('email')) {
+                $columns['email'] = ':email';
+                $params['email'] = strtolower($email);
+            }
+
+            $columns[$this->tokenColumn()] = ':token_hash';
+            $params['token_hash'] = $otpHash;
+
+            $columns['expires_at'] = ':expires_at';
+            $params['expires_at'] = $expiresAt->format('Y-m-d H:i:s');
+
+            if ($this->hasColumn('used')) {
+                $columns['used'] = ':used';
+                $params['used'] = 0;
+            }
+
+            if ($this->hasColumn('status')) {
+                $columns['status'] = ':status';
+                $params['status'] = 'active';
+            }
+
+            $sql = 'INSERT INTO ' . $this->table() . ' (' . implode(', ', array_keys($columns)) . ')
+                    VALUES (' . implode(', ', array_values($columns)) . ')';
+            $stmt = Database::connection()->prepare($sql);
+            $stmt->execute($params);
+        } catch (Throwable $e) {
+            error_log('Password reset OTP create failed: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    public function findLatestPendingForUser(int $userId, string $email = ''): ?array
+    {
+        try {
+            $conditions = [];
+            $params = [];
+
+            if ($this->hasColumn('user_id')) {
+                $conditions[] = 'user_id = :user_id';
+                $params['user_id'] = $userId;
+            }
+
+            if ($email !== '' && $this->hasColumn('email')) {
+                $conditions[] = 'LOWER(email) = :email';
+                $params['email'] = strtolower($email);
+            }
+
+            if (!$conditions) {
+                return null;
+            }
+
+            $stmt = Database::connection()->prepare(
+                'SELECT *
+                 FROM ' . $this->table() . '
+                 WHERE (' . implode(' OR ', $conditions) . ')
+                   AND expires_at > NOW()
+                   AND ' . $this->unusedCondition() . '
+                 ORDER BY created_at DESC, ' . $this->primaryKey() . ' DESC
+                 LIMIT 1'
+            );
+            $stmt->execute($params);
+            $reset = $stmt->fetch();
+            return $reset ?: null;
+        } catch (Throwable $e) {
+            error_log('Password reset OTP lookup failed: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
     public function findValid(string $token): ?array
     {
         try {
@@ -84,7 +166,7 @@ final class PasswordResetRepository
             $stmt = Database::connection()->prepare(
                 'UPDATE ' . $this->table() . '
                  SET ' . implode(', ', $sets) . '
-                 WHERE id = :id'
+                 WHERE ' . $this->primaryKey() . ' = :id'
             );
             $stmt->execute(['id' => $id]);
         } catch (Throwable $e) {
@@ -135,6 +217,21 @@ final class PasswordResetRepository
     {
         if ($this->tableName !== null) {
             return $this->tableName;
+        }
+
+        $pdo = Database::connection();
+        foreach (['password_resets', 'password_reset'] as $candidate) {
+            $stmt = $pdo->prepare(
+                'SELECT COUNT(*)
+                 FROM information_schema.tables
+                 WHERE table_schema = DATABASE()
+                   AND table_name = :table_name'
+            );
+            $stmt->execute(['table_name' => $candidate]);
+            if ((int) $stmt->fetchColumn() > 0) {
+                $this->tableName = $candidate;
+                return $this->tableName;
+            }
         }
 
         $this->ensurePasswordResetTable();
@@ -196,6 +293,25 @@ final class PasswordResetRepository
         }
 
         throw new RuntimeException('Password reset token column is missing.');
+    }
+
+    public function tokenColumnName(): string
+    {
+        return $this->tokenColumn();
+    }
+
+    public function primaryKeyName(): string
+    {
+        return $this->primaryKey();
+    }
+
+    private function primaryKey(): string
+    {
+        if ($this->hasColumn('reset_id')) {
+            return 'reset_id';
+        }
+
+        return 'id';
     }
 
     private function storedTokenValue(string $token): string

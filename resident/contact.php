@@ -11,6 +11,10 @@ pickled_init_csrf();
 
 $contactSuccess = '';
 $contactError = '';
+$prefillSubject = trim((string) ($_GET['subject'] ?? ''));
+$prefillMessage = $prefillSubject !== ''
+  ? 'I would like to inquire about this private package. My preferred date, time, group size, and event goals are:'
+  : '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? null)) {
@@ -18,18 +22,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   } else {
     $name = trim((string) ($_POST['name'] ?? ''));
     $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
-    $phone = trim((string) ($_POST['phone'] ?? ''));
     $subject = trim((string) ($_POST['subject'] ?? ''));
     $message = trim((string) ($_POST['message'] ?? ''));
 
-    if ($name === '' || !$email || $phone === '' || $subject === '' || $message === '') {
+    if ($name === '' || !$email || $subject === '' || $message === '') {
       $contactError = 'Please complete all contact fields.';
     } else {
       $emailService = new EmailService();
       if ($emailService->sendContactMessage([
         'name' => $name,
         'email' => $email,
-        'phone' => $phone,
         'subject' => $subject,
         'message' => $message,
       ])) {
@@ -41,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
       }
 
-      $contactError = 'Message saved, but the email could not be sent. Please try again later.';
+      $contactError = 'Message could not be sent. Please try again later.';
       error_log('Contact email failed for ' . $email);
     }
   }
@@ -71,12 +73,11 @@ include __DIR__ . '/../includes/header.php';
       <form class="contact-form" action="contact.php" method="post" id="contactForm">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
         <div class="contact-form__row">
-          <input type="text" name="name" placeholder="First name" required value="<?= htmlspecialchars($_POST['name'] ?? '') ?>" />
-          <input type="email" name="email" placeholder="Enter your email address" required value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" />
-          <input type="tel" name="phone" placeholder="Phone number" required value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>" />
+          <input type="text" name="name" placeholder="Full Name" required value="<?= htmlspecialchars($_POST['name'] ?? '') ?>" />
+          <input type="email" name="email" placeholder="Email Address" required value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" />
         </div>
-        <input type="text" name="subject" placeholder="Subject" required value="<?= htmlspecialchars($_POST['subject'] ?? '') ?>" />
-        <textarea name="message" placeholder="Comment" required><?= htmlspecialchars($_POST['message'] ?? '') ?></textarea>
+        <input type="text" name="subject" placeholder="Subject" required value="<?= htmlspecialchars($_POST['subject'] ?? $prefillSubject) ?>" />
+        <textarea name="message" placeholder="Comment" required><?= htmlspecialchars($_POST['message'] ?? $prefillMessage) ?></textarea>
         <button type="submit">Send message</button>
       </form>
     </div>

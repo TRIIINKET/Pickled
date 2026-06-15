@@ -138,17 +138,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           $selectedPayment,
           trim($_POST['notes'] ?? '')
         );
-        $emailService = new EmailService();
-        if (!$emailService->sendBookingConfirmation($_SESSION['user'], $_SESSION['last_booking'])) {
-          $_SESSION['flash'] = [
-            'type' => 'warning',
-            'message' => 'Booking created, but the confirmation email could not be sent.'
-          ];
-          error_log('Booking confirmation email failed for ' . ($_SESSION['user']['email'] ?? 'unknown email'));
-        }
-      } catch (RuntimeException $e) {
-        $message = $e->getMessage();
+      } catch (Throwable $e) {
+        $message = $e instanceof RuntimeException ? $e->getMessage() : 'Your booking could not be completed right now. Please try again.';
         $messageType = 'warning';
+        try {
+          if (!empty($_SESSION['user']['email'])) {
+            (new EmailService())->sendBookingIssue($_SESSION['user'], $message);
+          }
+        } catch (Throwable $emailError) {
+          error_log('Checkout failure email failed: ' . $emailError->getMessage());
+        }
       }
 
       if ($messageType !== 'warning') {

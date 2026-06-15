@@ -1,7 +1,9 @@
 <?php
 require_once __DIR__ . '/../includes/security.php';
+require_once __DIR__ . '/../includes/paths.php';
 require_once __DIR__ . '/../includes/booking-system.php';
 require_once __DIR__ . '/../database/Database.php';
+require_once __DIR__ . '/../includes/EmailVerification.php';
 
 pickled_start_secure_session();
 pickled_init_csrf();
@@ -13,18 +15,97 @@ $basePath = '../';
 $csrfToken = pickled_csrf_token();
 $user = $_SESSION['user'] ?? [];
 $userId = (int) ($user['id'] ?? 0);
+$defaultAvatar = 'avatars/default.png';
+$uploadDir = __DIR__ . '/../assets/uploads/avatars';
 $profile = [
   'phone' => '',
   'city' => '',
   'province' => '',
-  'avatar' => 'avatars/default.png',
+  'avatar' => $defaultAvatar,
 ];
 $message = '';
+$messageType = 'success';
+$fieldErrors = [];
+$isVerified = false;
+
+$provinceCities = [
+  'Metro Manila' => ['Caloocan', 'Las Pinas', 'Makati', 'Malabon', 'Mandaluyong', 'Manila', 'Marikina', 'Muntinlupa', 'Navotas', 'Paranaque', 'Pasay', 'Pasig', 'Quezon City', 'San Juan', 'Taguig', 'Valenzuela'],
+  'Batangas' => ['Batangas City', 'Lipa', 'Santo Tomas', 'Tanauan', 'Bauan', 'Calaca', 'Nasugbu'],
+  'Bulacan' => ['Malolos', 'Meycauayan', 'San Jose del Monte', 'Baliuag', 'Marilao', 'Santa Maria'],
+  'Cavite' => ['Bacoor', 'Cavite City', 'Dasmarinas', 'General Trias', 'Imus', 'Tagaytay', 'Trece Martires'],
+  'Cebu' => ['Cebu City', 'Lapu-Lapu', 'Mandaue', 'Talisay', 'Toledo', 'Danao'],
+  'Davao del Sur' => ['Davao City', 'Digos', 'Bansalan', 'Hagonoy', 'Santa Cruz'],
+  'Iloilo' => ['Iloilo City', 'Passi', 'Oton', 'Pavia', 'Santa Barbara'],
+  'Laguna' => ['Calamba', 'Los Banos', 'Santa Rosa', 'San Pablo', 'Binan', 'Cabuyao', 'San Pedro'],
+  'Pampanga' => ['Angeles', 'San Fernando', 'Mabalacat', 'Apalit', 'Guagua'],
+  'Rizal' => ['Antipolo', 'Binangonan', 'Cainta', 'Rodriguez', 'San Mateo', 'Taytay'],
+];
+
+function pickled_profile_avatar_url(string $avatar, string $defaultAvatar): string {
+  $avatar = trim($avatar);
+  if ($avatar === '' || $avatar === $defaultAvatar) {
+    return pickled_asset_url('img/nav-logo-lpink.png');
+  }
+
+  if (str_starts_with($avatar, 'assets/')) {
+    return pickled_frontend_url($avatar);
+  }
+
+  return pickled_asset_url('uploads/' . ltrim($avatar, '/'));
+}
+
+function pickled_profile_valid_location(array $provinceCities, string $province, string $city): bool {
+  return isset($provinceCities[$province]) && in_array($city, $provinceCities[$province], true);
+}
+
+function pickled_profile_store_avatar(array $file, int $userId, string $uploadDir): ?string {
+  if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+    return null;
+  }
+
+  if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+    throw new RuntimeException('Profile photo upload failed. Please choose another image.');
+  }
+
+  if ((int) ($file['size'] ?? 0) > 2 * 1024 * 1024) {
+    throw new RuntimeException('Profile photo must be 2MB or smaller.');
+  }
+
+  $tmpName = (string) ($file['tmp_name'] ?? '');
+  $info = @getimagesize($tmpName);
+  $mime = is_array($info) ? (string) ($info['mime'] ?? '') : '';
+  $extensions = [
+    'image/jpeg' => 'jpg',
+    'image/png' => 'png',
+    'image/webp' => 'webp',
+  ];
+
+  if (!isset($extensions[$mime])) {
+    throw new RuntimeException('Profile photo must be JPG, JPEG, PNG, or WEBP.');
+  }
+
+  if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
+    throw new RuntimeException('Unable to prepare profile photo storage.');
+  }
+
+  if (!is_writable($uploadDir)) {
+    throw new RuntimeException('Profile photo storage is not writable.');
+  }
+
+  $fileName = 'avatar_' . $userId . '_' . date('YmdHis') . '_' . bin2hex(random_bytes(4)) . '.' . $extensions[$mime];
+  $target = rtrim($uploadDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $fileName;
+
+  if (!move_uploaded_file($tmpName, $target)) {
+    throw new RuntimeException('Unable to save the profile photo right now.');
+  }
+
+  return 'assets/uploads/avatars/' . $fileName;
+}
 
 if ($userId > 0) {
   try {
     $stmt = Database::connection()->prepare(
-      'SELECT u.id, u.name, u.email, u.role,
+      'SELECT u.id, u.name, u.email, u.role, COALESCE(u.is_verified, 0) AS is_verified,
               COALESCE(up.phone, \'\') AS phone,
               COALESCE(up.city, \'\') AS city,
               COALESCE(up.province, \'\') AS province,
@@ -40,6 +121,7 @@ if ($userId > 0) {
     if ($row) {
       $user = pickled_session_user($row);
       $_SESSION['user'] = $user;
+      $isVerified = (int) ($row['is_verified'] ?? 0) === 1;
       $profile = [
         'phone' => (string) $row['phone'],
         'city' => (string) $row['city'],
@@ -56,22 +138,63 @@ if ($userId > 0) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $submittedToken = $_POST['csrf_token'] ?? '';
+  $action = (string) ($_POST['action'] ?? '');
+
   if (!pickled_validate_csrf_token($submittedToken)) {
     $message = 'Invalid request. Please refresh and try again.';
-  } elseif (($_POST['action'] ?? '') === 'update_profile') {
+    $messageType = 'error';
+  } elseif ($action === 'resend_verification') {
+    if ($isVerified) {
+      $message = 'Your email is already verified.';
+    } elseif (EmailVerification::issue($user)) {
+      header('Location: ' . pickled_frontend_url('auth/verify-otp.php'));
+      exit;
+    } else {
+      $message = 'Unable to send verification email right now. Please try again later.';
+      $messageType = 'error';
+    }
+  } elseif ($action === 'update_profile') {
     $name = trim((string) ($_POST['name'] ?? ''));
-    $email = trim((string) ($_POST['email'] ?? ''));
-    $avatar = trim((string) ($profile['avatar'] ?? 'avatars/default.png'));
-    $avatar = $avatar !== '' ? $avatar : 'avatars/default.png';
+    $phone = trim((string) ($_POST['phone'] ?? ''));
+    $province = trim((string) ($_POST['province'] ?? ''));
+    $city = trim((string) ($_POST['city'] ?? ''));
+    $avatar = trim((string) ($profile['avatar'] ?? $defaultAvatar));
+    $avatar = $avatar !== '' ? $avatar : $defaultAvatar;
     $profile = [
-      'phone' => trim((string) ($_POST['phone'] ?? '')),
-      'city' => trim((string) ($_POST['city'] ?? '')),
-      'province' => trim((string) ($_POST['province'] ?? '')),
+      'phone' => $phone,
+      'city' => $city,
+      'province' => $province,
       'avatar' => $avatar,
     ];
 
-    if ($userId <= 0 || $name === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-      $message = 'Please enter a valid name and email.';
+    if ($userId <= 0) {
+      $fieldErrors['profile'] = 'Please log in again before updating your profile.';
+    }
+
+    if ($name === '') {
+      $fieldErrors['name'] = 'Full name is required.';
+    }
+
+    if (!preg_match('/^09\d{9}$/', $phone)) {
+      $fieldErrors['phone'] = 'Use an 11-digit Philippine mobile number, for example 09123456789.';
+    }
+
+    if (!pickled_profile_valid_location($provinceCities, $province, $city)) {
+      $fieldErrors['location'] = 'Please select a valid city for the selected province.';
+    }
+
+    try {
+      $newAvatar = pickled_profile_store_avatar($_FILES['avatar'] ?? [], $userId, $uploadDir);
+      if ($newAvatar !== null) {
+        $profile['avatar'] = $newAvatar;
+      }
+    } catch (Throwable $e) {
+      $fieldErrors['avatar'] = $e->getMessage();
+    }
+
+    if ($fieldErrors) {
+      $message = reset($fieldErrors) ?: 'Please check the highlighted fields.';
+      $messageType = 'error';
     } else {
       try {
         $pdo = Database::connection();
@@ -79,12 +202,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = $pdo->prepare(
           'UPDATE users
-           SET name = :name, email = :email
+           SET name = :name
            WHERE id = :id AND role = :role'
         );
         $stmt->execute([
           'name' => $name,
-          'email' => strtolower($email),
           'id' => $userId,
           'role' => 'player',
         ]);
@@ -109,7 +231,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->commit();
 
         $user['name'] = $name;
-        $user['email'] = strtolower($email);
         $_SESSION['user'] = $user;
         $_SESSION['player_profile'] = $profile;
         $message = 'Profile changes saved.';
@@ -119,19 +240,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         error_log('Profile update failed: ' . $e->getMessage());
         $message = 'Unable to save profile changes right now.';
+        $messageType = 'error';
       }
     }
   }
 }
 
-$name = trim((string) ($user['name'] ?? 'Shemaiah Ezra'));
-$email = trim((string) ($user['email'] ?? 'shemaiah@email.com'));
-$phone = $profile['phone'] ?? '0917 123 4567';
-$city = $profile['city'] ?? 'Quezon City';
-$province = $profile['province'] ?? 'Metro Manila';
+$name = trim((string) ($user['name'] ?? ''));
+$email = trim((string) ($user['email'] ?? ''));
+$phone = trim((string) ($profile['phone'] ?? ''));
+$city = trim((string) ($profile['city'] ?? ''));
+$province = trim((string) ($profile['province'] ?? ''));
+$avatar = trim((string) ($profile['avatar'] ?? $defaultAvatar));
 $initial = strtoupper(substr($name !== '' ? $name : $email, 0, 1));
+$avatarUrl = pickled_profile_avatar_url($avatar, $defaultAvatar);
+$displayPhone = $phone !== '' ? $phone : 'Not added yet';
+$displayLocation = ($city !== '' && $province !== '') ? $city . ', ' . $province : 'Not added yet';
 
-$extraHead = '<link rel="stylesheet" href="../assets/css/player-profile.css?v=20260615a"/>';
+$extraHead = '<link rel="stylesheet" href="../assets/css/player-profile.css?v=20260616a"/>';
 
 include __DIR__ . '/../includes/header.php';
 ?>
@@ -143,17 +269,17 @@ include __DIR__ . '/../includes/header.php';
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M5 20a7 7 0 0 1 14 0"></path></svg>
         My Profile
       </a>
-      <a class="player-profile-nav__item" href="#bookings" id="bookings">
+      <a class="player-profile-nav__item" href="booking-details.php">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg>
         My Bookings
       </a>
-      <a class="player-profile-nav__item" href="#payments" id="payments">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"></rect><path d="M3 10h18M7 15h3"></path></svg>
-        My Payments
+      <a class="player-profile-nav__item" href="cart.php">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="20" r="1"></circle><circle cx="17" cy="20" r="1"></circle><path d="M3 4h2l2.4 11.4a2 2 0 0 0 2 1.6h7.4a2 2 0 0 0 2-1.6L20 8H7"></path></svg>
+        My Cart
       </a>
-      <a class="player-profile-nav__item" href="#settings" id="settings">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 7.1 4l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.9 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.7 1Z"></path></svg>
-        Settings
+      <a class="player-profile-nav__item" href="<?= htmlspecialchars(pickled_frontend_url('auth/change-password.php')) ?>">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="9" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+        Security
       </a>
       <form method="post" action="<?= htmlspecialchars(pickled_frontend_url('auth/logout.php')) ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
@@ -166,62 +292,67 @@ include __DIR__ . '/../includes/header.php';
 
     <section class="player-profile-main" aria-label="Profile settings">
       <?php if ($message): ?>
-        <div class="player-profile-message"><?= htmlspecialchars($message) ?></div>
+        <div class="player-profile-message player-profile-message--<?= htmlspecialchars($messageType) ?>"><?= htmlspecialchars($message) ?></div>
       <?php endif; ?>
 
       <article class="player-profile-card">
         <div class="player-profile-card__header">
-          <h1>Profile Information</h1>
-          <a class="player-profile-edit" href="#edit-profile">Edit</a>
+          <div>
+            <p class="player-profile-eyebrow">Player Account</p>
+            <h1>Profile Information</h1>
+          </div>
+          <a class="player-profile-edit" href="#edit-profile">Edit Profile</a>
         </div>
 
         <div class="player-profile-info">
           <div class="player-profile-identity">
-            <div class="player-profile-avatar" aria-hidden="true"><?= htmlspecialchars($initial) ?></div>
-            <button class="player-profile-photo" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L8 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3l-1.5-2Z"></path><circle cx="12" cy="13" r="3"></circle></svg>
-              Change Photo
-            </button>
+            <div class="player-profile-avatar">
+              <img src="<?= htmlspecialchars($avatarUrl) ?>" alt="" onerror="this.remove(); this.parentElement.dataset.fallback='<?= htmlspecialchars($initial) ?>';" />
+            </div>
+            <strong><?= htmlspecialchars($name !== '' ? $name : 'Player') ?></strong>
           </div>
 
           <div class="player-profile-fields">
             <div>
               <span>Full Name</span>
-              <strong><?= htmlspecialchars($name) ?></strong>
-            </div>
-            <div>
-              <span>City</span>
-              <strong><?= htmlspecialchars($city) ?></strong>
-            </div>
-            <div>
-              <span>Email Address</span>
-              <strong><?= htmlspecialchars($email) ?></strong>
-            </div>
-            <div>
-              <span>Province</span>
-              <strong><?= htmlspecialchars($province) ?></strong>
+              <strong><?= htmlspecialchars($name !== '' ? $name : 'Not added yet') ?></strong>
             </div>
             <div>
               <span>Phone Number</span>
-              <strong><?= htmlspecialchars($phone) ?></strong>
+              <strong><?= htmlspecialchars($displayPhone) ?></strong>
+            </div>
+            <div class="player-profile-fields__wide">
+              <span>Email Address</span>
+              <strong><?= htmlspecialchars($email) ?></strong>
+              <span class="player-profile-badge <?= $isVerified ? 'player-profile-badge--verified' : 'player-profile-badge--warning' ?>">
+                <?= $isVerified ? '✓ Verified' : '⚠ Email Not Verified' ?>
+              </span>
+              <?php if (!$isVerified): ?>
+                <p class="player-profile-help">Please verify your email address to access all features.</p>
+                <form class="player-profile-inline-form" method="post">
+                  <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
+                  <input type="hidden" name="action" value="resend_verification" />
+                  <button type="submit">Resend Verification Email</button>
+                </form>
+              <?php endif; ?>
+            </div>
+            <div>
+              <span>City and Province</span>
+              <strong><?= htmlspecialchars($displayLocation) ?></strong>
             </div>
           </div>
         </div>
       </article>
 
-      <article class="player-profile-card player-profile-card--password">
+      <article class="player-profile-card player-profile-card--security">
         <div class="player-profile-card__header">
-          <h2>Password</h2>
-          <a class="player-profile-edit" href="#settings">Edit</a>
-        </div>
-        <div class="player-profile-password">
           <div>
-            <span>Password</span>
-            <strong>********</strong>
-            <small>Last changed 2 months ago</small>
+            <p class="player-profile-eyebrow">Security</p>
+            <h2>Password Management</h2>
           </div>
-          <a class="player-profile-outline" href="<?= htmlspecialchars(pickled_frontend_url('auth/change-password.php')) ?>">Change Password</a>
+          <a class="player-profile-edit" href="<?= htmlspecialchars(pickled_frontend_url('auth/change-password.php')) ?>">Manage Security Settings</a>
         </div>
+        <p class="player-profile-security-copy">For security purposes, password management is handled in Settings.</p>
       </article>
     </section>
   </div>
@@ -229,43 +360,61 @@ include __DIR__ . '/../includes/header.php';
 
 <section class="player-profile-modal" id="edit-profile" aria-labelledby="edit-profile-title">
   <a class="player-profile-modal__backdrop" href="#" aria-label="Close edit profile modal"></a>
-  <form class="player-profile-modal__dialog" method="post">
+  <form class="player-profile-modal__dialog" method="post" enctype="multipart/form-data" novalidate>
     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
     <input type="hidden" name="action" value="update_profile" />
     <div class="player-profile-modal__header">
-      <h2 id="edit-profile-title">Edit Profile</h2>
+      <div>
+        <p class="player-profile-eyebrow">Edit Mode</p>
+        <h2 id="edit-profile-title">Profile Information</h2>
+      </div>
       <a href="#" aria-label="Close edit profile modal">&times;</a>
     </div>
+
+    <div class="player-profile-photo-editor">
+      <div class="player-profile-avatar player-profile-avatar--edit">
+        <img id="avatarPreview" src="<?= htmlspecialchars($avatarUrl) ?>" alt="" />
+      </div>
+      <label class="player-profile-photo-input">
+        <span>Profile Picture</span>
+        <input id="avatarInput" type="file" name="avatar" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
+        <small>JPG, JPEG, PNG, or WEBP. Max 2MB.</small>
+        <?php if (isset($fieldErrors['avatar'])): ?><em><?= htmlspecialchars($fieldErrors['avatar']) ?></em><?php endif; ?>
+      </label>
+    </div>
+
     <div class="player-profile-modal__grid">
       <label>
         <span>Full Name</span>
-        <input type="text" name="name" value="<?= htmlspecialchars($name) ?>" />
-      </label>
-      <label>
-        <span>City</span>
-        <select name="city">
-          <option<?= $city === 'Quezon City' ? ' selected' : '' ?>>Quezon City</option>
-          <option<?= $city === 'Makati' ? ' selected' : '' ?>>Makati</option>
-          <option<?= $city === 'Taguig' ? ' selected' : '' ?>>Taguig</option>
-          <option<?= $city === 'Manila' ? ' selected' : '' ?>>Manila</option>
-        </select>
+        <input type="text" name="name" value="<?= htmlspecialchars($name) ?>" required />
+        <?php if (isset($fieldErrors['name'])): ?><em><?= htmlspecialchars($fieldErrors['name']) ?></em><?php endif; ?>
       </label>
       <label>
         <span>Email Address</span>
-        <input type="email" name="email" value="<?= htmlspecialchars($email) ?>" />
+        <input type="email" value="<?= htmlspecialchars($email) ?>" readonly aria-readonly="true" />
+        <small>Email cannot be edited here.</small>
       </label>
       <label>
         <span>Province</span>
-        <select name="province">
-          <option<?= $province === 'Metro Manila' ? ' selected' : '' ?>>Metro Manila</option>
-          <option<?= $province === 'Rizal' ? ' selected' : '' ?>>Rizal</option>
-          <option<?= $province === 'Cavite' ? ' selected' : '' ?>>Cavite</option>
-          <option<?= $province === 'Laguna' ? ' selected' : '' ?>>Laguna</option>
+        <select id="provinceSelect" name="province" required>
+          <option value="">Select province first</option>
+          <?php foreach ($provinceCities as $provinceName => $cities): ?>
+            <option value="<?= htmlspecialchars($provinceName) ?>"<?= $province === $provinceName ? ' selected' : '' ?>><?= htmlspecialchars($provinceName) ?></option>
+          <?php endforeach; ?>
         </select>
       </label>
       <label>
+        <span>City</span>
+        <select id="citySelect" name="city" data-current-city="<?= htmlspecialchars($city) ?>" required>
+          <option value="">Select city</option>
+        </select>
+        <?php if (isset($fieldErrors['location'])): ?><em><?= htmlspecialchars($fieldErrors['location']) ?></em><?php endif; ?>
+      </label>
+      <label class="player-profile-modal__wide">
         <span>Phone Number</span>
-        <input type="tel" name="phone" value="<?= htmlspecialchars($phone) ?>" />
+        <input id="phoneInput" type="tel" name="phone" value="<?= htmlspecialchars($phone) ?>" inputmode="numeric" maxlength="11" pattern="09[0-9]{9}" placeholder="09123456789" required />
+        <small>Numbers only. Use 11 digits starting with 09.</small>
+        <?php if (isset($fieldErrors['phone'])): ?><em><?= htmlspecialchars($fieldErrors['phone']) ?></em><?php endif; ?>
       </label>
     </div>
     <div class="player-profile-modal__actions">
@@ -274,5 +423,56 @@ include __DIR__ . '/../includes/header.php';
     </div>
   </form>
 </section>
+
+<script>
+  window.pickledProvinceCities = <?= json_encode($provinceCities, JSON_UNESCAPED_SLASHES) ?>;
+
+  const provinceSelect = document.getElementById('provinceSelect');
+  const citySelect = document.getElementById('citySelect');
+  const phoneInput = document.getElementById('phoneInput');
+  const avatarInput = document.getElementById('avatarInput');
+  const avatarPreview = document.getElementById('avatarPreview');
+
+  function syncCities() {
+    if (!provinceSelect || !citySelect) return;
+    const selectedProvince = provinceSelect.value;
+    const currentCity = citySelect.dataset.currentCity || '';
+    const cities = window.pickledProvinceCities[selectedProvince] || [];
+    citySelect.innerHTML = '<option value="">Select city</option>';
+    cities.forEach((city) => {
+      const option = document.createElement('option');
+      option.value = city;
+      option.textContent = city;
+      option.selected = city === currentCity;
+      citySelect.appendChild(option);
+    });
+    if (!cities.includes(currentCity)) {
+      citySelect.value = '';
+    }
+  }
+
+  provinceSelect?.addEventListener('change', () => {
+    citySelect.dataset.currentCity = '';
+    syncCities();
+  });
+  syncCities();
+
+  phoneInput?.addEventListener('input', () => {
+    phoneInput.value = phoneInput.value.replace(/\D/g, '').slice(0, 11);
+    phoneInput.setCustomValidity(/^09\d{9}$/.test(phoneInput.value) ? '' : 'Enter an 11-digit Philippine mobile number starting with 09.');
+  });
+
+  avatarInput?.addEventListener('change', () => {
+    const file = avatarInput.files?.[0];
+    if (!file || !avatarPreview) return;
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      avatarInput.value = '';
+      alert('Profile photo must be JPG, JPEG, PNG, or WEBP.');
+      return;
+    }
+    avatarPreview.src = URL.createObjectURL(file);
+  });
+</script>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>

@@ -16,6 +16,7 @@ final class PaymentService
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
         'image/webp' => 'webp',
+        'application/pdf' => 'pdf',
     ];
 
     private const MAX_UPLOAD_BYTES = 5242880;
@@ -202,7 +203,7 @@ final class PaymentService
     private function storeProofImage(int $bookingId, array $file): string
     {
         if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            throw new RuntimeException('Please upload a valid payment receipt image.');
+            throw new RuntimeException('Please upload a valid payment receipt.');
         }
 
         $tmpName = (string) ($file['tmp_name'] ?? '');
@@ -213,7 +214,7 @@ final class PaymentService
 
         $mime = (new finfo(FILEINFO_MIME_TYPE))->file($tmpName) ?: '';
         if (!isset(self::ALLOWED_MIME_TYPES[$mime])) {
-            throw new RuntimeException('Receipt must be a JPG, PNG, or WEBP image.');
+            throw new RuntimeException('Receipt must be a JPG, JPEG, PNG, WEBP, or PDF file.');
         }
 
         $uploadDir = __DIR__ . '/../../assets/uploads/payments';
@@ -221,7 +222,11 @@ final class PaymentService
             throw new RuntimeException('Payment upload folder could not be created.');
         }
 
-        $filename = 'payment-' . $bookingId . '-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . self::ALLOWED_MIME_TYPES[$mime];
+        if (!is_writable($uploadDir)) {
+            throw new RuntimeException('Payment upload folder is not writable.');
+        }
+
+        $filename = 'payment_' . $bookingId . '_' . date('YmdHis') . '_' . bin2hex(random_bytes(4)) . '.' . self::ALLOWED_MIME_TYPES[$mime];
         $destination = $uploadDir . '/' . $filename;
         $stored = PHP_SAPI === 'cli'
             ? copy($tmpName, $destination)

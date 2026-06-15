@@ -5,6 +5,7 @@ require_once __DIR__ . '/../repositories/BookingRepository.php';
 require_once __DIR__ . '/CartService.php';
 require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/AdminLogService.php';
+require_once __DIR__ . '/EmailService.php';
 require_once __DIR__ . '/../controllers/CheckoutController.php';
 require_once __DIR__ . '/../../includes/booking-system.php';
 
@@ -47,6 +48,7 @@ final class CheckoutService
         $stored = $this->bookings->create($userId, $booking);
         $this->adminLogs->recordBookingCreated($stored);
         $this->notifications->notifyBookingCreated($stored);
+        $this->sendBookingConfirmationEmail($userId, $stored);
         $this->cart->clearForUser($userId);
 
         if (session_status() === PHP_SESSION_ACTIVE) {
@@ -55,6 +57,24 @@ final class CheckoutService
         }
 
         return $stored;
+    }
+
+    private function sendBookingConfirmationEmail(int $userId, array $booking): void
+    {
+        try {
+            $stmt = Database::connection()->prepare('SELECT * FROM users WHERE id = :id LIMIT 1');
+            $stmt->execute(['id' => $userId]);
+            $user = $stmt->fetch() ?: null;
+            if (!$user) {
+                return;
+            }
+
+            if (!(new EmailService())->sendBookingConfirmation($user, $booking)) {
+                error_log('Booking confirmation email failed for ' . (string) ($user['email'] ?? 'unknown email'));
+            }
+        } catch (Throwable $e) {
+            error_log('Booking confirmation email failed: ' . $e->getMessage());
+        }
     }
 
     private function generateReference(): string

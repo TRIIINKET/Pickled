@@ -60,6 +60,68 @@ final class AuthService
         return $token;
     }
 
+    public function issuePasswordResetOtp(string $email): ?array
+    {
+        $user = $this->users->findByEmail($email);
+        if (!$user) {
+            return null;
+        }
+
+        $otp = (string) random_int(100000, 999999);
+        $config = require __DIR__ . '/../../includes/config.php';
+        $timezone = new DateTimeZone((string) ($config['timezone'] ?? 'Asia/Manila'));
+        $expiresAt = (new DateTimeImmutable('now', $timezone))->modify('+10 minutes');
+        $this->resets->createOtp(
+            (int) $user['id'],
+            (string) $user['email'],
+            password_hash($otp, PASSWORD_DEFAULT),
+            $expiresAt
+        );
+
+        return [
+            'user' => $user,
+            'otp' => $otp,
+            'expires_at' => $expiresAt,
+        ];
+    }
+
+    public function verifyPasswordResetOtp(int $userId, string $email, string $otp): ?array
+    {
+        if (!preg_match('/^\d{6}$/', $otp)) {
+            return null;
+        }
+
+        $reset = $this->resets->findLatestPendingForUser($userId, $email);
+        if (!$reset) {
+            return null;
+        }
+
+        $tokenColumn = $this->resets->tokenColumnName();
+        if (!password_verify($otp, (string) ($reset[$tokenColumn] ?? ''))) {
+            return null;
+        }
+
+        return $reset;
+    }
+
+    public function resetPasswordWithOtp(int $userId, int $resetId, string $password): bool
+    {
+        $user = $this->users->findById($userId);
+        if (!$user) {
+            return false;
+        }
+
+        $reset = $this->resets->findLatestPendingForUser($userId, (string) ($user['email'] ?? ''));
+        if (!$reset || (int) ($reset[$this->resets->primaryKeyName()] ?? 0) !== $resetId) {
+            return false;
+        }
+
+        $this->users->updatePassword($userId, password_hash($password, PASSWORD_DEFAULT));
+        $this->resets->markUsed($resetId);
+        $this->resets->markUsedForUser($userId, (string) ($user['email'] ?? ''));
+        return true;
+    }
+
     public function isPasswordResetTokenValid(string $token): bool
     {
         if ($token === '' || !preg_match('/\A[a-f0-9]{64}\z/i', $token)) {
