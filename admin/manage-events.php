@@ -5,6 +5,14 @@ $courtSlug = preg_replace('/[^a-z0-9-]/', '', strtolower((string) ($_GET['court'
 $pageTitle = $isSocialPlay ? 'Social Play' : ($courtSlug === 'pink' ? 'Court Pink' : 'Court Green');
 $activePage = $isSocialPlay ? 'events' : 'courts';
 $bodyClass = 'admin-dashboard-body';
+$ajaxJsonRequest = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+    && (
+        str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json')
+        || strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'fetch'
+    );
+if ($ajaxJsonRequest) {
+    ob_start();
+}
 require_once __DIR__ . '/../includes/admin-header.php';
 require_once __DIR__ . '/../includes/admin-paths.php';
 require_once __DIR__ . '/../database/Database.php';
@@ -65,6 +73,15 @@ function court_ensure_customization_schema(?PDO $pdo): void {
     if (!court_column_exists($pdo, 'booking_variants', 'sort_order')) {
         $pdo->exec('ALTER TABLE booking_variants ADD COLUMN sort_order INT NOT NULL DEFAULT 0 AFTER active');
     }
+    if (!court_column_exists($pdo, 'booking_variants', 'pricing_type')) {
+        $pdo->exec("ALTER TABLE booking_variants ADD COLUMN pricing_type VARCHAR(40) NOT NULL DEFAULT 'per_session' AFTER price");
+    }
+    if (!court_column_exists($pdo, 'booking_variants', 'description')) {
+        $pdo->exec('ALTER TABLE booking_variants ADD COLUMN description TEXT NULL AFTER name');
+    }
+    if (!court_column_exists($pdo, 'booking_variants', 'coach_required')) {
+        $pdo->exec("ALTER TABLE booking_variants ADD COLUMN coach_required VARCHAR(20) NOT NULL DEFAULT 'no' AFTER participants_limit");
+    }
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS court_media (
@@ -84,10 +101,155 @@ function court_ensure_customization_schema(?PDO $pdo): void {
     ");
 }
 
+function court_apply_standard_court_defaults(?PDO $pdo): void {
+    if (!$pdo) {
+        return;
+    }
+
+    try {
+        $pdo->exec("UPDATE courts SET base_price = 400.00 WHERE slug = 'pink' AND base_price IN (0.00, 250.00)");
+        $pdo->exec("UPDATE booking_variants SET category = 'Class' WHERE slug IN ('pink-kids-pickleball-class-ages-6-10', 'pink-youth-development-class-ages-11-17') AND category = 'Academy'");
+        $pdo->exec("UPDATE booking_variants SET category = 'Family Session' WHERE slug = 'pink-parent-child-session' AND category = 'Academy'");
+        $pdo->exec("UPDATE booking_variants
+            SET active = 0
+            WHERE slug IN (
+                'pink-foundational-ages-6-10',
+                'pink-youth-development-ages-11-17',
+                'pink-adult-beginner-bootcamp',
+                'pink-introductory-trial-class',
+                'pink-parent-child-trial'
+            )
+            AND category = 'Academy'");
+        $pdo->exec("DELETE s
+            FROM sessions s
+            JOIN booking_variants v ON v.id = s.variant_id
+            LEFT JOIN cart_items ci ON ci.session_id = s.id
+            LEFT JOIN booking_items bi ON bi.session_id = s.id
+            WHERE v.slug IN (
+                'green-court-rentals',
+                'green-lessons',
+                'green-private-coaching',
+                'green-training',
+                'pink-base-rate',
+                'pink-kids-pickleball-class-ages-6-10',
+                'pink-youth-development-class-ages-11-17',
+                'pink-parent-child-session'
+            )
+            AND s.booked_count = 0
+            AND ci.id IS NULL
+            AND bi.id IS NULL");
+    } catch (Throwable $e) {
+        error_log('Court standard defaults cleanup failed: ' . $e->getMessage());
+    }
+}
+
 function court_normalize_image_path(string $path): string {
     $path = str_replace('\\', '/', trim($path));
     $path = preg_replace('#^(\.\./)?assets/#', '', $path) ?? $path;
     return ltrim($path, '/');
+}
+
+function court_category_options(): array {
+    return [
+        'Court Rental' => 'Court Rental',
+        'Private Coaching' => 'Private Coaching',
+        'Class' => 'Class',
+        'Training' => 'Training',
+        'Social Play' => 'Social Play',
+        'Tournament' => 'Tournament',
+    ];
+}
+
+function court_category_value(string $category): string {
+    $normalized = strtolower(trim(str_replace(['-', ' '], '_', $category)));
+    $map = [
+        'court_reservation' => 'Court Rental',
+        'court_rental' => 'Court Rental',
+        'court_rentals' => 'Court Rental',
+        'coaching' => 'Private Coaching',
+        'private_coaching' => 'Private Coaching',
+        'social_play' => 'Social Play',
+        'tournament' => 'Tournament',
+        'training' => 'Training',
+        'training_session' => 'Training',
+        'class' => 'Class',
+        'family_session' => 'Class',
+    ];
+    return $map[$normalized] ?? (array_key_exists($category, court_category_options()) ? $category : 'Court Rental');
+}
+
+function court_category_label(string $category): string {
+    $value = court_category_value($category);
+    return court_category_options()[$value] ?? $value;
+}
+
+function court_pricing_type_options(): array {
+    return [
+        'per_court' => 'Per Court',
+        'per_participant' => 'Per Participant',
+        'per_session' => 'Per Session',
+    ];
+}
+
+function court_pricing_type_value(array $service): string {
+    $stored = (string) ($service['pricing_type'] ?? '');
+    if ($stored === 'per_court_session') {
+        return 'per_court';
+    }
+    if (array_key_exists($stored, court_pricing_type_options())) {
+        return $stored;
+    }
+
+    $category = strtolower((string) ($service['category'] ?? ''));
+    $name = strtolower((string) ($service['name'] ?? ''));
+    if (str_contains($category, 'court') || str_contains($name, 'rental')) {
+        return 'per_court';
+    }
+    if (str_contains($category, 'class') || str_contains($category, 'family') || str_contains($name, 'class') || str_contains($name, 'child')) {
+        return 'per_participant';
+    }
+    return 'per_session';
+}
+
+function court_duration_options(): array {
+    return ['30 Minutes', '1 Hour', '1.5 Hours', '2 Hours', '3 Hours'];
+}
+
+function court_duration_value(string $duration): string {
+    $map = [
+        '30 minutes' => '30 Minutes',
+        '1 hour' => '1 Hour',
+        '1.5 hours' => '1.5 Hours',
+        '2 hours' => '2 Hours',
+        '3 hours' => '3 Hours',
+    ];
+    $key = strtolower(trim($duration));
+    return $map[$key] ?? $duration;
+}
+
+function court_coach_required_options(): array {
+    return [
+        'no' => 'No',
+        'yes' => 'Yes',
+        'optional' => 'Optional',
+    ];
+}
+
+function court_coach_required_value(array $service): string {
+    $stored = strtolower((string) ($service['coach_required'] ?? ''));
+    if (array_key_exists($stored, court_coach_required_options())) {
+        return $stored;
+    }
+
+    $name = strtolower((string) ($service['name'] ?? ''));
+    $category = strtolower((string) ($service['category'] ?? ''));
+    if (str_contains($name, 'rental') || str_contains($category, 'court')) {
+        return 'no';
+    }
+    if (str_contains($name, 'training')) {
+        return 'optional';
+    }
+    return 'yes';
 }
 
 function court_upload_image(array $file): string {
@@ -193,9 +355,43 @@ function court_soft_delete_media(?PDO $pdo, int $courtId, int $mediaId): void {
     $pdo->prepare('UPDATE court_media SET status = "deleted", is_hero = 0 WHERE id = :id AND court_id = :court_id')->execute(['id' => $mediaId, 'court_id' => $courtId]);
 }
 
+function court_wants_json(): bool {
+    $accept = strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? ''));
+    $requestedWith = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+    return str_contains($accept, 'application/json') || $requestedWith === 'fetch';
+}
+
+function court_variant_json(?PDO $pdo, int $variantId): array {
+    if (!$pdo || $variantId <= 0) {
+        return [];
+    }
+
+    $stmt = $pdo->prepare('SELECT * FROM booking_variants WHERE id = :id LIMIT 1');
+    $stmt->execute(['id' => $variantId]);
+    $variant = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    if (!$variant) {
+        return [];
+    }
+
+    return [
+        'id' => (int) $variant['id'],
+        'name' => (string) $variant['name'],
+        'category' => court_category_label((string) $variant['category']),
+        'description' => trim((string) ($variant['description'] ?? '')),
+        'price' => (float) $variant['price'],
+        'priceLabel' => '₱' . number_format((float) $variant['price'], 2),
+        'duration' => (string) $variant['duration_label'],
+        'active' => !empty($variant['active']),
+        'statusLabel' => !empty($variant['active']) ? 'Active' : 'Inactive',
+    ];
+}
+
 court_ensure_customization_schema($pdo);
+court_apply_standard_court_defaults($pdo);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $jsonResponse = court_wants_json();
+    $variantResponseId = 0;
     if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? null)) {
         $errorMsg = 'Invalid form submission. Please try again.';
     } else {
@@ -216,7 +412,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $catalogService->createVariant($_POST, $adminId);
                 $successMsg = 'Booking variant added successfully.';
             } elseif ($action === 'update_variant') {
-                $catalogService->updateVariant((int) ($_POST['variant_id'] ?? 0), $_POST, $adminId);
+                $variantResponseId = (int) ($_POST['variant_id'] ?? 0);
+                $catalogService->updateVariant($variantResponseId, $_POST, $adminId);
                 $successMsg = 'Booking variant updated successfully.';
             } elseif ($action === 'set_variant_active') {
                 $catalogService->setVariantActive((int) ($_POST['variant_id'] ?? 0), (string) ($_POST['active'] ?? '0') === '1', $adminId);
@@ -270,6 +467,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             error_log('Court catalog action failed: ' . $e->getMessage());
             $errorMsg = $e instanceof RuntimeException ? $e->getMessage() : 'Unable to save catalog changes.';
         }
+    }
+
+    if ($jsonResponse) {
+        if (ob_get_level() > 0) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+        echo json_encode([
+            'ok' => $errorMsg === '',
+            'message' => $errorMsg === '' ? $successMsg : $errorMsg,
+            'variant' => $errorMsg === '' && $variantResponseId > 0 ? court_variant_json($pdo, $variantResponseId) : null,
+        ]);
+        exit;
     }
 }
 
@@ -444,6 +654,20 @@ $defaultGallery = $courtSlug === 'pink'
     : ['img/court/court green-1.png', 'img/court/court green-2.png', 'img/court/court green-3.png', 'img/court/social play-1.png'];
 $socialGallery = ['img/court/social play-1.png', 'img/court/social play-2.png', 'img/court/social play-3.png', 'img/court/court green-1.png', 'img/court/court pink-1.webp'];
 
+$hiddenCourtCatalogSlugs = [
+    'green-open-match-play',
+    'green-weekly-tournament',
+    'pink-foundational-ages-6-10',
+    'pink-youth-development-ages-11-17',
+    'pink-adult-beginner-bootcamp',
+    'pink-introductory-trial-class',
+    'pink-parent-child-trial',
+];
+if (!$isSocialPlay) {
+    $hiddenCatalogSlugs = array_flip($hiddenCourtCatalogSlugs);
+    $services = array_values(array_filter($services, static fn(array $service): bool => !isset($hiddenCatalogSlugs[(string) ($service['slug'] ?? '')])));
+}
+
 $activeServices = array_values(array_filter($services, static fn(array $service): bool => !empty($service['active'])));
 court_seed_default_media($pdo, (int) ($court['id'] ?? 0), $defaultGallery);
 $mediaRows = court_media_rows($pdo, (int) ($court['id'] ?? 0), false);
@@ -468,18 +692,6 @@ $subtitle = trim((string) ($court['description'] ?? '')) ?: ($courtSlug === 'pin
 $operatingHours = trim((string) ($court['operating_hours'] ?? '')) ?: '8AM - 10PM';
 $courtType = trim((string) ($court['court_type'] ?? '')) ?: 'Indoor';
 $courtStats = court_stats($pdo, (int) ($court['id'] ?? 0));
-$courtVariantIds = array_map(static fn(array $service): int => (int) ($service['id'] ?? 0), $services);
-$courtSessions = array_values(array_filter($allSessions, static fn(array $session): bool => in_array((int) ($session['variant_id'] ?? 0), $courtVariantIds, true)));
-$sessionsByVariant = [];
-$upcomingSessionsByVariant = [];
-$todayDate = (new DateTimeImmutable('today', new DateTimeZone('Asia/Manila')))->format('Y-m-d');
-foreach ($courtSessions as $courtSession) {
-    $variantId = (int) ($courtSession['variant_id'] ?? 0);
-    $sessionsByVariant[$variantId][] = $courtSession;
-    if (($courtSession['session_date'] ?? '') >= $todayDate && in_array((string) ($courtSession['status'] ?? ''), ['open', 'full'], true)) {
-        $upcomingSessionsByVariant[$variantId] = ($upcomingSessionsByVariant[$variantId] ?? 0) + 1;
-    }
-}
 $accent = $courtSlug === 'pink' ? 'pink' : 'green';
 
 $icons = [
@@ -743,7 +955,7 @@ $dashboardNav = [
             <section class="court-stats-grid" aria-label="<?php echo court_h($pageTitle); ?> live stats">
                 <article><span>Total bookings this month</span><strong><?php echo number_format($courtStats['bookings_month']); ?></strong></article>
                 <article><span>Revenue this month</span><strong>₱<?php echo number_format((float) $courtStats['revenue_month'], 2); ?></strong></article>
-                <article><span>Upcoming sessions</span><strong><?php echo number_format($courtStats['upcoming_sessions']); ?></strong></article>
+                <article><span>Active services</span><strong><?php echo number_format(count($activeServices)); ?></strong></article>
                 <article><span>Most booked service</span><strong><?php echo court_h($courtStats['most_booked_service']); ?></strong></article>
             </section>
 
@@ -752,67 +964,169 @@ $dashboardNav = [
                     <article class="catalog-manager-card">
                         <header>
                             <div><h2>Services</h2><p>Manage the services and offers for <?php echo htmlspecialchars($pageTitle); ?>.</p></div>
-                            <details class="inline-create-panel">
-                                <summary><?php echo court_icon($icons, 'plus'); ?> Add New Service</summary>
-                                <form class="catalog-admin-form catalog-admin-form-wide" method="post">
-                                    <?php echo court_csrf_input(); ?>
-                                    <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
-                                    <label><span>Name</span><input type="text" name="name" placeholder="Court Rental" required></label>
-                                    <label><span>Slug</span><input type="text" name="slug" placeholder="<?php echo court_h($courtSlug); ?>-court-rental" required></label>
-                                    <label><span>Category</span><input type="text" name="category" placeholder="Court Reservation" required></label>
-                                    <label><span>Duration</span><input type="text" name="duration_label" placeholder="1 hour" required></label>
-                                    <label><span>Price</span><input type="number" name="price" step="0.01" min="0" value="0.00" required></label>
-                                    <label><span>Limit</span><input type="number" name="participants_limit" min="1" value="1" required></label>
-                                    <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $capacity; ?>" required></label>
-                                    <label><span>Sort</span><input type="number" name="sort_order" min="0" value="<?php echo count($services) * 10; ?>"></label>
-                                    <label class="catalog-check"><input type="checkbox" name="active" value="1" checked> Active</label>
-                                    <button class="bookings-button primary" type="submit" name="action" value="create_variant">Add Service</button>
-                                </form>
-                            </details>
+                            <button class="service-add-toggle" type="button" data-service-add-toggle><?php echo court_icon($icons, 'plus'); ?> Add New Service</button>
                         </header>
+                        <div class="service-add-panel" data-service-add-panel>
+                            <form class="service-edit-form service-add-form" method="post">
+                                <?php echo court_csrf_input(); ?>
+                                <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
+                                <header class="service-editor-header">
+                                    <h3>Add New Service</h3>
+                                    <p>Create a service that players can choose during booking.</p>
+                                </header>
+                                <section class="service-form-section">
+                                    <h4>Basic Information</h4>
+                                    <div class="service-field-grid">
+                                        <label><span>Service Name</span><input type="text" name="name" placeholder="Court Rental" data-service-name required></label>
+                                        <label><span>Category</span><select name="category" data-service-category required>
+                                            <?php foreach (court_category_options() as $value => $label): ?>
+                                                <option value="<?php echo court_h($value); ?>"><?php echo court_h($label); ?></option>
+                                            <?php endforeach; ?>
+                                        </select></label>
+                                        <label class="service-field-wide"><span>Description</span><textarea name="description" rows="3" placeholder="Optional description"></textarea></label>
+                                    </div>
+                                </section>
+                                <section class="service-form-section">
+                                    <h4>Pricing &amp; Booking Rules</h4>
+                                    <div class="service-field-grid">
+                                        <label><span>Pricing Type</span><select name="pricing_type" data-pricing-type required>
+                                            <?php foreach (court_pricing_type_options() as $value => $label): ?>
+                                                <option value="<?php echo court_h($value); ?>"><?php echo court_h($label); ?></option>
+                                            <?php endforeach; ?>
+                                        </select></label>
+                                        <label><span>Price</span><input type="number" name="price" step="0.01" min="0.01" placeholder="0.00" required><small class="field-help">Amount charged for this service.</small></label>
+                                        <label><span>Duration</span><select name="duration_choice" data-duration-select required>
+                                            <?php foreach (court_duration_options() as $option): ?>
+                                                <option value="<?php echo court_h($option); ?>" <?php echo $option === '1 Hour' ? 'selected' : ''; ?>><?php echo court_h($option); ?></option>
+                                            <?php endforeach; ?>
+                                            <option value="custom">Custom</option>
+                                        </select><input type="hidden" name="duration_label" value="1 Hour" data-duration-custom></label>
+                                        <label data-participants-field><span>Participants Limit</span><input type="number" name="participants_limit" min="1" value="1" required><small class="field-help">Maximum number of participants allowed, if applicable.</small></label>
+                                        <label><span>Coach Required</span><select name="coach_required" data-coach-required required>
+                                            <?php foreach (court_coach_required_options() as $value => $label): ?>
+                                                <option value="<?php echo court_h($value); ?>"><?php echo court_h($label); ?></option>
+                                            <?php endforeach; ?>
+                                        </select></label>
+                                    </div>
+                                </section>
+                                <section class="service-form-section">
+                                    <h4>Visibility</h4>
+                                    <div class="service-field-grid service-field-grid-small">
+                                        <label><span>Status</span><select name="active" required><option value="1" selected>Active</option><option value="0">Inactive</option></select></label>
+                                    </div>
+                                </section>
+                                <details class="service-form-section service-advanced-settings">
+                                    <summary>Show Advanced Settings</summary>
+                                    <div class="service-field-grid">
+                                        <label><span>Slug</span><input type="text" name="slug" placeholder="<?php echo court_h($courtSlug); ?>-court-rental" data-service-slug required><small class="field-help">Auto-generates from the service name unless edited.</small></label>
+                                        <label><span>Sort Order</span><input type="number" name="sort_order" min="0" value="<?php echo count($services) * 10; ?>"></label>
+                                        <label class="session-capacity-field is-hidden"><span>Session Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $capacity; ?>" required><small class="field-help">Default capacity used when creating scheduled sessions. Mostly used for Social Play or event-based services.</small></label>
+                                    </div>
+                                </details>
+                                <input type="hidden" name="image" value="">
+                                <div class="service-form-actions">
+                                    <button class="bookings-button ghost service-cancel-button" type="button" data-close-add-service>Cancel</button>
+                                    <button class="bookings-button primary" type="submit" name="action" value="create_variant">Add Service</button>
+                                </div>
+                            </form>
+                        </div>
                         <div class="service-list service-table-list">
                             <div class="service-table-head"><span></span><span>Service</span><span>Category</span><span>Price</span><span>Duration</span><span>Status</span><span>Actions</span></div>
                             <?php foreach ($services as $service): ?>
-                                <article class="service-card">
+                                <article class="service-card" data-service-card data-service-id="<?php echo (int) $service['id']; ?>">
                                     <span class="service-icon"><?php echo court_icon($icons, service_icon_name($service['name'])); ?></span>
-                                    <?php $serviceSessionCount = (int) ($upcomingSessionsByVariant[(int) $service['id']] ?? 0); ?>
-                                    <div class="service-main"><strong><?php echo htmlspecialchars($service['name']); ?></strong><small><?php echo htmlspecialchars($service['category']); ?> for <?php echo htmlspecialchars($pageTitle); ?></small><small class="service-session-summary"><?php echo $serviceSessionCount > 0 ? number_format($serviceSessionCount) . ' upcoming session' . ($serviceSessionCount === 1 ? '' : 's') : 'No sessions created'; ?></small></div>
-                                    <p class="service-category-cell"><small>Category</small><strong><?php echo htmlspecialchars($service['category']); ?></strong></p>
-                                    <p><small>Price</small><strong>₱<?php echo number_format((float) $service['price'], 2); ?></strong></p>
-                                    <p><small>Duration</small><strong><?php echo htmlspecialchars($service['duration_label']); ?></strong></p>
-                                    <p><small>Status</small><em class="status-pill status-<?php echo !empty($service['active']) ? 'success' : 'warning'; ?>"><?php echo !empty($service['active']) ? 'Active' : 'Inactive'; ?></em></p>
+                                    <div class="service-main"><strong data-service-name-text><?php echo htmlspecialchars($service['name']); ?></strong><small><span data-service-category-line><?php echo court_h(court_category_label((string) $service['category'])); ?></span> for <?php echo htmlspecialchars($pageTitle); ?></small></div>
+                                    <p class="service-category-cell"><small>Category</small><strong data-service-category-text><?php echo court_h(court_category_label((string) $service['category'])); ?></strong></p>
+                                    <p><small>Price</small><strong data-service-price-text>₱<?php echo number_format((float) $service['price'], 2); ?></strong></p>
+                                    <p><small>Duration</small><strong data-service-duration-text><?php echo court_h(court_duration_value((string) $service['duration_label'])); ?></strong></p>
+                                    <p><small>Status</small><em class="status-pill status-<?php echo !empty($service['active']) ? 'success' : 'warning'; ?>" data-service-status-text><?php echo !empty($service['active']) ? 'Active' : 'Inactive'; ?></em></p>
                                     <div class="service-actions">
-                                        <details class="service-edit-details">
-                                            <summary><?php echo court_icon($icons, 'edit'); ?> Edit</summary>
-                                            <form class="service-edit-form" method="post">
-                                                <?php echo court_csrf_input(); ?>
-                                                <input type="hidden" name="variant_id" value="<?php echo (int) $service['id']; ?>">
-                                                <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
-                                                <label><span>Name</span><input type="text" name="name" value="<?php echo court_h($service['name']); ?>" required></label>
-                                                <label><span>Slug</span><input type="text" name="slug" value="<?php echo court_h($service['slug']); ?>" required></label>
-                                                <label><span>Category</span><input type="text" name="category" value="<?php echo court_h($service['category']); ?>" required></label>
-                                                <label><span>Duration</span><input type="text" name="duration_label" value="<?php echo court_h($service['duration_label']); ?>" required></label>
-                                                <label><span>Price</span><input type="number" name="price" step="0.01" min="0" value="<?php echo court_h($service['price']); ?>" required></label>
-                                                <label><span>Limit</span><input type="number" name="participants_limit" min="1" value="<?php echo (int) $service['participants_limit']; ?>" required></label>
-                                                <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $service['capacity']; ?>" required></label>
-                                                <label><span>Sort</span><input type="number" name="sort_order" min="0" value="<?php echo (int) ($service['sort_order'] ?? 0); ?>"></label>
-                                                <input type="hidden" name="image" value="<?php echo court_h($service['image'] ?? ''); ?>">
-                                                <label class="catalog-check"><input type="checkbox" name="active" value="1" <?php echo !empty($service['active']) ? 'checked' : ''; ?>> Active on website</label>
-                                                <button type="submit" name="action" value="update_variant">Save Service</button>
-                                            </form>
-                                        </details>
+                                        <button class="service-edit-toggle" type="button" data-service-edit-toggle><?php echo court_icon($icons, 'edit'); ?> Edit</button>
                                         <form method="post">
                                             <?php echo court_csrf_input(); ?>
                                             <input type="hidden" name="variant_id" value="<?php echo (int) $service['id']; ?>">
                                             <input type="hidden" name="active" value="<?php echo !empty($service['active']) ? '0' : '1'; ?>">
                                             <button class="archive-service-button danger" type="submit" name="action" value="set_variant_active"><?php echo court_icon($icons, 'trash'); ?> Archive</button>
                                         </form>
-                                        <button class="session-manage-button" type="button" data-open-session-modal="<?php echo (int) $service['id']; ?>"><?php echo court_icon($icons, 'calendar'); ?> Sessions</button>
+                                    </div>
+                                    <div class="service-edit-panel" data-service-edit-panel>
+                                        <form class="service-edit-form" method="post">
+                                            <?php echo court_csrf_input(); ?>
+                                            <input type="hidden" name="variant_id" value="<?php echo (int) $service['id']; ?>">
+                                            <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
+                                            <?php
+                                                $durationValue = court_duration_value((string) ($service['duration_label'] ?? ''));
+                                                $durationOptions = court_duration_options();
+                                                $isCustomDuration = !in_array($durationValue, $durationOptions, true);
+                                                $categoryValue = court_category_value((string) ($service['category'] ?? ''));
+                                                $pricingTypeValue = court_pricing_type_value($service);
+                                                $coachRequiredValue = court_coach_required_value($service);
+                                            ?>
+                                            <header class="service-editor-header">
+                                                <h3>Edit Service: <span data-editor-title><?php echo court_h($service['name']); ?></span></h3>
+                                                <p>Update how this service appears and behaves during booking.</p>
+                                            </header>
+                                            <section class="service-form-section">
+                                                <h4>Basic Information</h4>
+                                                <div class="service-field-grid">
+                                                    <label><span>Service Name</span><input type="text" name="name" value="<?php echo court_h($service['name']); ?>" data-service-name required></label>
+                                                    <label><span>Category</span><select name="category" data-service-category required>
+                                                        <?php foreach (court_category_options() as $value => $label): ?>
+                                                            <option value="<?php echo court_h($value); ?>" <?php echo $categoryValue === $value ? 'selected' : ''; ?>><?php echo court_h($label); ?></option>
+                                                        <?php endforeach; ?>
+                                                    </select></label>
+                                                    <label class="service-field-wide"><span>Description</span><textarea name="description" rows="3" placeholder="Optional description"><?php echo court_h($service['description'] ?? ''); ?></textarea></label>
+                                                </div>
+                                            </section>
+                                            <section class="service-form-section">
+                                                <h4>Pricing &amp; Booking Rules</h4>
+                                                <div class="service-field-grid">
+                                                    <label><span>Pricing Type</span><select name="pricing_type" data-pricing-type required>
+                                                        <?php foreach (court_pricing_type_options() as $value => $label): ?>
+                                                            <option value="<?php echo court_h($value); ?>" <?php echo $pricingTypeValue === $value ? 'selected' : ''; ?>><?php echo court_h($label); ?></option>
+                                                        <?php endforeach; ?>
+                                                    </select></label>
+                                                    <label><span>Price</span><input type="number" name="price" step="0.01" min="0.01" value="<?php echo court_h($service['price']); ?>" required><small class="field-help">Amount charged for this service.</small></label>
+                                                    <label><span>Duration</span><select name="duration_choice" data-duration-select required>
+                                                        <?php foreach ($durationOptions as $option): ?>
+                                                            <option value="<?php echo court_h($option); ?>" <?php echo (!$isCustomDuration && $durationValue === $option) ? 'selected' : ''; ?>><?php echo court_h($option); ?></option>
+                                                        <?php endforeach; ?>
+                                                        <option value="custom" <?php echo $isCustomDuration ? 'selected' : ''; ?>>Custom</option>
+                                                    </select><input type="<?php echo $isCustomDuration ? 'text' : 'hidden'; ?>" name="duration_label" value="<?php echo court_h($durationValue); ?>" data-duration-custom <?php echo $isCustomDuration ? 'required' : ''; ?>></label>
+                                                    <label data-participants-field><span>Participants Limit</span><input type="number" name="participants_limit" min="1" value="<?php echo (int) $service['participants_limit']; ?>" required><small class="field-help">Maximum number of participants allowed, if applicable.</small></label>
+                                                    <label><span>Coach Required</span><select name="coach_required" data-coach-required required>
+                                                        <?php foreach (court_coach_required_options() as $value => $label): ?>
+                                                            <option value="<?php echo court_h($value); ?>" <?php echo $coachRequiredValue === $value ? 'selected' : ''; ?>><?php echo court_h($label); ?></option>
+                                                        <?php endforeach; ?>
+                                                    </select></label>
+                                                </div>
+                                            </section>
+                                            <section class="service-form-section">
+                                                <h4>Visibility</h4>
+                                                <div class="service-field-grid service-field-grid-small">
+                                                    <label><span>Status</span><select name="active" required><option value="1" <?php echo !empty($service['active']) ? 'selected' : ''; ?>>Active</option><option value="0" <?php echo empty($service['active']) ? 'selected' : ''; ?>>Inactive</option></select></label>
+                                                </div>
+                                            </section>
+                                            <details class="service-form-section service-advanced-settings">
+                                                <summary>Show Advanced Settings</summary>
+                                                <div class="service-field-grid">
+                                                    <label><span>Slug</span><input type="text" name="slug" value="<?php echo court_h($service['slug']); ?>" data-service-slug required><small class="field-help">Auto-generates from the service name unless edited.</small></label>
+                                                    <label><span>Sort Order</span><input type="number" name="sort_order" min="0" value="<?php echo (int) ($service['sort_order'] ?? 0); ?>"></label>
+                                                    <label class="session-capacity-field is-hidden"><span>Session Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $service['capacity']; ?>" required><small class="field-help">Default capacity used when creating scheduled sessions. Mostly used for Social Play or event-based services.</small></label>
+                                                </div>
+                                            </details>
+                                            <input type="hidden" name="image" value="<?php echo court_h($service['image'] ?? ''); ?>">
+                                            <div class="service-form-feedback" data-service-form-feedback role="status" aria-live="polite"></div>
+                                            <div class="service-form-actions">
+                                                <button class="bookings-button ghost service-cancel-button" type="button" data-close-service-editor>Cancel</button>
+                                                <button class="bookings-button primary" type="submit" name="action" value="update_variant">Save Changes</button>
+                                            </div>
+                                        </form>
                                     </div>
                                 </article>
                             <?php endforeach; ?>
                         </div>
-                        <footer><?php echo court_icon($icons, 'target'); ?> Use the Sort field inside Edit to reorder services. Only active services appear publicly.</footer>
+                        <footer><?php echo court_icon($icons, 'target'); ?> Court services are always available. Users choose their date and time during booking.</footer>
                     </article>
                 </section>
 
@@ -861,80 +1175,6 @@ $dashboardNav = [
 
             </div>
         </section>
-        <?php foreach ($services as $service): ?>
-            <?php
-                $serviceId = (int) $service['id'];
-                $serviceSessions = $sessionsByVariant[$serviceId] ?? [];
-            ?>
-            <div class="court-session-modal" id="sessionModal<?php echo $serviceId; ?>" aria-hidden="true" data-session-modal="<?php echo $serviceId; ?>">
-                <div class="court-session-modal-backdrop" data-close-session-modal></div>
-                <section class="court-session-modal-panel" role="dialog" aria-modal="true" aria-labelledby="sessionModalTitle<?php echo $serviceId; ?>">
-                    <header>
-                        <div><h2 id="sessionModalTitle<?php echo $serviceId; ?>">Manage Sessions</h2><p><?php echo court_h($service['name']); ?></p></div>
-                        <button type="button" data-close-session-modal aria-label="Close session manager">&times;</button>
-                    </header>
-
-                    <details class="session-create-panel">
-                        <summary><?php echo court_icon($icons, 'plus'); ?> Add Session</summary>
-                        <form class="session-edit-form" method="post">
-                            <?php echo court_csrf_input(); ?>
-                            <input type="hidden" name="variant_id" value="<?php echo $serviceId; ?>">
-                            <input type="hidden" name="booked_count" value="0">
-                            <label><span>Session Date</span><input type="date" name="session_date" value="<?php echo date('Y-m-d'); ?>" required></label>
-                            <label><span>Start Time</span><input type="time" name="start_time" value="09:00" required></label>
-                            <label><span>End Time</span><input type="time" name="end_time" value="10:00" required></label>
-                            <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) ($service['capacity'] ?? $capacity); ?>" required></label>
-                            <label><span>Status</span><select name="status"><option value="open">Available</option><option value="full">Full</option><option value="cancelled">Closed</option></select></label>
-                            <button class="bookings-button primary" type="submit" name="action" value="create_session">Create Session</button>
-                        </form>
-                    </details>
-
-                    <div class="session-list-table">
-                        <div class="session-list-head"><span>Date</span><span>Start Time</span><span>End Time</span><span>Capacity</span><span>Booked</span><span>Status</span><span>Actions</span></div>
-                        <?php foreach ($serviceSessions as $session): ?>
-                            <?php
-                                $rawStatus = (string) ($session['status'] ?? 'open');
-                                $statusLabel = $rawStatus === 'open' ? 'Available' : ($rawStatus === 'full' ? 'Full' : 'Closed');
-                                $statusTone = $rawStatus === 'open' ? 'success' : 'warning';
-                            ?>
-                            <article>
-                                <span><?php echo court_h($session['display_date'] ?? $session['session_date'] ?? ''); ?></span>
-                                <span><?php echo court_h((new DateTimeImmutable('1970-01-01 ' . (string) $session['start_time']))->format('h:i A')); ?></span>
-                                <span><?php echo court_h((new DateTimeImmutable('1970-01-01 ' . (string) $session['end_time']))->format('h:i A')); ?></span>
-                                <span><?php echo number_format((int) ($session['capacity'] ?? 0)); ?></span>
-                                <span><?php echo number_format((int) ($session['booked_count'] ?? 0)); ?> booked</span>
-                                <span><em class="status-pill status-<?php echo $statusTone; ?>"><?php echo court_h($statusLabel); ?></em></span>
-                                <span class="session-row-actions">
-                                    <details class="session-edit-panel">
-                                        <summary><?php echo court_icon($icons, 'edit'); ?> Edit</summary>
-                                        <form class="session-edit-form" method="post">
-                                            <?php echo court_csrf_input(); ?>
-                                            <input type="hidden" name="session_id" value="<?php echo (int) $session['id']; ?>">
-                                            <input type="hidden" name="variant_id" value="<?php echo $serviceId; ?>">
-                                            <input type="hidden" name="coach_user_id" value="<?php echo (int) ($session['coach_user_id'] ?? 0); ?>">
-                                            <input type="hidden" name="booked_count" value="<?php echo (int) ($session['booked_count'] ?? 0); ?>">
-                                            <label><span>Date</span><input type="date" name="session_date" value="<?php echo court_h($session['session_date']); ?>" required></label>
-                                            <label><span>Start</span><input type="time" name="start_time" value="<?php echo court_h(substr((string) $session['start_time'], 0, 5)); ?>" required></label>
-                                            <label><span>End</span><input type="time" name="end_time" value="<?php echo court_h(substr((string) $session['end_time'], 0, 5)); ?>" required></label>
-                                            <label><span>Capacity</span><input type="number" name="capacity" min="<?php echo max(1, (int) ($session['booked_count'] ?? 0)); ?>" value="<?php echo (int) $session['capacity']; ?>" required></label>
-                                            <label><span>Status</span><select name="status"><option value="open" <?php echo $rawStatus === 'open' ? 'selected' : ''; ?>>Available</option><option value="full" <?php echo $rawStatus === 'full' ? 'selected' : ''; ?>>Full</option><option value="cancelled" <?php echo $rawStatus === 'cancelled' ? 'selected' : ''; ?>>Closed</option></select></label>
-                                            <button type="submit" name="action" value="update_session">Save Session</button>
-                                        </form>
-                                    </details>
-                                    <form method="post">
-                                        <?php echo court_csrf_input(); ?>
-                                        <input type="hidden" name="session_id" value="<?php echo (int) $session['id']; ?>">
-                                        <input type="hidden" name="status" value="<?php echo $rawStatus === 'cancelled' ? 'open' : 'cancelled'; ?>">
-                                        <button class="icon-button danger" type="submit" name="action" value="set_session_status" aria-label="Archive session"><?php echo court_icon($icons, 'trash'); ?></button>
-                                    </form>
-                                </span>
-                            </article>
-                        <?php endforeach; ?>
-                        <?php if (!$serviceSessions): ?><p class="catalog-empty-state">No sessions created for this service yet.</p><?php endif; ?>
-                    </div>
-                </section>
-            </div>
-        <?php endforeach; ?>
         <div class="court-photo-modal" id="courtPhotoModal" aria-hidden="true">
             <div class="court-photo-modal-backdrop" data-close-photo-modal></div>
             <section class="court-photo-modal-panel" role="dialog" aria-modal="true" aria-labelledby="courtPhotoModalTitle">
@@ -1094,34 +1334,245 @@ $dashboardNav = [
     });
 })();
 (function(){
-    const modals = document.querySelectorAll('[data-session-modal]');
-    if (!modals.length) return;
+    const slugify = value => String(value || '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
 
-    const closeAll = () => {
-        modals.forEach(modal => {
-            modal.classList.remove('is-open');
-            modal.setAttribute('aria-hidden', 'true');
+    const money = value => '₱' + Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const closeCard = card => {
+        if (!card) return;
+        card.classList.remove('is-editing');
+        const toggle = card.querySelector('[data-service-edit-toggle]');
+        if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    };
+    const closeAddPanel = () => {
+        const manager = document.querySelector('.catalog-manager-card.is-adding');
+        if (!manager) return;
+        manager.classList.remove('is-adding');
+        const toggle = manager.querySelector('[data-service-add-toggle]');
+        if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    };
+    const closeOtherCards = activeCard => {
+        document.querySelectorAll('[data-service-card].is-editing').forEach(card => {
+            if (card !== activeCard) closeCard(card);
         });
-        document.body.classList.remove('session-modal-open');
+    };
+    const updateFormDefaults = form => {
+        form.querySelectorAll('input, textarea').forEach(input => {
+            if (input.type === 'checkbox' || input.type === 'radio') {
+                input.defaultChecked = input.checked;
+            } else {
+                input.defaultValue = input.value;
+            }
+        });
+        form.querySelectorAll('select').forEach(select => {
+            Array.from(select.options).forEach(option => {
+                option.defaultSelected = option.selected;
+            });
+        });
+    };
+    const serviceRules = form => {
+        const name = String(form.querySelector('[data-service-name]')?.value || '').toLowerCase();
+        const category = String(form.querySelector('[data-service-category]')?.value || '').toLowerCase();
+        const pricing = form.querySelector('[data-pricing-type]');
+        const participantsLabel = form.querySelector('[data-participants-field]');
+        const participants = participantsLabel?.querySelector('input');
+        const coach = form.querySelector('[data-coach-required]');
+
+        const setValues = () => {
+            const isCourtRental = category.includes('court') || name.includes('rental');
+            const isPrivate = category.includes('private') || name.includes('private coaching');
+            const isTraining = category.includes('training') || name.includes('training');
+            const isParentChild = name.includes('parent') || name.includes('child session');
+            const isKidsOrYouth = name.includes('kids') || name.includes('youth') || category.includes('class');
+            const isLesson = name.includes('lesson');
+
+            if (isCourtRental) {
+                if (pricing) pricing.value = 'per_court';
+                if (participants) participants.value = participants.value || '1';
+                if (coach) coach.value = 'no';
+            } else if (isPrivate) {
+                if (pricing) pricing.value = 'per_session';
+                if (participants) participants.value = '1';
+                if (coach) coach.value = 'yes';
+            } else if (isParentChild) {
+                if (pricing) pricing.value = 'per_session';
+                if (participants) participants.value = '2';
+            } else if (isKidsOrYouth || isLesson) {
+                if (pricing) pricing.value = 'per_participant';
+                if (participants) participants.value = isKidsOrYouth ? '8' : (participants.value || '1');
+                if (coach) coach.value = 'yes';
+            } else if (isTraining) {
+                if (pricing) pricing.value = 'per_session';
+                if (coach) coach.value = 'optional';
+            }
+
+            if (participantsLabel) {
+                participantsLabel.classList.toggle('is-hidden', isCourtRental);
+            }
+        };
+
+        setValues();
     };
 
-    document.querySelectorAll('[data-open-session-modal]').forEach(button => {
+    document.querySelectorAll('[data-service-edit-toggle]').forEach(button => {
+        button.setAttribute('aria-expanded', 'false');
         button.addEventListener('click', () => {
-            const modal = document.querySelector('[data-session-modal="' + button.dataset.openSessionModal + '"]');
-            if (!modal) return;
-            closeAll();
-            modal.classList.add('is-open');
-            modal.setAttribute('aria-hidden', 'false');
-            document.body.classList.add('session-modal-open');
+            const card = button.closest('[data-service-card]');
+            if (!card) return;
+            const willOpen = !card.classList.contains('is-editing');
+            closeAddPanel();
+            closeOtherCards(card);
+            card.classList.toggle('is-editing', willOpen);
+            button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
         });
     });
 
-    document.querySelectorAll('[data-close-session-modal]').forEach(button => {
-        button.addEventListener('click', closeAll);
+    document.querySelectorAll('[data-service-add-toggle]').forEach(button => {
+        button.setAttribute('aria-expanded', 'false');
+        button.addEventListener('click', () => {
+            const manager = button.closest('.catalog-manager-card');
+            if (!manager) return;
+            const willOpen = !manager.classList.contains('is-adding');
+            closeOtherCards(null);
+            manager.classList.toggle('is-adding', willOpen);
+            button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        });
     });
 
-    document.addEventListener('keydown', event => {
-        if (event.key === 'Escape') closeAll();
+    document.querySelectorAll('.service-edit-form, .service-add-form').forEach(form => {
+        const card = form.closest('[data-service-card]');
+        const manager = form.closest('.catalog-manager-card');
+        const nameInput = form.querySelector('[data-service-name]');
+        const slugInput = form.querySelector('[data-service-slug]');
+        const durationSelect = form.querySelector('[data-duration-select]');
+        const durationCustom = form.querySelector('[data-duration-custom]');
+        const feedback = form.querySelector('[data-service-form-feedback]');
+        let slugTouched = false;
+
+        if (nameInput && slugInput) {
+            slugInput.addEventListener('input', () => { slugTouched = true; });
+            nameInput.addEventListener('input', () => {
+                if (!slugTouched) {
+                    slugInput.value = slugify(nameInput.value);
+                }
+            });
+        }
+
+        if (durationSelect && durationCustom) {
+            const syncDuration = () => {
+                if (durationSelect.value === 'custom') {
+                    durationCustom.type = 'text';
+                    durationCustom.required = true;
+                    durationCustom.placeholder = 'Enter custom duration';
+                    return;
+                }
+
+                durationCustom.type = 'hidden';
+                durationCustom.required = false;
+                durationCustom.value = durationSelect.value;
+            };
+
+            durationSelect.addEventListener('change', syncDuration);
+            syncDuration();
+        }
+
+        form.querySelectorAll('[data-service-category], [data-service-name]').forEach(input => {
+            input.addEventListener('change', () => serviceRules(form));
+        });
+        serviceRules(form);
+
+        form.querySelectorAll('[data-close-service-editor]').forEach(button => {
+            button.addEventListener('click', () => {
+                form.reset();
+                if (durationSelect && durationCustom) durationSelect.dispatchEvent(new Event('change'));
+                serviceRules(form);
+                closeCard(card);
+            });
+        });
+
+        form.querySelectorAll('[data-close-add-service]').forEach(button => {
+            button.addEventListener('click', () => {
+                form.reset();
+                slugTouched = false;
+                if (durationSelect && durationCustom) durationSelect.dispatchEvent(new Event('change'));
+                serviceRules(form);
+                if (manager) {
+                    manager.classList.remove('is-adding');
+                    const toggle = manager.querySelector('[data-service-add-toggle]');
+                    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+                }
+            });
+        });
+
+        if (form.classList.contains('service-add-form')) {
+            return;
+        }
+
+        form.addEventListener('submit', async event => {
+            event.preventDefault();
+            if (feedback) {
+                feedback.textContent = 'Saving changes...';
+                feedback.classList.remove('is-error', 'is-success');
+            }
+
+            const submitter = event.submitter;
+            const data = new FormData(form);
+            if (submitter?.name) data.set(submitter.name, submitter.value);
+            data.set('action', 'update_variant');
+
+            try {
+                const response = await fetch(window.location.href, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'fetch'
+                    },
+                    body: data
+                });
+                const raw = await response.text();
+                let payload;
+                try {
+                    payload = JSON.parse(raw);
+                } catch (parseError) {
+                    throw new Error(response.redirected ? 'Your admin session expired. Please log in again.' : 'The server returned an HTML page instead of JSON. Please refresh and try again.');
+                }
+                if (!payload.ok) {
+                    throw new Error(payload.message || 'Unable to save service.');
+                }
+
+                const variant = payload.variant || {};
+                if (card) {
+                    card.querySelector('[data-service-name-text]').textContent = variant.name || data.get('name') || 'Service';
+                    card.querySelector('[data-editor-title]').textContent = variant.name || data.get('name') || 'Service';
+                    card.querySelector('[data-service-category-text]').textContent = variant.category || data.get('category') || '';
+                    card.querySelector('[data-service-category-line]').textContent = variant.category || data.get('category') || '';
+                    card.querySelector('[data-service-price-text]').textContent = variant.priceLabel || money(data.get('price'));
+                    card.querySelector('[data-service-duration-text]').textContent = variant.duration || data.get('duration_label') || '';
+                    const status = card.querySelector('[data-service-status-text]');
+                    if (status) {
+                        const active = Boolean(variant.active ?? (data.get('active') === '1'));
+                        status.textContent = active ? 'Active' : 'Inactive';
+                        status.classList.toggle('status-success', active);
+                        status.classList.toggle('status-warning', !active);
+                    }
+                }
+
+                if (feedback) {
+                    feedback.textContent = payload.message || 'Service updated successfully.';
+                    feedback.classList.add('is-success');
+                }
+                updateFormDefaults(form);
+                closeCard(card);
+            } catch (error) {
+                if (feedback) {
+                    feedback.textContent = error.message || 'Unable to save service.';
+                    feedback.classList.add('is-error');
+                }
+            }
+        });
     });
 })();
 </script>

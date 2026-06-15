@@ -148,13 +148,25 @@ final class CatalogRepository
 
     public function createVariant(array $data): int
     {
+        $columns = ['court_id', 'slug', 'name', 'category', 'duration_label', 'price', 'participants_limit', 'capacity', 'image', 'active', 'sort_order'];
+        if ($this->columnExists('booking_variants', 'description')) {
+            array_splice($columns, 3, 0, 'description');
+        }
+        if ($this->columnExists('booking_variants', 'pricing_type')) {
+            array_splice($columns, 6, 0, 'pricing_type');
+        }
+        if ($this->columnExists('booking_variants', 'coach_required')) {
+            $capacityIndex = array_search('capacity', $columns, true);
+            array_splice($columns, $capacityIndex === false ? 8 : $capacityIndex, 0, 'coach_required');
+        }
+        $placeholders = array_map(static fn (string $column): string => ':' . $column, $columns);
+
         $stmt = Database::connection()->prepare(
-            'INSERT INTO booking_variants
-                (court_id, slug, name, category, duration_label, price, participants_limit, capacity, image, active, sort_order)
-             VALUES
-                (:court_id, :slug, :name, :category, :duration_label, :price, :participants_limit, :capacity, :image, :active, :sort_order)'
+            'INSERT INTO booking_variants (' . implode(', ', $columns) . ')
+             VALUES (' . implode(', ', $placeholders) . ')'
         );
-        $stmt->execute($this->variantParams($data));
+        $params = $this->variantParams($data);
+        $stmt->execute(array_intersect_key($params, array_flip($columns)));
 
         return (int) Database::connection()->lastInsertId();
     }
@@ -162,20 +174,40 @@ final class CatalogRepository
     public function updateVariant(int $id, array $data): bool
     {
         $params = $this->variantParams($data) + ['id' => $id];
+        $assignments = [
+            'court_id = :court_id',
+            'slug = :slug',
+            'name = :name',
+            'category = :category',
+            'duration_label = :duration_label',
+            'price = :price',
+        ];
+        if ($this->columnExists('booking_variants', 'description')) {
+            array_splice($assignments, 3, 0, 'description = :description');
+        } else {
+            unset($params['description']);
+        }
+        if ($this->columnExists('booking_variants', 'pricing_type')) {
+            $assignments[] = 'pricing_type = :pricing_type';
+        } else {
+            unset($params['pricing_type']);
+        }
+        if ($this->columnExists('booking_variants', 'coach_required')) {
+            $assignments[] = 'coach_required = :coach_required';
+        } else {
+            unset($params['coach_required']);
+        }
+        array_push(
+            $assignments,
+            'participants_limit = :participants_limit',
+            'capacity = :capacity',
+            'image = :image',
+            'active = :active',
+            'sort_order = :sort_order'
+        );
+
         $stmt = Database::connection()->prepare(
-            'UPDATE booking_variants
-             SET court_id = :court_id,
-                 slug = :slug,
-                 name = :name,
-                 category = :category,
-                 duration_label = :duration_label,
-                 price = :price,
-                 participants_limit = :participants_limit,
-                 capacity = :capacity,
-                 image = :image,
-                 active = :active,
-                 sort_order = :sort_order
-             WHERE id = :id'
+            'UPDATE booking_variants SET ' . implode(', ', $assignments) . ' WHERE id = :id'
         );
         return $stmt->execute($params);
     }
@@ -186,9 +218,9 @@ final class CatalogRepository
         return $stmt->execute(['id' => $id, 'active' => $active ? 1 : 0]);
     }
 
-    public function findOrCreateSession(int $variantId, string $date, string $time, int $capacity): array
+    public function findOrCreateSession(int $variantId, string $date, string $time, int $capacity, ?int $coachUserId = null): array
     {
-        return (new SchedulingService())->findOrCreateSession($variantId, $date, $time, $capacity);
+        return (new SchedulingService())->findOrCreateSession($variantId, $date, $time, $capacity, $coachUserId);
     }
 
     public function sessionsForVariantMonth(int $variantId, int $year, int $month): array
@@ -212,10 +244,13 @@ final class CatalogRepository
             'court_id' => (int) $data['court_id'],
             'slug' => $data['slug'],
             'name' => $data['name'],
+            'description' => $data['description'] ?? null,
             'category' => $data['category'],
             'duration_label' => $data['duration_label'],
             'price' => (float) $data['price'],
+            'pricing_type' => $data['pricing_type'] ?? 'per_session',
             'participants_limit' => (int) $data['participants_limit'],
+            'coach_required' => $data['coach_required'] ?? 'no',
             'capacity' => (int) $data['capacity'],
             'image' => $data['image'] ?? null,
             'active' => !empty($data['active']) ? 1 : 0,

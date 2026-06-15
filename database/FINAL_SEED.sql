@@ -189,10 +189,13 @@ CREATE TABLE IF NOT EXISTS booking_variants (
   court_id INT UNSIGNED NOT NULL,
   slug VARCHAR(120) NOT NULL,
   name VARCHAR(160) NOT NULL,
+  description TEXT NULL,
   category VARCHAR(120) NOT NULL,
   duration_label VARCHAR(80) NOT NULL,
   price DECIMAL(10,2) NOT NULL,
+  pricing_type VARCHAR(40) NOT NULL DEFAULT 'per_session',
   participants_limit INT UNSIGNED NOT NULL,
+  coach_required VARCHAR(20) NOT NULL DEFAULT 'no',
   capacity INT UNSIGNED NOT NULL,
   image VARCHAR(255) NULL,
   active TINYINT(1) NOT NULL DEFAULT 1,
@@ -236,7 +239,7 @@ CREATE TABLE IF NOT EXISTS court_media (
 INSERT INTO courts (name, slug, status, description, base_price, capacity, operating_hours, court_type)
 VALUES
   ('Court Green', 'green', 'active', 'Main standard indoor court', 350.00, 16, '8AM - 10PM', 'Indoor'),
-  ('Court Pink', 'pink', 'active', 'Youth-friendly indoor court', 250.00, 10, '8AM - 10PM', 'Indoor')
+  ('Court Pink', 'pink', 'active', 'Youth-friendly indoor court', 400.00, 10, '8AM - 10PM', 'Indoor')
 ON DUPLICATE KEY UPDATE
   name = VALUES(name),
   status = VALUES(status),
@@ -259,14 +262,14 @@ JOIN (
   UNION ALL SELECT 'green', 'green-open-match-play', 'Open Match-Play', 'Social Play', '2 hours', 350.00, 8, 16, '../assets/img/court/social play-1.png', 1, 20
   UNION ALL SELECT 'green', 'green-weekly-tournament', 'Weekly Tournament', 'Social Play', 'This week', 900.00, 1, 16, '../assets/img/court/social play-1.png', 1, 10
   UNION ALL SELECT 'pink', 'pink-base-rate', 'Court Rental', 'Court Reservation', '1 hour', 400.00, 6, 10, '../assets/img/court/court pink-1.webp', 1, 10
-  UNION ALL SELECT 'pink', 'pink-kids-pickleball-class-ages-6-10', 'Kids Pickleball Class (Ages 6-10)', 'Academy', '1 hour', 350.00, 8, 10, '../assets/img/court/court pink-1.webp', 1, 20
-  UNION ALL SELECT 'pink', 'pink-youth-development-class-ages-11-17', 'Youth Development Class (Ages 11-17)', 'Academy', '1 hour', 350.00, 8, 10, '../assets/img/court/court pink-1.webp', 1, 30
-  UNION ALL SELECT 'pink', 'pink-parent-child-session', 'Parent & Child Session', 'Academy', '1 hour', 500.00, 2, 10, '../assets/img/court/court pink-1.webp', 1, 40
-  UNION ALL SELECT 'pink', 'pink-foundational-ages-6-10', 'Foundational Ages 6-10', 'Academy', '4 sessions', 1200.00, 8, 10, '../assets/img/court/academy.png', 1, 50
-  UNION ALL SELECT 'pink', 'pink-youth-development-ages-11-17', 'Youth Development Ages 11-17', 'Academy', '4 sessions', 1200.00, 8, 10, '../assets/img/court/academy.png', 1, 60
-  UNION ALL SELECT 'pink', 'pink-adult-beginner-bootcamp', 'Adult Beginner Bootcamp', 'Academy', '4 sessions', 1800.00, 8, 10, '../assets/img/court/academy.png', 1, 70
-  UNION ALL SELECT 'pink', 'pink-introductory-trial-class', 'Introductory Trial Class', 'Academy', '1 hour', 250.00, 8, 10, '../assets/img/court/academy.png', 1, 80
-  UNION ALL SELECT 'pink', 'pink-parent-child-trial', 'Parent & Child Trial', 'Academy', '1 hour', 500.00, 2, 10, '../assets/img/court/academy.png', 1, 90
+  UNION ALL SELECT 'pink', 'pink-kids-pickleball-class-ages-6-10', 'Kids Pickleball Class (Ages 6-10)', 'Class', '1 hour', 350.00, 8, 10, '../assets/img/court/court pink-1.webp', 1, 20
+  UNION ALL SELECT 'pink', 'pink-youth-development-class-ages-11-17', 'Youth Development Class (Ages 11-17)', 'Class', '1 hour', 350.00, 8, 10, '../assets/img/court/court pink-1.webp', 1, 30
+  UNION ALL SELECT 'pink', 'pink-parent-child-session', 'Parent & Child Session', 'Family Session', '1 hour', 500.00, 2, 10, '../assets/img/court/court pink-1.webp', 1, 40
+  UNION ALL SELECT 'pink', 'pink-foundational-ages-6-10', 'Foundational Ages 6-10', 'Academy', '4 sessions', 1200.00, 8, 10, '../assets/img/court/academy.png', 0, 50
+  UNION ALL SELECT 'pink', 'pink-youth-development-ages-11-17', 'Youth Development Ages 11-17', 'Academy', '4 sessions', 1200.00, 8, 10, '../assets/img/court/academy.png', 0, 60
+  UNION ALL SELECT 'pink', 'pink-adult-beginner-bootcamp', 'Adult Beginner Bootcamp', 'Academy', '4 sessions', 1800.00, 8, 10, '../assets/img/court/academy.png', 0, 70
+  UNION ALL SELECT 'pink', 'pink-introductory-trial-class', 'Introductory Trial Class', 'Academy', '1 hour', 250.00, 8, 10, '../assets/img/court/academy.png', 0, 80
+  UNION ALL SELECT 'pink', 'pink-parent-child-trial', 'Parent & Child Trial', 'Academy', '1 hour', 500.00, 2, 10, '../assets/img/court/academy.png', 0, 90
 ) AS seed ON seed.court_slug = c.slug
 ON DUPLICATE KEY UPDATE
   court_id = VALUES(court_id),
@@ -442,12 +445,7 @@ SELECT v.id,
        'open'
 FROM booking_variants v
 JOIN (
-  SELECT 'green-private-coaching' AS slug, 'martina.coach@pickled.ph' AS coach_email, DATE('2026-06-15') AS session_date, '09:00:00' AS start_time, '10:00:00' AS end_time, 1 AS capacity
-  UNION ALL SELECT 'green-court-rentals', NULL, DATE('2026-06-14'), '07:00:00', '08:00:00', 8
-  UNION ALL SELECT 'pink-base-rate', NULL, DATE('2026-06-14'), '08:00:00', '09:00:00', 8
-  UNION ALL SELECT 'green-lessons', 'david.coach@pickled.ph', DATE('2026-06-16'), '17:00:00', '18:00:00', 8
-  UNION ALL SELECT 'pink-kids-pickleball-class-ages-6-10', 'sophia.coach@pickled.ph', DATE('2026-06-18'), '17:00:00', '18:00:00', 10
-  UNION ALL SELECT 'green-open-match-play', NULL, DATE('2026-06-19'), '18:00:00', '20:00:00', 16
+  SELECT 'green-open-match-play' AS slug, NULL AS coach_email, DATE('2026-06-19') AS session_date, '18:00:00' AS start_time, '20:00:00' AS end_time, 16 AS capacity
   UNION ALL SELECT 'green-weekly-tournament', NULL, DATE('2026-06-21'), '09:00:00', '12:00:00', 24
 ) AS seed ON seed.slug = v.slug
 LEFT JOIN users coach ON coach.email = seed.coach_email AND coach.role = 'coach'
@@ -576,7 +574,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     FOREIGN KEY (user_id) REFERENCES users(id)
     ON DELETE RESTRICT
     ON UPDATE CASCADE,
-  CONSTRAINT chk_bookings_status CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled')),
+  CONSTRAINT chk_bookings_status CHECK (status IN ('pending', 'approved', 'confirmed', 'paid', 'completed', 'cancelled', 'rejected', 'expired', 'refunded')),
   CONSTRAINT chk_bookings_subtotal CHECK (subtotal >= 0),
   CONSTRAINT chk_bookings_payment_fee CHECK (payment_fee >= 0),
   CONSTRAINT chk_bookings_total CHECK (total >= 0)
@@ -585,7 +583,8 @@ CREATE TABLE IF NOT EXISTS bookings (
 CREATE TABLE IF NOT EXISTS booking_items (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   booking_id INT UNSIGNED NOT NULL,
-  session_id INT UNSIGNED NOT NULL,
+  session_id INT UNSIGNED NULL,
+  coach_user_id INT UNSIGNED NULL,
   variant_slug VARCHAR(120) NOT NULL,
   name VARCHAR(160) NOT NULL,
   court VARCHAR(80) NOT NULL,
@@ -601,6 +600,7 @@ CREATE TABLE IF NOT EXISTS booking_items (
   PRIMARY KEY (id),
   KEY idx_booking_items_booking_id (booking_id),
   KEY idx_booking_items_session_id (session_id),
+  KEY idx_booking_items_coach_slot (coach_user_id, booking_date, start_time, end_time),
   KEY idx_booking_items_booking_date (booking_date),
   KEY idx_booking_items_service_date (name, booking_date),
   CONSTRAINT fk_booking_items_booking
@@ -635,7 +635,12 @@ CREATE TABLE IF NOT EXISTS carts (
 CREATE TABLE IF NOT EXISTS cart_items (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   cart_id INT UNSIGNED NOT NULL,
-  session_id INT UNSIGNED NOT NULL,
+  session_id INT UNSIGNED NULL,
+  variant_id INT UNSIGNED NULL,
+  booking_date DATE NULL,
+  start_time TIME NULL,
+  end_time TIME NULL,
+  coach_user_id INT UNSIGNED NULL,
   quantity INT UNSIGNED NOT NULL DEFAULT 1,
   unit_price DECIMAL(10,2) NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -643,6 +648,8 @@ CREATE TABLE IF NOT EXISTS cart_items (
   UNIQUE KEY uq_cart_items_cart_session (cart_id, session_id),
   KEY idx_cart_items_cart_id (cart_id),
   KEY idx_cart_items_session_id (session_id),
+  KEY idx_cart_items_variant_slot (variant_id, booking_date, start_time, end_time),
+  KEY idx_cart_items_coach_slot (coach_user_id, booking_date, start_time, end_time),
   CONSTRAINT fk_cart_items_cart
     FOREIGN KEY (cart_id) REFERENCES carts(id)
     ON DELETE CASCADE

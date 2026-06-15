@@ -46,6 +46,18 @@ if (isset($_GET['full'])) {
   $message = 'That session is already full. Please choose another schedule.';
   $messageType = 'warning';
 }
+if (isset($_GET['capacity'])) {
+  $message = 'This service has reached its maximum capacity for the selected schedule.';
+  $messageType = 'warning';
+}
+if (isset($_GET['conflict'])) {
+  $message = 'That court is already booked for the selected date and time. Please choose another schedule.';
+  $messageType = 'warning';
+}
+if (isset($_GET['coach_unavailable'])) {
+  $message = 'No coach is available for the selected date and time.';
+  $messageType = 'warning';
+}
 if (isset($_GET['invalid'])) {
   $message = 'That cart action could not be completed. Please choose a valid schedule.';
   $messageType = 'warning';

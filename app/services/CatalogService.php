@@ -141,22 +141,26 @@ final class CatalogService
         $participants = (int) ($input['participants_limit'] ?? 0);
         $capacity = (int) ($input['capacity'] ?? 0);
         $courtId = (int) ($input['court_id'] ?? 0);
+        $pricingType = $this->pricingType((string) ($input['pricing_type'] ?? ''));
 
         if ($courtId <= 0 || $name === '' || $slug === '' || $category === '' || $duration === '') {
             throw new RuntimeException('Court, service name, slug, category, and duration are required.');
         }
-        if ($price < 0 || $participants <= 0 || $capacity <= 0) {
-            throw new RuntimeException('Price must be zero or greater. Participants and capacity must be greater than zero.');
+        if ($price <= 0 || $participants <= 0 || $capacity <= 0) {
+            throw new RuntimeException('Price, participants, and capacity must be greater than zero.');
         }
 
         return [
             'court_id' => $courtId,
             'slug' => $slug,
             'name' => $name,
+            'description' => trim((string) ($input['description'] ?? '')) ?: null,
             'category' => $category,
             'duration_label' => $duration,
             'price' => $price,
+            'pricing_type' => $pricingType,
             'participants_limit' => $participants,
+            'coach_required' => $this->coachRequired((string) ($input['coach_required'] ?? 'no')),
             'capacity' => $capacity,
             'image' => trim((string) ($input['image'] ?? '')) ?: null,
             'active' => !empty($input['active']),
@@ -175,6 +179,21 @@ final class CatalogService
     {
         $status = strtolower(trim($status));
         return in_array($status, ['active', 'inactive', 'maintenance'], true) ? $status : 'active';
+    }
+
+    private function pricingType(string $pricingType): string
+    {
+        $pricingType = strtolower(trim($pricingType));
+        if ($pricingType === 'per_court_session') {
+            return 'per_court';
+        }
+        return in_array($pricingType, ['per_court', 'per_participant', 'per_session'], true) ? $pricingType : 'per_session';
+    }
+
+    private function coachRequired(string $coachRequired): string
+    {
+        $coachRequired = strtolower(trim($coachRequired));
+        return in_array($coachRequired, ['no', 'yes', 'optional'], true) ? $coachRequired : 'no';
     }
 
     private function adminId(array $input, ?int $adminId): int

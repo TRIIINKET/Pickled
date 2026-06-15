@@ -27,10 +27,13 @@ CREATE TABLE IF NOT EXISTS booking_variants (
   court_id INT UNSIGNED NOT NULL,
   slug VARCHAR(120) NOT NULL,
   name VARCHAR(160) NOT NULL,
+  description TEXT NULL,
   category VARCHAR(120) NOT NULL,
   duration_label VARCHAR(80) NOT NULL,
   price DECIMAL(10,2) NOT NULL,
+  pricing_type VARCHAR(40) NOT NULL DEFAULT 'per_session',
   participants_limit INT UNSIGNED NOT NULL,
+  coach_required VARCHAR(20) NOT NULL DEFAULT 'no',
   capacity INT UNSIGNED NOT NULL,
   image VARCHAR(255) NULL,
   active TINYINT(1) NOT NULL DEFAULT 1,
@@ -74,7 +77,7 @@ CREATE TABLE IF NOT EXISTS court_media (
 INSERT INTO courts (name, slug, status, description, base_price, capacity, operating_hours, court_type)
 VALUES
   ('Court Green', 'green', 'active', 'Main standard indoor court', 350.00, 16, '8AM - 10PM', 'Indoor'),
-  ('Court Pink', 'pink', 'active', 'Youth-friendly indoor court', 250.00, 10, '8AM - 10PM', 'Indoor')
+  ('Court Pink', 'pink', 'active', 'Youth-friendly indoor court', 400.00, 10, '8AM - 10PM', 'Indoor')
 ON DUPLICATE KEY UPDATE
   name = VALUES(name),
   status = VALUES(status),
@@ -96,14 +99,14 @@ JOIN (
   UNION ALL SELECT 'green', 'green-open-match-play', 'Open Match-Play', 'Social Play', '2 hours', 350.00, 8, 16, '../assets/img/court/social play-1.png', 1, 20
   UNION ALL SELECT 'green', 'green-weekly-tournament', 'Weekly Tournament', 'Social Play', 'This week', 900.00, 1, 16, '../assets/img/court/social play-1.png', 1, 10
   UNION ALL SELECT 'pink', 'pink-base-rate', 'Court Rental', 'Court Reservation', '1 hour', 400.00, 6, 10, '../assets/img/court/court pink-1.webp', 1, 10
-  UNION ALL SELECT 'pink', 'pink-kids-pickleball-class-ages-6-10', 'Kids Pickleball Class (Ages 6-10)', 'Academy', '1 hour', 350.00, 8, 10, '../assets/img/court/court pink-1.webp', 1, 20
-  UNION ALL SELECT 'pink', 'pink-youth-development-class-ages-11-17', 'Youth Development Class (Ages 11-17)', 'Academy', '1 hour', 350.00, 8, 10, '../assets/img/court/court pink-1.webp', 1, 30
-  UNION ALL SELECT 'pink', 'pink-parent-child-session', 'Parent & Child Session', 'Academy', '1 hour', 500.00, 2, 10, '../assets/img/court/court pink-1.webp', 1, 40
-  UNION ALL SELECT 'pink', 'pink-foundational-ages-6-10', 'Foundational Ages 6-10', 'Academy', '4 sessions', 1200.00, 8, 10, '../assets/img/court/academy.png', 1, 50
-  UNION ALL SELECT 'pink', 'pink-youth-development-ages-11-17', 'Youth Development Ages 11-17', 'Academy', '4 sessions', 1200.00, 8, 10, '../assets/img/court/academy.png', 1, 60
-  UNION ALL SELECT 'pink', 'pink-adult-beginner-bootcamp', 'Adult Beginner Bootcamp', 'Academy', '4 sessions', 1800.00, 8, 10, '../assets/img/court/academy.png', 1, 70
-  UNION ALL SELECT 'pink', 'pink-introductory-trial-class', 'Introductory Trial Class', 'Academy', '1 hour', 250.00, 8, 10, '../assets/img/court/academy.png', 1, 80
-  UNION ALL SELECT 'pink', 'pink-parent-child-trial', 'Parent & Child Trial', 'Academy', '1 hour', 500.00, 2, 10, '../assets/img/court/academy.png', 1, 90
+  UNION ALL SELECT 'pink', 'pink-kids-pickleball-class-ages-6-10', 'Kids Pickleball Class (Ages 6-10)', 'Class', '1 hour', 350.00, 8, 10, '../assets/img/court/court pink-1.webp', 1, 20
+  UNION ALL SELECT 'pink', 'pink-youth-development-class-ages-11-17', 'Youth Development Class (Ages 11-17)', 'Class', '1 hour', 350.00, 8, 10, '../assets/img/court/court pink-1.webp', 1, 30
+  UNION ALL SELECT 'pink', 'pink-parent-child-session', 'Parent & Child Session', 'Family Session', '1 hour', 500.00, 2, 10, '../assets/img/court/court pink-1.webp', 1, 40
+  UNION ALL SELECT 'pink', 'pink-foundational-ages-6-10', 'Foundational Ages 6-10', 'Academy', '4 sessions', 1200.00, 8, 10, '../assets/img/court/academy.png', 0, 50
+  UNION ALL SELECT 'pink', 'pink-youth-development-ages-11-17', 'Youth Development Ages 11-17', 'Academy', '4 sessions', 1200.00, 8, 10, '../assets/img/court/academy.png', 0, 60
+  UNION ALL SELECT 'pink', 'pink-adult-beginner-bootcamp', 'Adult Beginner Bootcamp', 'Academy', '4 sessions', 1800.00, 8, 10, '../assets/img/court/academy.png', 0, 70
+  UNION ALL SELECT 'pink', 'pink-introductory-trial-class', 'Introductory Trial Class', 'Academy', '1 hour', 250.00, 8, 10, '../assets/img/court/academy.png', 0, 80
+  UNION ALL SELECT 'pink', 'pink-parent-child-trial', 'Parent & Child Trial', 'Academy', '1 hour', 500.00, 2, 10, '../assets/img/court/academy.png', 0, 90
 ) AS seed ON seed.court_slug = c.slug
 ON DUPLICATE KEY UPDATE
   court_id = VALUES(court_id),

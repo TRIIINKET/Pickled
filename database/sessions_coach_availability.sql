@@ -124,12 +124,7 @@ SELECT v.id,
        seed.session_date, seed.start_time, seed.end_time, seed.capacity, 0, 'open'
 FROM booking_variants v
 JOIN (
-  SELECT 'green-private-coaching' AS slug, DATE('2026-06-15') AS session_date, '09:00:00' AS start_time, '10:00:00' AS end_time, 1 AS capacity
-  UNION ALL SELECT 'green-court-rentals', DATE('2026-06-14'), '07:00:00', '08:00:00', 8
-  UNION ALL SELECT 'pink-base-rate', DATE('2026-06-14'), '08:00:00', '09:00:00', 8
-  UNION ALL SELECT 'green-lessons', DATE('2026-06-16'), '17:00:00', '18:00:00', 8
-  UNION ALL SELECT 'pink-kids-pickleball-class-ages-6-10', DATE('2026-06-18'), '17:00:00', '18:00:00', 10
-  UNION ALL SELECT 'green-open-match-play', DATE('2026-06-19'), '18:00:00', '20:00:00', 16
+  SELECT 'green-open-match-play' AS slug, DATE('2026-06-19') AS session_date, '18:00:00' AS start_time, '20:00:00' AS end_time, 16 AS capacity
   UNION ALL SELECT 'green-weekly-tournament', DATE('2026-06-21'), '09:00:00', '12:00:00', 24
 ) seed ON seed.slug = v.slug
 LEFT JOIN users coach ON coach.email = 'coach@example.com' AND coach.role = 'coach'

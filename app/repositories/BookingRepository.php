@@ -3,12 +3,34 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../database/Database.php';
 require_once __DIR__ . '/CatalogRepository.php';
+require_once __DIR__ . '/CartRepository.php';
+require_once __DIR__ . '/SchedulingRepository.php';
 
 final class BookingRepository
 {
-    private const BOOKING_STATUSES = ['pending', 'confirmed', 'completed', 'cancelled'];
+    private const BOOKING_STATUSES = ['pending', 'confirmed', 'completed', 'cancelled', 'rejected', 'expired', 'refunded', 'approved', 'paid'];
 
-    public function __construct(private readonly CatalogRepository $catalog = new CatalogRepository()) {}
+    public function __construct(
+        private readonly CatalogRepository $catalog = new CatalogRepository(),
+        private readonly CartRepository $carts = new CartRepository(),
+        private readonly SchedulingRepository $schedules = new SchedulingRepository()
+    ) {
+        $this->ensureStandardCourtBookingSchema();
+    }
+
+    private function ensureStandardCourtBookingSchema(): void
+    {
+        $pdo = Database::connection();
+        try {
+            if (!$this->columnExists('booking_items', 'coach_user_id')) {
+                $pdo->exec('ALTER TABLE booking_items ADD COLUMN coach_user_id INT UNSIGNED NULL AFTER session_id');
+                $pdo->exec('ALTER TABLE booking_items ADD KEY idx_booking_items_coach_slot (coach_user_id, booking_date, start_time, end_time)');
+            }
+            $pdo->exec('ALTER TABLE booking_items MODIFY session_id INT UNSIGNED NULL');
+        } catch (Throwable $e) {
+            error_log('Booking standard court schema check failed: ' . $e->getMessage());
+        }
+    }
 
     public function create(int $userId, array $booking): array
     {
@@ -47,32 +69,42 @@ final class BookingRepository
 
             $itemStmt = $pdo->prepare(
                 'INSERT INTO booking_items
-                    (booking_id, session_id, variant_slug, name, court, category, duration_label, booking_date, start_time, end_time, quantity, unit_price, image)
+                    (booking_id, session_id, coach_user_id, variant_slug, name, court, category, duration_label, booking_date, start_time, end_time, quantity, unit_price, image)
                  VALUES
-                    (:booking_id, :session_id, :variant_slug, :name, :court, :category, :duration_label, :booking_date, :start_time, :end_time, :quantity, :unit_price, :image)'
+                    (:booking_id, :session_id, :coach_user_id, :variant_slug, :name, :court, :category, :duration_label, :booking_date, :start_time, :end_time, :quantity, :unit_price, :image)'
             );
 
             foreach ($items as $item) {
                 $quantity = max(1, (int) ($item['quantity'] ?? 1));
                 $sessionId = (int) ($item['session_id'] ?? 0);
-                if ($sessionId <= 0) {
-                    throw new RuntimeException('One of the selected sessions is no longer available.');
-                }
-
-                if ($this->statusConsumesCapacity($bookingStatus) && !$this->catalog->incrementBookedCount($sessionId, $quantity)) {
-                    throw new RuntimeException('One of the selected sessions is already full.');
-                }
-
+                $variantSlug = (string) ($item['variant_slug'] ?? $item['variant_id'] ?? '');
+                $variant = $this->catalog->findVariantBySlug($variantSlug);
                 [$startTime, $endTime] = $this->timeSnapshot($item);
+                $bookingDate = $this->dateSnapshot($item);
+                $coachUserId = empty($item['coach_user_id']) ? null : (int) $item['coach_user_id'];
+
+                if ($variant && $this->usesStandardCourtFlow($variant)) {
+                    $this->assertStandardCourtBookingAvailable($userId, $variant, $bookingDate, $startTime, $endTime, $quantity, $coachUserId);
+                } else {
+                    if ($sessionId <= 0) {
+                        throw new RuntimeException('One of the selected sessions is no longer available.');
+                    }
+
+                    if ($this->statusConsumesCapacity($bookingStatus) && !$this->catalog->incrementBookedCount($sessionId, $quantity)) {
+                        throw new RuntimeException('This service has reached its maximum capacity for the selected schedule.');
+                    }
+                }
+
                 $itemStmt->execute([
                     'booking_id' => $bookingId,
-                    'session_id' => $sessionId,
-                    'variant_slug' => (string) ($item['variant_slug'] ?? $item['variant_id'] ?? 'custom'),
+                    'session_id' => $sessionId > 0 ? $sessionId : null,
+                    'coach_user_id' => $coachUserId,
+                    'variant_slug' => $variantSlug !== '' ? $variantSlug : 'custom',
                     'name' => (string) ($item['name'] ?? 'Booking'),
                     'court' => (string) ($item['court'] ?? 'Any Court'),
                     'category' => (string) ($item['category'] ?? 'Booking'),
                     'duration_label' => (string) ($item['duration_label'] ?? $item['duration'] ?? 'Scheduled session'),
-                    'booking_date' => $this->dateSnapshot($item),
+                    'booking_date' => $bookingDate,
                     'start_time' => $startTime,
                     'end_time' => $endTime,
                     'quantity' => $quantity,
@@ -314,6 +346,7 @@ final class BookingRepository
         $sql = "SELECT bi.id,
                        bi.booking_id,
                        bi.session_id,
+                       bi.coach_user_id,
                        bi.variant_slug,
                        bi.variant_slug AS variant_id,
                        bi.name,
@@ -336,11 +369,10 @@ final class BookingRepository
                        u.name AS user_name,
                        u.email AS user_email
                 FROM booking_items bi
-                JOIN sessions s ON s.id = bi.session_id
                 JOIN bookings b ON b.id = bi.booking_id
                 LEFT JOIN users u ON u.id = b.user_id
-                WHERE s.coach_user_id = :coach_user_id
-                  AND b.status <> 'cancelled'";
+                WHERE bi.coach_user_id = :coach_user_id
+                  AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')";
         $params = ['coach_user_id' => $coachUserId];
 
         if ($startDate) {
@@ -389,6 +421,7 @@ final class BookingRepository
         return "SELECT {$prefix}id,
                        {$prefix}booking_id,
                        {$prefix}session_id,
+                       {$prefix}coach_user_id,
                        {$prefix}variant_slug,
                        {$prefix}variant_slug AS variant_id,
                        {$prefix}name,
@@ -413,8 +446,20 @@ final class BookingRepository
         if (str_contains($status, 'cancel')) {
             return 'cancelled';
         }
+        if (str_contains($status, 'reject')) {
+            return 'rejected';
+        }
+        if (str_contains($status, 'expire')) {
+            return 'expired';
+        }
+        if (str_contains($status, 'refund')) {
+            return 'refunded';
+        }
         if (str_contains($status, 'complete')) {
             return 'completed';
+        }
+        if (str_contains($status, 'approve')) {
+            return 'approved';
         }
         if (str_contains($status, 'confirm') || str_contains($status, 'paid')) {
             return 'confirmed';
@@ -424,7 +469,142 @@ final class BookingRepository
 
     private function statusConsumesCapacity(string $status): bool
     {
-        return $this->normalizeBookingStatus($status) !== 'cancelled';
+        return in_array($this->normalizeBookingStatus($status), ['pending', 'approved', 'confirmed', 'paid', 'completed'], true);
+    }
+
+    private function assertStandardCourtBookingAvailable(int $userId, array $variant, string $bookingDate, string $startTime, string $endTime, int $quantity, ?int $coachUserId): void
+    {
+        if ($this->courtBookingConflict((int) $variant['court_id'], $bookingDate, $startTime, $endTime)) {
+            throw new RuntimeException('That court is already booked for the selected date and time. Please choose another schedule.');
+        }
+
+        $bookedQuantity = $this->bookedQuantityForStandardSlot((string) $variant['slug'], $bookingDate, $startTime, $endTime);
+        $heldQuantity = $this->carts->activeHeldQuantityForStandardSlot((int) $variant['id'], $bookingDate, $startTime, $endTime, null, $userId);
+        if ($bookedQuantity + $heldQuantity + $quantity > (int) $variant['capacity']) {
+            throw new RuntimeException('This service has reached its maximum capacity for the selected schedule.');
+        }
+
+        if ($this->requiresCoach($variant)) {
+            if (!$coachUserId || !$this->coachCanTakeBooking($coachUserId, $bookingDate, $startTime, $endTime, $userId)) {
+                throw new RuntimeException('No coach is available for the selected date and time.');
+            }
+        }
+    }
+
+    private function courtBookingConflict(int $courtId, string $bookingDate, string $startTime, string $endTime): bool
+    {
+        $stmt = Database::connection()->prepare(
+            "SELECT 1
+             FROM booking_items bi
+             JOIN bookings b ON b.id = bi.booking_id
+             JOIN booking_variants v ON v.slug = bi.variant_slug
+             WHERE v.court_id = :court_id
+               AND bi.booking_date = :booking_date
+               AND (b.status IN ('pending', 'approved', 'confirmed', 'paid', 'completed')
+                    OR b.payment_status IN ('pending', 'approved', 'paid'))
+               AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+               AND b.payment_status NOT IN ('expired', 'refunded', 'rejected')
+               AND :start_time < bi.end_time
+               AND :end_time > bi.start_time
+             LIMIT 1"
+        );
+        $stmt->execute([
+            'court_id' => $courtId,
+            'booking_date' => $bookingDate,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
+        ]);
+        return (bool) $stmt->fetchColumn();
+    }
+
+    private function bookedQuantityForStandardSlot(string $variantSlug, string $bookingDate, string $startTime, string $endTime): int
+    {
+        $stmt = Database::connection()->prepare(
+            "SELECT COALESCE(SUM(bi.quantity), 0)
+             FROM booking_items bi
+             JOIN bookings b ON b.id = bi.booking_id
+             WHERE bi.variant_slug = :variant_slug
+               AND bi.booking_date = :booking_date
+               AND (b.status IN ('pending', 'approved', 'confirmed', 'paid', 'completed')
+                    OR b.payment_status IN ('pending', 'approved', 'paid'))
+               AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+               AND b.payment_status NOT IN ('expired', 'refunded', 'rejected')
+               AND :start_time < bi.end_time
+               AND :end_time > bi.start_time"
+        );
+        $stmt->execute([
+            'variant_slug' => $variantSlug,
+            'booking_date' => $bookingDate,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
+        ]);
+        return (int) $stmt->fetchColumn();
+    }
+
+    private function coachCanTakeBooking(int $coachUserId, string $bookingDate, string $startTime, string $endTime, int $userId): bool
+    {
+        $coach = $this->schedules->coachById($coachUserId);
+        if (!$coach || (($coach['status'] ?? 'active') !== 'active')) {
+            return false;
+        }
+
+        $dayOfWeek = (int) (new DateTimeImmutable($bookingDate))->format('w');
+        if (!$this->schedules->coachAvailableForSlot($coachUserId, $dayOfWeek, $startTime, $endTime)) {
+            return false;
+        }
+        if ($this->schedules->coachSessionOverlap($coachUserId, $bookingDate, $startTime, $endTime)) {
+            return false;
+        }
+        if ($this->coachBookingOverlap($coachUserId, $bookingDate, $startTime, $endTime)) {
+            return false;
+        }
+        return !$this->carts->coachHasOverlap($coachUserId, $bookingDate, $startTime, $endTime, $userId);
+    }
+
+    private function coachBookingOverlap(int $coachUserId, string $bookingDate, string $startTime, string $endTime): bool
+    {
+        $stmt = Database::connection()->prepare(
+            "SELECT 1
+             FROM booking_items bi
+             JOIN bookings b ON b.id = bi.booking_id
+             WHERE bi.coach_user_id = :coach_user_id
+               AND bi.booking_date = :booking_date
+               AND (b.status IN ('pending', 'approved', 'confirmed', 'paid', 'completed')
+                    OR b.payment_status IN ('pending', 'approved', 'paid'))
+               AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+               AND b.payment_status NOT IN ('expired', 'refunded', 'rejected')
+               AND :start_time < bi.end_time
+               AND :end_time > bi.start_time
+             LIMIT 1"
+        );
+        $stmt->execute([
+            'coach_user_id' => $coachUserId,
+            'booking_date' => $bookingDate,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
+        ]);
+        return (bool) $stmt->fetchColumn();
+    }
+
+    private function usesStandardCourtFlow(array $variant): bool
+    {
+        $courtSlug = strtolower((string) ($variant['court_slug'] ?? ''));
+        $label = strtolower((string) ($variant['category'] ?? '') . ' ' . (string) ($variant['name'] ?? ''));
+        return in_array($courtSlug, ['green', 'pink'], true)
+            && !str_contains($label, 'social play')
+            && !str_contains($label, 'tournament')
+            && !str_contains($label, 'match-play');
+    }
+
+    private function requiresCoach(array $variant): bool
+    {
+        $label = strtolower((string) ($variant['category'] ?? '') . ' ' . (string) ($variant['name'] ?? ''));
+        foreach (['lesson', 'coaching', 'training', 'class', 'kids', 'youth', 'parent'] as $keyword) {
+            if (str_contains($label, $keyword)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function bookingSessionQuantities(int $bookingId): array
@@ -433,6 +613,7 @@ final class BookingRepository
             'SELECT session_id, COALESCE(SUM(quantity), 0) AS quantity
              FROM booking_items
              WHERE booking_id = :booking_id
+               AND session_id IS NOT NULL
              GROUP BY session_id'
         );
         $stmt->execute(['booking_id' => $bookingId]);
@@ -538,5 +719,19 @@ final class BookingRepository
         }
 
         return date('H:i:s', $timestamp);
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        $stmt = Database::connection()->prepare('
+            SELECT 1
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = :table_name
+              AND COLUMN_NAME = :column_name
+            LIMIT 1
+        ');
+        $stmt->execute(['table_name' => $table, 'column_name' => $column]);
+        return (bool) $stmt->fetchColumn();
     }
 }
