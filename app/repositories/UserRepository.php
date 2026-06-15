@@ -18,13 +18,26 @@ final class UserRepository
         $pdo = Database::connection();
         $pdo->beginTransaction();
         try {
-            $stmt = $pdo->prepare('INSERT INTO users (name, email, password_hash, role) VALUES (:name, :email, :password_hash, :role)');
-            $stmt->execute([
+            $columns = ['name', 'email', 'password_hash', 'role'];
+            $placeholders = [':name', ':email', ':password_hash', ':role'];
+            $params = [
                 'name' => $name,
                 'email' => strtolower($email),
                 'password_hash' => $passwordHash,
                 'role' => 'player',
-            ]);
+            ];
+
+            if ($this->hasColumn('is_verified')) {
+                $columns[] = 'is_verified';
+                $placeholders[] = ':is_verified';
+                $params['is_verified'] = 0;
+            }
+
+            $stmt = $pdo->prepare(
+                'INSERT INTO users (' . implode(', ', $columns) . ')
+                 VALUES (' . implode(', ', $placeholders) . ')'
+            );
+            $stmt->execute($params);
             $userId = (int) $pdo->lastInsertId();
             $this->createProfile($userId, $profile);
             $pdo->commit();
@@ -42,6 +55,41 @@ final class UserRepository
         $stmt->execute(['id' => $id]);
         $user = $stmt->fetch();
         return $user ?: null;
+    }
+
+    public function hasColumn(string $column): bool
+    {
+        $stmt = Database::connection()->prepare(
+            'SELECT COUNT(*)
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = :table_name
+               AND COLUMN_NAME = :column_name'
+        );
+        $stmt->execute([
+            'table_name' => 'users',
+            'column_name' => $column,
+        ]);
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    public function isVerified(array $user): bool
+    {
+        if (!$this->hasColumn('is_verified')) {
+            return true;
+        }
+
+        return (int) ($user['is_verified'] ?? 0) === 1;
+    }
+
+    public function markVerified(int $id): bool
+    {
+        if (!$this->hasColumn('is_verified')) {
+            return true;
+        }
+
+        $stmt = Database::connection()->prepare('UPDATE users SET is_verified = 1 WHERE id = :id');
+        return $stmt->execute(['id' => $id]);
     }
 
     public function updatePassword(int $id, string $passwordHash): void

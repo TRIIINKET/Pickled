@@ -19,9 +19,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim((string) ($_POST['name'] ?? ''));
     $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
     $phone = trim((string) ($_POST['phone'] ?? ''));
+    $subject = trim((string) ($_POST['subject'] ?? ''));
     $message = trim((string) ($_POST['message'] ?? ''));
 
-    if ($name === '' || !$email || $phone === '' || $message === '') {
+    if ($name === '' || !$email || $phone === '' || $subject === '' || $message === '') {
       $contactError = 'Please complete all contact fields.';
     } else {
       $emailService = new EmailService();
@@ -29,6 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'name' => $name,
         'email' => $email,
         'phone' => $phone,
+        'subject' => $subject,
         'message' => $message,
       ])) {
         $_SESSION['flash'] = [
@@ -73,6 +75,7 @@ include __DIR__ . '/../includes/header.php';
           <input type="email" name="email" placeholder="Enter your email address" required value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" />
           <input type="tel" name="phone" placeholder="Phone number" required value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>" />
         </div>
+        <input type="text" name="subject" placeholder="Subject" required value="<?= htmlspecialchars($_POST['subject'] ?? '') ?>" />
         <textarea name="message" placeholder="Comment" required><?= htmlspecialchars($_POST['message'] ?? '') ?></textarea>
         <button type="submit">Send message</button>
       </form>

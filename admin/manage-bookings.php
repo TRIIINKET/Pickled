@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/admin-paths.php';
 require_once __DIR__ . '/../app/services/AdminService.php';
 require_once __DIR__ . '/../app/services/BookingExpiryService.php';
 require_once __DIR__ . '/../app/services/NotificationService.php';
+require_once __DIR__ . '/../app/services/EmailService.php';
 require_once __DIR__ . '/../database/Database.php';
 
 pickled_init_csrf();
@@ -175,6 +176,46 @@ function booking_admin_notify(PDO $pdo, NotificationService $notificationService
     );
 }
 
+function booking_admin_send_payment_email(PDO $pdo, int $bookingId, string $status, string $remarks = ''): void {
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT b.*, u.name AS user_name, u.email AS user_email
+             FROM bookings b
+             LEFT JOIN users u ON u.id = b.user_id
+             WHERE b.id = :id
+             LIMIT 1'
+        );
+        $stmt->execute(['id' => $bookingId]);
+        $booking = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$booking || empty($booking['user_email'])) {
+            return;
+        }
+
+        $itemsStmt = $pdo->prepare(
+            "SELECT *,
+                    DATE_FORMAT(booking_date, '%W, %M %e, %Y') AS booking_date,
+                    CONCAT(TIME_FORMAT(start_time, '%h:%i %p'), ' - ', TIME_FORMAT(end_time, '%h:%i %p')) AS booking_time
+             FROM booking_items
+             WHERE booking_id = :booking_id
+             ORDER BY id ASC"
+        );
+        $itemsStmt->execute(['booking_id' => $bookingId]);
+        $booking['items'] = $itemsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $user = [
+            'name' => (string) ($booking['user_name'] ?? 'Member'),
+            'email' => (string) $booking['user_email'],
+        ];
+        $email = new EmailService();
+        if ($status === 'approved') {
+            $email->sendPaymentApproved($user, $booking);
+        } else {
+            $email->sendPaymentRejected($user, $booking, $remarks);
+        }
+    } catch (Throwable $e) {
+        error_log('Admin payment email failed: ' . $e->getMessage());
+    }
+}
+
 function booking_admin_mark_paid(PDO $pdo, int $bookingId, int $adminId, string $remarks = ''): bool {
     $started = !$pdo->inTransaction();
     if ($started) {
@@ -230,6 +271,7 @@ function booking_admin_mark_paid(PDO $pdo, int $bookingId, int $adminId, string 
         if ($started) {
             $pdo->commit();
         }
+        booking_admin_send_payment_email($pdo, $bookingId, 'approved', $remarks);
         return true;
     } catch (Throwable $e) {
         if ($started && $pdo->inTransaction()) {

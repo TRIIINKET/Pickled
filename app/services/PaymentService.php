@@ -7,6 +7,7 @@ require_once __DIR__ . '/../controllers/CheckoutController.php';
 require_once __DIR__ . '/BookingExpiryService.php';
 require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/AdminLogService.php';
+require_once __DIR__ . '/EmailService.php';
 require_once __DIR__ . '/../../database/Database.php';
 
 final class PaymentService
@@ -166,12 +167,35 @@ final class PaymentService
             if ($startedTransaction) {
                 $pdo->commit();
             }
+            $this->sendPaymentReviewEmail($updatedBooking, $status, $remarks);
             return true;
         } catch (Throwable $e) {
             if ($startedTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             throw $e;
+        }
+    }
+
+    private function sendPaymentReviewEmail(array $booking, string $status, string $remarks): void
+    {
+        try {
+            $stmt = Database::connection()->prepare('SELECT * FROM users WHERE id = :id LIMIT 1');
+            $stmt->execute(['id' => (int) ($booking['user_id'] ?? 0)]);
+            $user = $stmt->fetch() ?: null;
+            if (!$user) {
+                return;
+            }
+
+            $booking['items'] = $this->bookings->getBookingItems((int) ($booking['id'] ?? 0));
+            $email = new EmailService();
+            if ($status === 'approved') {
+                $email->sendPaymentApproved($user, $booking);
+            } else {
+                $email->sendPaymentRejected($user, $booking, $remarks);
+            }
+        } catch (Throwable $e) {
+            error_log('Payment review email failed: ' . $e->getMessage());
         }
     }
 

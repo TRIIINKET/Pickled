@@ -3,6 +3,7 @@ require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/booking-system.php';
 require_once __DIR__ . '/../app/services/AuthService.php';
 require_once __DIR__ . '/../app/services/EmailService.php';
+require_once __DIR__ . '/../includes/EmailVerification.php';
 pickled_start_secure_session();
 pickled_init_csrf();
 
@@ -30,6 +31,7 @@ $bookingNotice = ($_GET['notice'] ?? '') === 'booking' ? 'Please sign up or sign
 $loginError = '';
 $signupError = '';
 $signupSuccess = '';
+$unverifiedEmail = '';
 $roleLabels = [
     'admin' => 'Admin',
     'coach' => 'Coaches',
@@ -45,7 +47,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!pickled_validate_csrf_token($csrfToken)) {
         $loginError = 'Invalid request. Please refresh and try again.';
     } else {
-        if ($action === 'signup') {
+        if ($action === 'resend_otp') {
+            $mode = 'login';
+            $user = $email ? $auth->findByEmail($email) : null;
+            if (!$user) {
+                $loginError = 'Enter a valid registered email address.';
+            } elseif ($auth->isVerified($user)) {
+                $signupSuccess = 'This email is already verified. You may log in.';
+            } elseif (EmailVerification::issue($user)) {
+                header('Location: verify-otp.php');
+                exit;
+            } else {
+                $loginError = 'Unable to send OTP right now. Please try again later.';
+                $unverifiedEmail = (string) ($user['email'] ?? $email);
+            }
+        } elseif ($action === 'signup') {
             $mode = 'signup';
             $name = trim($_POST['name'] ?? '');
             $confirmPassword = trim($_POST['confirm_password'] ?? '');
@@ -60,9 +76,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $signupError = 'Passwords do not match.';
             } else {
                 try {
-                    $auth->register($name, $email, $password);
-                    $mode = 'login';
-                    $signupSuccess = 'Account created. Please log in.';
+                    $user = $auth->register($name, $email, $password);
+                    if (EmailVerification::issue($user)) {
+                        header('Location: verify-otp.php');
+                        exit;
+                    }
+                    $signupError = 'Account created, but the OTP email could not be sent. Please use resend OTP on the login page.';
                 } catch (RuntimeException $e) {
                     $signupError = $e->getMessage();
                 }
@@ -71,6 +90,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $mode = 'login';
             $user = $email && $password !== '' ? $auth->attempt($email, $password) : null;
             if ($user) {
+                if (!$auth->isVerified($user)) {
+                    $loginError = 'Please verify your email address before logging in.';
+                    $unverifiedEmail = (string) ($user['email'] ?? $email);
+                } else {
                 session_regenerate_id(true);
                 $_SESSION['user'] = pickled_session_user($user);
                 $_SESSION['user_id'] = $_SESSION['user']['id'];
@@ -86,9 +109,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 header('Location: ' . pickled_frontend_url(pickled_login_redirect_for_role($_SESSION['user']['role'], $redirect)));
                 exit;
+                }
             }
 
-            $loginError = 'Invalid email or password.';
+            if (!$loginError) {
+                $loginError = 'Invalid email or password.';
+            }
         }
     }
 }
@@ -195,11 +221,10 @@ include $frontendPath . '/includes/header.php';
       <?php if ($loginError): ?>
         <div class="login-error"><?= htmlspecialchars($loginError) ?></div>
       <?php endif; ?>
-
       <label>
         <span>Email</span>
         <span class="login-field">
-          <input type="email" name="email" placeholder="Enter your email" autocomplete="email" required/>
+          <input type="email" name="email" placeholder="Enter your email" autocomplete="email" required value="<?= htmlspecialchars($unverifiedEmail ?: ($_POST['email'] ?? '')) ?>"/>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 6h16v12H4z"></path>
             <path d="m4 7 8 6 8-6"></path>
@@ -235,6 +260,14 @@ include $frontendPath . '/includes/header.php';
 
       <button type="submit">Sign in</button>
     </form>
+    <?php if ($unverifiedEmail): ?>
+      <form class="login-form" action="login.php" method="post">
+        <input type="hidden" name="action" value="resend_otp" />
+        <input type="hidden" name="email" value="<?= htmlspecialchars($unverifiedEmail) ?>" />
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
+        <button type="submit">Resend OTP</button>
+      </form>
+    <?php endif; ?>
     <?php endif; ?>
 
     <div class="login-links">

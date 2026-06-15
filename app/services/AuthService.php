@@ -30,6 +30,21 @@ final class AuthService
         return $user;
     }
 
+    public function findByEmail(string $email): ?array
+    {
+        return $this->users->findByEmail($email);
+    }
+
+    public function isVerified(array $user): bool
+    {
+        return $this->users->isVerified($user);
+    }
+
+    public function markVerified(int $userId): bool
+    {
+        return $this->users->markVerified($userId);
+    }
+
     public function issuePasswordReset(string $email): ?string
     {
         $user = $this->users->findByEmail($email);
