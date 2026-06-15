@@ -5,13 +5,16 @@ require_once __DIR__ . '/../../database/Database.php';
 
 final class PrivatePackageRepository
 {
+    private static bool $schemaReady = false;
+
     public function __construct(private readonly ?PDO $connection = null) {}
 
     public function create(array $data): int
     {
+        $this->ensureSchema();
         $stmt = $this->db()->prepare(
-            'INSERT INTO private_packages (title, description, price, duration, coach_profile_id, status)
-             VALUES (:title, :description, :price, :duration, :coach_profile_id, :status)'
+            'INSERT INTO private_packages (title, category, description, price, duration, capacity, coach_profile_id, required_coach, slug, sort_order, status)
+             VALUES (:title, :category, :description, :price, :duration, :capacity, :coach_profile_id, :required_coach, :slug, :sort_order, :status)'
         );
         $stmt->execute($this->params($data));
 
@@ -20,14 +23,20 @@ final class PrivatePackageRepository
 
     public function update(int $id, array $data): bool
     {
+        $this->ensureSchema();
         $params = $this->params($data) + ['id' => $id];
         $stmt = $this->db()->prepare(
             'UPDATE private_packages
              SET title = :title,
+                 category = :category,
                  description = :description,
                  price = :price,
                  duration = :duration,
+                 capacity = :capacity,
                  coach_profile_id = :coach_profile_id,
+                 required_coach = :required_coach,
+                 slug = :slug,
+                 sort_order = :sort_order,
                  status = :status
              WHERE id = :id'
         );
@@ -37,12 +46,14 @@ final class PrivatePackageRepository
 
     public function setStatus(int $id, string $status): bool
     {
+        $this->ensureSchema();
         $stmt = $this->db()->prepare('UPDATE private_packages SET status = :status WHERE id = :id');
         return $stmt->execute(['id' => $id, 'status' => $status]);
     }
 
     public function findById(int $id): ?array
     {
+        $this->ensureSchema();
         $stmt = $this->db()->prepare($this->selectSql() . ' WHERE pp.id = :id LIMIT 1');
         $stmt->execute(['id' => $id]);
         $package = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -52,12 +63,14 @@ final class PrivatePackageRepository
 
     public function active(): array
     {
-        $stmt = $this->db()->query($this->selectSql() . " WHERE pp.status = 'active' ORDER BY pp.created_at DESC, pp.id DESC");
+        $this->ensureSchema();
+        $stmt = $this->db()->query($this->selectSql() . " WHERE pp.status = 'active' ORDER BY pp.sort_order ASC, pp.created_at DESC, pp.id DESC");
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
     public function all(?string $status = null, string $search = '', int $limit = 100): array
     {
+        $this->ensureSchema();
         $where = [];
         $params = [];
 
@@ -68,8 +81,9 @@ final class PrivatePackageRepository
 
         $search = trim($search);
         if ($search !== '') {
-            $where[] = '(pp.title LIKE :q_title OR pp.description LIKE :q_description OR u.name LIKE :q_coach)';
+            $where[] = '(pp.title LIKE :q_title OR pp.category LIKE :q_category OR pp.description LIKE :q_description OR u.name LIKE :q_coach)';
             $params[':q_title'] = '%' . $search . '%';
+            $params[':q_category'] = '%' . $search . '%';
             $params[':q_description'] = '%' . $search . '%';
             $params[':q_coach'] = '%' . $search . '%';
         }
@@ -78,7 +92,7 @@ final class PrivatePackageRepository
         if ($where) {
             $sql .= ' WHERE ' . implode(' AND ', $where);
         }
-        $sql .= ' ORDER BY pp.created_at DESC, pp.id DESC LIMIT :limit_count';
+        $sql .= ' ORDER BY pp.sort_order ASC, pp.created_at DESC, pp.id DESC LIMIT :limit_count';
 
         $stmt = $this->db()->prepare($sql);
         foreach ($params as $key => $value) {
@@ -92,11 +106,12 @@ final class PrivatePackageRepository
 
     public function forCoachUser(int $coachUserId, bool $activeOnly = false): array
     {
+        $this->ensureSchema();
         $sql = $this->selectSql() . ' WHERE cp.user_id = :coach_user_id';
         if ($activeOnly) {
             $sql .= " AND pp.status = 'active'";
         }
-        $sql .= ' ORDER BY pp.created_at DESC, pp.id DESC';
+        $sql .= ' ORDER BY pp.sort_order ASC, pp.created_at DESC, pp.id DESC';
 
         $stmt = $this->db()->prepare($sql);
         $stmt->execute(['coach_user_id' => $coachUserId]);
@@ -106,6 +121,7 @@ final class PrivatePackageRepository
 
     public function coachProfiles(): array
     {
+        $this->ensureSchema();
         $stmt = $this->db()->query(
             "SELECT cp.id, cp.user_id, u.name, u.email, cp.specialization, cp.status
              FROM coach_profiles cp
@@ -119,6 +135,7 @@ final class PrivatePackageRepository
 
     public function coachProfileById(int $id): ?array
     {
+        $this->ensureSchema();
         $stmt = $this->db()->prepare(
             "SELECT cp.id, cp.user_id, u.name, u.email, cp.specialization, cp.status
              FROM coach_profiles cp
@@ -137,10 +154,15 @@ final class PrivatePackageRepository
     {
         return [
             'title' => $data['title'],
+            'category' => $data['category'],
             'description' => $data['description'],
             'price' => (float) $data['price'],
             'duration' => $data['duration'],
-            'coach_profile_id' => (int) $data['coach_profile_id'],
+            'capacity' => (int) $data['capacity'],
+            'coach_profile_id' => $data['coach_profile_id'] !== null ? (int) $data['coach_profile_id'] : null,
+            'required_coach' => !empty($data['required_coach']) ? 1 : 0,
+            'slug' => $data['slug'],
+            'sort_order' => (int) $data['sort_order'],
             'status' => $data['status'],
         ];
     }
@@ -153,8 +175,54 @@ final class PrivatePackageRepository
                        u.name AS coach_name,
                        u.email AS coach_email
                 FROM private_packages pp
-                JOIN coach_profiles cp ON cp.id = pp.coach_profile_id
-                JOIN users u ON u.id = cp.user_id";
+                LEFT JOIN coach_profiles cp ON cp.id = pp.coach_profile_id
+                LEFT JOIN users u ON u.id = cp.user_id";
+    }
+
+    private function ensureSchema(): void
+    {
+        if (self::$schemaReady) {
+            return;
+        }
+
+        $db = $this->db();
+        $columns = $this->columns('private_packages');
+        $alter = [];
+        if (!isset($columns['category'])) {
+            $alter[] = "ADD COLUMN category VARCHAR(120) NOT NULL DEFAULT 'Private Coaching' AFTER title";
+        }
+        if (!isset($columns['capacity'])) {
+            $alter[] = 'ADD COLUMN capacity INT UNSIGNED NULL AFTER duration';
+        }
+        if (!isset($columns['required_coach'])) {
+            $alter[] = 'ADD COLUMN required_coach TINYINT(1) NOT NULL DEFAULT 1 AFTER coach_profile_id';
+        }
+        if (!isset($columns['slug'])) {
+            $alter[] = 'ADD COLUMN slug VARCHAR(190) NULL AFTER required_coach';
+        }
+        if (!isset($columns['sort_order'])) {
+            $alter[] = 'ADD COLUMN sort_order INT NOT NULL DEFAULT 0 AFTER slug';
+        }
+        if (($columns['coach_profile_id']['Null'] ?? 'NO') === 'NO') {
+            $alter[] = 'MODIFY coach_profile_id INT UNSIGNED NULL';
+        }
+
+        if ($alter) {
+            $db->exec('ALTER TABLE private_packages ' . implode(', ', $alter));
+        }
+
+        self::$schemaReady = true;
+    }
+
+    private function columns(string $table): array
+    {
+        $stmt = $this->db()->query('SHOW COLUMNS FROM ' . $table);
+        $columns = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $column) {
+            $columns[(string) $column['Field']] = $column;
+        }
+
+        return $columns;
     }
 
     private function db(): PDO

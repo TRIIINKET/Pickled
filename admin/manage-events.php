@@ -642,10 +642,11 @@ $socialSessions = court_rows($pdo, "
     FROM sessions s
     JOIN booking_variants bv ON bv.id = s.variant_id
     JOIN courts c ON c.id = bv.court_id
-    WHERE bv.category = 'Social Play'
+    WHERE (bv.category = 'Social Play'
        OR bv.name LIKE '%Match%'
-       OR bv.name LIKE '%Tournament%'
-    ORDER BY s.session_date DESC, s.start_time DESC
+       OR bv.name LIKE '%Tournament%')
+      AND s.session_date >= CURDATE()
+    ORDER BY s.session_date ASC, s.start_time ASC
     LIMIT 4
 ");
 $socialParticipants = array_sum(array_map(fn($row) => (int) ($row['booked_count'] ?? 0), $socialSessions));
@@ -727,7 +728,7 @@ $dashboardNav = [
     ['type' => 'group', 'label' => 'Bookings', 'href' => 'manage-bookings.php', 'key' => 'bookings', 'icon' => 'calendar', 'children' => [['All Bookings', 'manage-bookings.php', ''], ['Calendar View', 'manage-bookings.php?view=calendar', '']]],
     ['type' => 'group', 'label' => 'Users', 'href' => 'manage-users.php?role=player', 'key' => 'users', 'icon' => 'users', 'children' => [['Players', 'manage-users.php?role=player', ''], ['Coaches', 'manage-users.php?role=coach', '']]],
     ['type' => 'group', 'label' => 'Courts', 'href' => 'manage-events.php?court=green', 'key' => 'courts', 'icon' => 'courts', 'children' => $courtNavChildren],
-    ['type' => 'group', 'label' => 'Programs & Events', 'href' => 'manage-events.php?program=social-play', 'key' => 'events', 'icon' => 'target', 'children' => [['Social Play', 'manage-events.php?program=social-play', 'social-play'], ['Private Sessions', 'private-sessions.php', 'private']]],
+    ['type' => 'group', 'label' => 'Programs & Events', 'href' => 'manage-events.php?program=social-play', 'key' => 'events', 'icon' => 'target', 'children' => [['Social Play', 'manage-events.php?program=social-play', 'social-play'], ['Private Packages', 'private-sessions.php', 'private']]],
 ['type' => 'single', 'label' => 'Content', 'href' => 'content.php', 'key' => 'content', 'icon' => 'image'],
 ['type' => 'single', 'label' => 'Reports', 'href' => 'reports.php', 'key' => 'reports', 'icon' => 'chart'],
 ['type' => 'single', 'label' => 'Admin Profile', 'href' => 'admin-profile.php', 'key' => 'admin-profile', 'icon' => 'users'],
@@ -750,7 +751,7 @@ $dashboardNav = [
 
     <main class="admin-dashboard-main court-manager-main">
         <header class="admin-topbar">
-            <div><h1><?php echo htmlspecialchars($pageTitle); ?> <span class="court-title-badge"><?php echo $isSocialPlay ? 'Active' : court_h(ucfirst((string) ($court['status'] ?? 'inactive'))); ?></span></h1><p class="court-breadcrumb"><?php echo $isSocialPlay ? 'Programs' : 'Courts'; ?> <?php echo court_icon($icons, 'arrow'); ?> <?php echo htmlspecialchars($pageTitle); ?></p><?php if ($isSocialPlay): ?><p class="program-subtitle">Community-driven pickleball sessions</p><?php endif; ?></div>
+            <div><h1><?php echo htmlspecialchars($pageTitle); ?> <span class="court-title-badge"><?php echo $isSocialPlay ? 'Active' : court_h(ucfirst((string) ($court['status'] ?? 'inactive'))); ?></span></h1><p class="court-breadcrumb"><?php echo $isSocialPlay ? 'Programs' : 'Courts'; ?> <?php echo court_icon($icons, 'arrow'); ?> <?php echo htmlspecialchars($pageTitle); ?></p><?php if ($isSocialPlay): ?><p class="program-subtitle">Community-driven pickleball events and group activities.</p><?php endif; ?></div>
             <div class="admin-topbar-actions"><button class="admin-date-pill" type="button"><?php echo court_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button><a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>"><?php echo court_icon($icons, 'bell'); ?>
                 </a>
                 <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'topbar'); ?>
@@ -761,188 +762,90 @@ $dashboardNav = [
         <?php if ($errorMsg): ?><div class="alert alert-error"><?php echo court_h($errorMsg); ?></div><?php endif; ?>
 
         <?php if ($isSocialPlay): ?>
-        <section class="catalog-admin-panel" aria-label="Court and service catalog management">
-            <details id="catalog-add-court">
-                <summary><?php echo court_icon($icons, 'plus'); ?> Add Court</summary>
-                <form class="catalog-admin-form" method="post">
-                    <?php echo court_csrf_input(); ?>
-                    <label><span>Name</span><input type="text" name="name" placeholder="Court Blue" required></label>
-                    <label><span>Slug</span><input type="text" name="slug" placeholder="blue" required></label>
-                    <label><span>Status</span><select name="status"><option value="active">Active</option><option value="inactive">Inactive</option><option value="maintenance">Maintenance</option></select></label>
-                    <button class="bookings-button primary" type="submit" name="action" value="create_court">Add Court</button>
-                </form>
-            </details>
-
-            <details id="catalog-add-variant">
-                <summary><?php echo court_icon($icons, 'plus'); ?> Add Booking Variant</summary>
-                <form class="catalog-admin-form catalog-admin-form-wide" method="post">
-                    <?php echo court_csrf_input(); ?>
-                    <label><span>Court</span><select name="court_id" required><?php foreach ($allCourts as $selectCourt): ?><option value="<?php echo (int) $selectCourt['id']; ?>"><?php echo court_h($selectCourt['name']); ?></option><?php endforeach; ?></select></label>
-                    <label><span>Name</span><input type="text" name="name" placeholder="Court Rentals" required></label>
-                    <label><span>Slug</span><input type="text" name="slug" placeholder="blue-court-rentals" required></label>
-                    <label><span>Category</span><input type="text" name="category" placeholder="Court Rental" required></label>
-                    <label><span>Duration</span><input type="text" name="duration_label" placeholder="1 hour" required></label>
-                    <label><span>Price</span><input type="number" name="price" step="0.01" min="0" value="0.00" required></label>
-                    <label><span>Limit</span><input type="number" name="participants_limit" min="1" value="1" required></label>
-                    <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $defaultCatalogCapacity; ?>" required></label>
-                    <label><span>Sort</span><input type="number" name="sort_order" min="0" value="0"></label>
-                    <label><span>Image</span><input type="text" name="image" placeholder="assets/img/court/example.png"></label>
-                    <label class="catalog-check"><input type="checkbox" name="active" value="1" checked> Active</label>
-                    <button class="bookings-button primary" type="submit" name="action" value="create_variant">Add Variant</button>
-                </form>
-            </details>
-
-            <details id="catalog-add-session">
-                <summary><?php echo court_icon($icons, 'calendar'); ?> Add Session</summary>
-                <form class="catalog-admin-form catalog-admin-form-wide" method="post">
-                    <?php echo court_csrf_input(); ?>
-                    <label><span>Variant</span><select name="variant_id" required><?php foreach ($allVariants as $variant): ?><option value="<?php echo (int) $variant['id']; ?>"><?php echo court_h($variant['court'] . ' - ' . $variant['name']); ?></option><?php endforeach; ?></select></label>
-                    <label><span>Coach</span><select name="coach_user_id"><option value="">Unassigned</option><?php foreach ($coaches as $coach): ?><option value="<?php echo (int) $coach['id']; ?>"><?php echo court_h($coach['name']); ?></option><?php endforeach; ?></select></label>
-                    <label><span>Date</span><input type="date" name="session_date" value="<?php echo date('Y-m-d'); ?>" required></label>
-                    <label><span>Start</span><input type="time" name="start_time" value="09:00" required></label>
-                    <label><span>End</span><input type="time" name="end_time" value="10:00" required></label>
-                    <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $defaultSessionCapacity; ?>" required></label>
-                    <label><span>Booked</span><input type="number" name="booked_count" min="0" value="0" required></label>
-                    <label><span>Status</span><select name="status"><option value="open">Open</option><option value="full">Full</option><option value="cancelled">Cancelled</option><option value="completed">Completed</option></select></label>
-                    <button class="bookings-button primary" type="submit" name="action" value="create_session">Add Session</button>
-                </form>
-            </details>
-
-            <details>
-                <summary><?php echo court_icon($icons, 'edit'); ?> Edit Courts</summary>
-                <div class="catalog-admin-list">
-                    <?php foreach ($allCourts as $catalogCourt): $status = (string) ($catalogCourt['status'] ?? 'active'); ?>
-                        <article class="catalog-admin-row">
-                            <form class="catalog-admin-form catalog-inline-form" method="post">
-                                <?php echo court_csrf_input(); ?>
-                                <input type="hidden" name="court_id" value="<?php echo (int) $catalogCourt['id']; ?>">
-                                <label><span>Name</span><input type="text" name="name" value="<?php echo court_h($catalogCourt['name']); ?>" required></label>
-                                <label><span>Slug</span><input type="text" name="slug" value="<?php echo court_h($catalogCourt['slug']); ?>" required></label>
-                                <label><span>Status</span><select name="status"><option value="active" <?php echo $status === 'active' ? 'selected' : ''; ?>>Active</option><option value="inactive" <?php echo $status === 'inactive' ? 'selected' : ''; ?>>Inactive</option><option value="maintenance" <?php echo $status === 'maintenance' ? 'selected' : ''; ?>>Maintenance</option></select></label>
-                                <button type="submit" name="action" value="update_court">Save</button>
-                            </form>
-                            <form class="catalog-status-form" method="post">
-                                <?php echo court_csrf_input(); ?>
-                                <input type="hidden" name="court_id" value="<?php echo (int) $catalogCourt['id']; ?>">
-                                <input type="hidden" name="status" value="<?php echo $status === 'active' ? 'inactive' : 'active'; ?>">
-                                <button class="<?php echo $status === 'active' ? 'danger' : ''; ?>" type="submit" name="action" value="set_court_status"><?php echo $status === 'active' ? 'Deactivate' : 'Activate'; ?></button>
-                            </form>
-                        </article>
-                    <?php endforeach; ?>
-                    <?php if (!$allCourts): ?><p class="catalog-empty-state">No courts yet. Add the first court above.</p><?php endif; ?>
-                </div>
-            </details>
-
-            <details>
-                <summary><?php echo court_icon($icons, 'edit'); ?> Edit Booking Variants</summary>
-                <div class="catalog-admin-list">
-                    <?php foreach ($allVariants as $variant): $variantActive = !empty($variant['active']); ?>
-                        <article class="catalog-admin-row">
-                            <form class="catalog-admin-form catalog-inline-form catalog-variant-form" method="post">
-                                <?php echo court_csrf_input(); ?>
-                                <input type="hidden" name="variant_id" value="<?php echo (int) $variant['id']; ?>">
-                                <label><span>Court</span><select name="court_id" required><?php foreach ($allCourts as $selectCourt): ?><option value="<?php echo (int) $selectCourt['id']; ?>" <?php echo (int) $variant['court_id'] === (int) $selectCourt['id'] ? 'selected' : ''; ?>><?php echo court_h($selectCourt['name']); ?></option><?php endforeach; ?></select></label>
-                                <label><span>Name</span><input type="text" name="name" value="<?php echo court_h($variant['name']); ?>" required></label>
-                                <label><span>Slug</span><input type="text" name="slug" value="<?php echo court_h($variant['slug']); ?>" required></label>
-                                <label><span>Category</span><input type="text" name="category" value="<?php echo court_h($variant['category']); ?>" required></label>
-                                <label><span>Duration</span><input type="text" name="duration_label" value="<?php echo court_h($variant['duration_label']); ?>" required></label>
-                                <label><span>Price</span><input type="number" name="price" step="0.01" min="0" value="<?php echo court_h($variant['price']); ?>" required></label>
-                                <label><span>Limit</span><input type="number" name="participants_limit" min="1" value="<?php echo (int) $variant['participants_limit']; ?>" required></label>
-                                <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $variant['capacity']; ?>" required></label>
-                                <label><span>Sort</span><input type="number" name="sort_order" min="0" value="<?php echo (int) ($variant['sort_order'] ?? 0); ?>"></label>
-                                <label><span>Image</span><input type="text" name="image" value="<?php echo court_h($variant['image'] ?? ''); ?>"></label>
-                                <label class="catalog-check"><input type="checkbox" name="active" value="1" <?php echo $variantActive ? 'checked' : ''; ?>> Active</label>
-                                <button type="submit" name="action" value="update_variant">Save</button>
-                            </form>
-                            <form class="catalog-status-form" method="post">
-                                <?php echo court_csrf_input(); ?>
-                                <input type="hidden" name="variant_id" value="<?php echo (int) $variant['id']; ?>">
-                                <input type="hidden" name="active" value="<?php echo $variantActive ? '0' : '1'; ?>">
-                                <button class="<?php echo $variantActive ? 'danger' : ''; ?>" type="submit" name="action" value="set_variant_active"><?php echo $variantActive ? 'Deactivate' : 'Activate'; ?></button>
-                            </form>
-                        </article>
-                    <?php endforeach; ?>
-                    <?php if (!$allVariants): ?><p class="catalog-empty-state">No booking variants yet. Add the first service above.</p><?php endif; ?>
-                </div>
-            </details>
-
-            <details>
-                <summary><?php echo court_icon($icons, 'edit'); ?> Edit Sessions</summary>
-                <div class="catalog-admin-list">
-                    <?php foreach ($allSessions as $session): $sessionStatus = (string) ($session['status'] ?? 'open'); ?>
-                        <article class="catalog-admin-row">
-                            <form class="catalog-admin-form catalog-inline-form catalog-variant-form" method="post">
-                                <?php echo court_csrf_input(); ?>
-                                <input type="hidden" name="session_id" value="<?php echo (int) $session['id']; ?>">
-                                <label><span>Variant</span><select name="variant_id" required><?php foreach ($allVariants as $variant): ?><option value="<?php echo (int) $variant['id']; ?>" <?php echo (int) $session['variant_id'] === (int) $variant['id'] ? 'selected' : ''; ?>><?php echo court_h($variant['court'] . ' - ' . $variant['name']); ?></option><?php endforeach; ?></select></label>
-                                <label><span>Coach</span><select name="coach_user_id"><option value="">Unassigned</option><?php foreach ($coaches as $coach): ?><option value="<?php echo (int) $coach['id']; ?>" <?php echo (int) ($session['coach_user_id'] ?? 0) === (int) $coach['id'] ? 'selected' : ''; ?>><?php echo court_h($coach['name']); ?></option><?php endforeach; ?></select></label>
-                                <label><span>Date</span><input type="date" name="session_date" value="<?php echo court_h($session['session_date']); ?>" required></label>
-                                <label><span>Start</span><input type="time" name="start_time" value="<?php echo court_h(substr((string) $session['start_time'], 0, 5)); ?>" required></label>
-                                <label><span>End</span><input type="time" name="end_time" value="<?php echo court_h(substr((string) $session['end_time'], 0, 5)); ?>" required></label>
-                                <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $session['capacity']; ?>" required></label>
-                                <label><span>Booked</span><input type="number" name="booked_count" min="0" value="<?php echo (int) $session['booked_count']; ?>" required></label>
-                                <label><span>Status</span><select name="status"><option value="open" <?php echo $sessionStatus === 'open' ? 'selected' : ''; ?>>Open</option><option value="full" <?php echo $sessionStatus === 'full' ? 'selected' : ''; ?>>Full</option><option value="cancelled" <?php echo $sessionStatus === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option><option value="completed" <?php echo $sessionStatus === 'completed' ? 'selected' : ''; ?>>Completed</option></select></label>
-                                <button type="submit" name="action" value="update_session">Save</button>
-                            </form>
-                            <form class="catalog-status-form" method="post">
-                                <?php echo court_csrf_input(); ?>
-                                <input type="hidden" name="session_id" value="<?php echo (int) $session['id']; ?>">
-                                <input type="hidden" name="status" value="<?php echo $sessionStatus === 'cancelled' ? 'open' : 'cancelled'; ?>">
-                                <button class="<?php echo $sessionStatus === 'cancelled' ? '' : 'danger'; ?>" type="submit" name="action" value="set_session_status"><?php echo $sessionStatus === 'cancelled' ? 'Reopen' : 'Disable'; ?></button>
-                            </form>
-                        </article>
-                    <?php endforeach; ?>
-                    <?php if (!$allSessions): ?><p class="catalog-empty-state">No sessions yet. Add the first schedule above.</p><?php endif; ?>
-                </div>
-            </details>
-        </section>
-        <?php endif; ?>
-
-        <?php if ($isSocialPlay): ?>
-        <section class="social-play-layout">
+        <section class="social-play-layout social-play-redesign">
             <div class="social-main-column">
                 <div class="social-actions-row"><a class="bookings-button ghost" href="<?php echo court_public_url('courts.php#social-play'); ?>"><?php echo court_icon($icons, 'eye'); ?> Preview on Website</a><button class="bookings-button primary" type="button">Save Changes</button></div>
                 <section class="social-stat-grid">
-                    <article class="user-stat green"><div><?php echo court_icon($icons, 'users'); ?></div><span>Participants This Month</span><strong><?php echo number_format(max($socialParticipants, 128)); ?></strong><small>↑ 18% vs last month</small></article>
-                    <article class="user-stat orange"><div><?php echo court_icon($icons, 'calendar'); ?></div><span>Sessions This Month</span><strong><?php echo number_format(max(count($socialSessions), 12)); ?></strong><small>↑ 9% vs last month</small></article>
-                    <article class="user-stat pink"><div><?php echo court_icon($icons, 'tag'); ?></div><span>Revenue This Month</span><strong>₱<?php echo number_format(max($socialRevenue, 18400), 0); ?></strong><small>↑ 22% vs last month</small></article>
-                    <article class="user-stat orange"><div><?php echo court_icon($icons, 'bell'); ?></div><span>Upcoming Sessions</span><strong><?php echo number_format(max(count($socialSessions), 4)); ?></strong><small>Next: Jun 10, 6:00 PM</small></article>
+                    <article class="user-stat green"><div><?php echo court_icon($icons, 'users'); ?></div><span>Participants This Month</span><strong><?php echo number_format($socialParticipants); ?></strong><small>Booked players</small></article>
+                    <article class="user-stat pink"><div><?php echo court_icon($icons, 'tag'); ?></div><span>Revenue This Month</span><strong>₱<?php echo number_format($socialRevenue, 0); ?></strong><small>Confirmed event value</small></article>
+                    <article class="user-stat orange"><div><?php echo court_icon($icons, 'calendar'); ?></div><span>Upcoming Events</span><strong><?php echo number_format(count($socialSessions)); ?></strong><small>Scheduled occurrences</small></article>
+                    <article class="user-stat green"><div><?php echo court_icon($icons, 'target'); ?></div><span>Active Event Types</span><strong><?php echo number_format(count(array_filter($socialServices, static fn(array $service): bool => !empty($service['active'])))); ?></strong><small>Available to players</small></article>
                 </section>
 
                 <article class="social-panel">
-                    <header><div><h2>Booking Types</h2><p>Manage available social play products and booking options.</p></div><button type="button"><?php echo court_icon($icons, 'plus'); ?> Add Booking Type</button></header>
-                    <div class="social-type-list">
-                        <?php foreach ($socialServices as $index => $service): ?>
-                            <article class="social-type-card <?php echo $index % 2 ? 'purple' : 'pink'; ?>">
-                                <span><?php echo court_icon($icons, $index % 2 ? 'target' : 'courts'); ?></span>
-                                <div><h3><?php echo htmlspecialchars(strtoupper($service['name'])); ?> <em>₱<?php echo number_format((float) $service['price'], 0); ?></em></h3><p><?php echo $index % 2 ? "Compete in this week's Court Green bracket." : 'Meet new partners, rotate games, and level up with peers.'; ?></p></div>
+                    <header><div><h2>Social Play Event Types</h2><p>Manage available event offerings that players can book.</p></div></header>
+                    <div class="service-list service-table-list">
+                        <div class="service-table-head"><span></span><span>Event</span><span>Category</span><span>Price</span><span>Duration</span><span>Status</span><span>Actions</span></div>
+                        <?php foreach ($socialServices as $service): ?>
+                            <article class="service-card" data-service-card data-service-id="<?php echo (int) $service['id']; ?>">
+                                <span class="service-icon"><?php echo court_icon($icons, service_icon_name($service['name'])); ?></span>
+                                <div class="service-main"><strong data-service-name-text><?php echo court_h($service['name']); ?></strong><small><span data-service-category-line><?php echo court_h((string) $service['category']); ?></span> event</small></div>
                                 <p><small>Capacity</small><strong><?php echo number_format((int) $service['capacity']); ?> Players</strong></p>
-                                <p><small>Duration</small><strong><?php echo htmlspecialchars($service['duration_label']); ?></strong></p>
-                                <p><small>Status</small><b class="status-pill status-<?php echo !empty($service['active']) ? 'success' : 'warning'; ?>"><?php echo !empty($service['active']) ? 'Active' : 'Inactive'; ?></b></p>
-                                <div class="service-actions"><button type="button"><?php echo court_icon($icons, 'edit'); ?> Edit</button><button class="icon-button danger" type="button" aria-label="Archive service"><?php echo court_icon($icons, 'trash'); ?></button></div>
+                                <p><small>Price</small><strong data-service-price-text>₱<?php echo number_format((float) $service['price'], 2); ?></strong></p>
+                                <p><small>Duration</small><strong data-service-duration-text><?php echo court_h($service['duration_label']); ?></strong></p>
+                                <p><small>Status</small><em class="status-pill status-<?php echo !empty($service['active']) ? 'success' : 'warning'; ?>" data-service-status-text><?php echo !empty($service['active']) ? 'Active' : 'Inactive'; ?></em></p>
+                                <div class="service-actions">
+                                    <button class="service-edit-toggle" type="button" data-service-edit-toggle><?php echo court_icon($icons, 'edit'); ?> Edit</button>
+                                    <form method="post"><?php echo court_csrf_input(); ?><input type="hidden" name="variant_id" value="<?php echo (int) $service['id']; ?>"><input type="hidden" name="active" value="<?php echo !empty($service['active']) ? '0' : '1'; ?>"><button class="archive-service-button danger" type="submit" name="action" value="set_variant_active">Archive</button></form>
+                                </div>
+                                <div class="service-edit-panel" data-service-edit-panel>
+                                    <form class="service-edit-form" method="post">
+                                        <?php echo court_csrf_input(); ?>
+                                        <input type="hidden" name="variant_id" value="<?php echo (int) $service['id']; ?>">
+                                        <input type="hidden" name="court_id" value="<?php echo (int) ($service['court_id'] ?? $court['id'] ?? 0); ?>">
+                                        <header class="service-editor-header"><h3>Edit Event Type: <span data-editor-title><?php echo court_h($service['name']); ?></span></h3><p>Update how this Social Play offering appears to players.</p></header>
+                                        <section class="service-form-section"><h4>Basic Information</h4><div class="service-field-grid">
+                                            <label><span>Event Name</span><input type="text" name="name" value="<?php echo court_h($service['name']); ?>" data-service-name required></label>
+                                            <label><span>Category</span><select name="category" data-service-category required><?php foreach (['Tournament', 'Social Play', 'Match Play', 'Community Event'] as $option): ?><option value="<?php echo court_h($option); ?>" <?php echo (string) $service['category'] === $option ? 'selected' : ''; ?>><?php echo court_h($option); ?></option><?php endforeach; ?></select></label>
+                                            <label class="service-field-wide"><span>Description</span><textarea name="description" rows="3" placeholder="Short description"><?php echo court_h($service['description'] ?? ''); ?></textarea></label>
+                                        </div></section>
+                                        <section class="service-form-section"><h4>Pricing</h4><div class="service-field-grid">
+                                            <label><span>Pricing Type</span><select name="pricing_type" required><option value="per_participant" <?php echo ($service['pricing_type'] ?? '') !== 'per_team' ? 'selected' : ''; ?>>Per Participant</option><option value="per_team" <?php echo ($service['pricing_type'] ?? '') === 'per_team' ? 'selected' : ''; ?>>Per Team</option></select></label>
+                                            <label><span>Price</span><input type="number" name="price" step="0.01" min="0.01" value="<?php echo court_h($service['price']); ?>" required></label>
+                                            <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $service['capacity']; ?>" required></label>
+                                            <label><span>Duration</span><input type="text" name="duration_label" value="<?php echo court_h($service['duration_label']); ?>" required></label>
+                                            <input type="hidden" name="participants_limit" value="<?php echo (int) $service['participants_limit']; ?>">
+                                        </div></section>
+                                        <section class="service-form-section"><h4>Visibility</h4><div class="service-field-grid service-field-grid-small"><label><span>Status</span><select name="active"><option value="1" <?php echo !empty($service['active']) ? 'selected' : ''; ?>>Active</option><option value="0" <?php echo empty($service['active']) ? 'selected' : ''; ?>>Inactive</option></select></label></div></section>
+                                        <details class="service-form-section service-advanced-settings"><summary>Show Advanced Settings</summary><div class="service-field-grid"><label><span>Slug</span><input type="text" name="slug" value="<?php echo court_h($service['slug']); ?>" data-service-slug required></label><label><span>Sort Order</span><input type="number" name="sort_order" min="0" value="<?php echo (int) ($service['sort_order'] ?? 0); ?>"></label></div></details>
+                                        <input type="hidden" name="image" value="<?php echo court_h($service['image'] ?? ''); ?>">
+                                        <div class="service-form-feedback" data-service-form-feedback role="status" aria-live="polite"></div>
+                                        <div class="service-form-actions"><button class="bookings-button ghost service-cancel-button" type="button" data-close-service-editor>Cancel</button><button class="bookings-button primary" type="submit" name="action" value="update_variant">Save Changes</button></div>
+                                    </form>
+                                </div>
                             </article>
                         <?php endforeach; ?>
                     </div>
                 </article>
 
                 <article class="social-panel">
-                    <header><div><h2>Upcoming Sessions</h2><p>Manage and schedule upcoming social play sessions.</p></div><button type="button"><?php echo court_icon($icons, 'plus'); ?> Add New Session</button></header>
-                    <div class="social-session-table">
-                        <div class="social-session-row head"><span>Date</span><span>Time</span><span>Session Type</span><span>Court</span><span>Players</span><span>Status</span><span>Actions</span></div>
-                        <?php foreach ($socialSessions as $session): ?>
-                            <div class="social-session-row"><span><?php echo court_icon($icons, 'calendar'); ?> <strong><?php echo htmlspecialchars($session['session_date']); ?></strong></span><span><?php echo court_icon($icons, 'bell'); ?> <?php echo htmlspecialchars($session['session_time']); ?></span><span><em class="social-chip"><?php echo htmlspecialchars($session['name']); ?></em></span><span><em class="court-chip"><?php echo htmlspecialchars($session['court_name']); ?></em></span><span><?php echo number_format((int) $session['booked_count']); ?> / <?php echo number_format((int) ($session['variant_capacity'] ?? $defaultSessionCapacity)); ?></span><span><b class="status-pill status-success">Open</b></span><span class="social-row-actions"><button><?php echo court_icon($icons, 'edit'); ?></button><button><?php echo court_icon($icons, 'plus'); ?></button><button><?php echo court_icon($icons, 'more'); ?></button></span></div>
-                        <?php endforeach; ?>
-                        <?php if (!$socialSessions): ?><div class="social-session-row"><span>No sessions scheduled yet.</span><span></span><span></span><span></span><span></span><span></span><span></span></div><?php endif; ?>
+                    <header><div><h2>Upcoming Social Play Events</h2><p>Scheduled Social Play occurrences.</p></div><button class="service-add-toggle" type="button" data-social-event-add-toggle><?php echo court_icon($icons, 'plus'); ?> Add Event</button></header>
+                    <div class="service-add-panel" data-social-event-add-panel>
+                        <form class="service-edit-form" method="post">
+                            <?php echo court_csrf_input(); ?>
+                            <header class="service-editor-header"><h3>Add Social Play Event</h3><p>Create a scheduled occurrence from an active event type.</p></header>
+                            <section class="service-form-section"><h4>Event Schedule</h4><div class="service-field-grid">
+                                <label><span>Event Type</span><select name="variant_id" required><?php foreach ($socialServices as $service): ?><option value="<?php echo (int) $service['id']; ?>"><?php echo court_h($service['name']); ?></option><?php endforeach; ?></select></label>
+                                <label><span>Coach</span><select name="coach_user_id"><option value="">Unassigned</option><?php foreach ($coaches as $coach): ?><option value="<?php echo (int) $coach['id']; ?>"><?php echo court_h($coach['name']); ?></option><?php endforeach; ?></select></label>
+                                <label><span>Date</span><input type="date" name="session_date" value="<?php echo date('Y-m-d'); ?>" required></label>
+                                <label><span>Start Time</span><input type="time" name="start_time" value="09:00" required></label>
+                                <label><span>End Time</span><input type="time" name="end_time" value="10:00" required></label>
+                                <label><span>Capacity</span><input type="number" name="capacity" min="1" value="16" required></label>
+                                <input type="hidden" name="booked_count" value="0">
+                                <label><span>Status</span><select name="status"><option value="open">Open</option><option value="full">Full</option><option value="cancelled">Closed</option></select></label>
+                            </div></section>
+                            <div class="service-form-actions"><button class="bookings-button ghost service-cancel-button" type="button" data-social-event-add-cancel>Cancel</button><button class="bookings-button primary" type="submit" name="action" value="create_session">Create Event</button></div>
+                        </form>
                     </div>
-                    <a class="social-view-all" href="#">View All Sessions <?php echo court_icon($icons, 'arrow'); ?></a>
+                    <div class="social-session-table">
+                        <div class="social-session-row head"><span>Event</span><span>Date</span><span>Time</span><span>Court</span><span>Capacity</span><span>Booked</span><span>Status</span><span>Actions</span></div>
+                        <?php foreach ($socialSessions as $session): ?>
+                            <div class="social-session-row"><span><em class="social-chip"><?php echo htmlspecialchars($session['name']); ?></em></span><span><?php echo court_icon($icons, 'calendar'); ?> <strong><?php echo htmlspecialchars($session['session_date']); ?></strong></span><span><?php echo court_icon($icons, 'bell'); ?> <?php echo htmlspecialchars($session['session_time']); ?></span><span><em class="court-chip"><?php echo htmlspecialchars($session['court_name']); ?></em></span><span><?php echo number_format((int) ($session['variant_capacity'] ?? 16)); ?></span><span><?php echo number_format((int) $session['booked_count']); ?></span><span><b class="status-pill status-success">Open</b></span><span class="social-row-actions"><button><?php echo court_icon($icons, 'edit'); ?> Edit</button><button>Archive</button></span></div>
+                        <?php endforeach; ?>
+                        <?php if (!$socialSessions): ?><div class="social-session-row"><span>No events scheduled yet.</span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><?php endif; ?>
+                    </div>
                 </article>
             </div>
-
-            <aside class="social-content-column">
-                <article class="court-photo-card"><header><h2>Hero Image</h2><button type="button"><?php echo court_icon($icons, 'plus'); ?> Change Photo</button></header><div class="hero-photo social-hero"><img src="<?php echo court_asset('img/court/social play-2.png'); ?>" alt="Social Play hero"></div></article>
-                <article class="court-photo-card"><header><h2>Gallery</h2><button type="button">Manage Photos</button></header><div class="gallery-grid social-gallery"><?php foreach ($socialGallery as $photo): ?><img src="<?php echo court_asset($photo); ?>" alt="Social Play photo"><?php endforeach; ?></div></article>
-                <details class="website-preview-card social-preview-card"><summary>Website Preview</summary><div class="social-preview"><h3>SOCIAL PLAY</h3><p>Community-driven pickleball sessions</p><?php foreach ($socialServices as $index => $service): ?><article><span><?php echo court_icon($icons, $index % 2 ? 'target' : 'courts'); ?></span><div><strong><?php echo htmlspecialchars(strtoupper($service['name'])); ?></strong><small><?php echo $index % 2 ? "Compete in this week's Court Green bracket." : 'Meet new partners, rotate games, and level up with peers.'; ?></small></div><b>₱<?php echo number_format((float) $service['price'], 0); ?><small>/ session</small></b></article><?php endforeach; ?><button type="button">Book Now</button></div><footer><span>This is how Social Play looks on the public website.</span><a href="<?php echo court_public_url('courts.php#social-play'); ?>">View Full Page</a></footer></details>
-            </aside>
         </section>
         <?php else: ?>
         <section class="court-actions-row">
@@ -1447,6 +1350,30 @@ $dashboardNav = [
         });
     });
 
+    document.querySelectorAll('[data-social-event-add-toggle]').forEach(button => {
+        button.setAttribute('aria-expanded', 'false');
+        button.addEventListener('click', () => {
+            const panel = document.querySelector('[data-social-event-add-panel]');
+            if (!panel) return;
+            const willOpen = !panel.classList.contains('is-open');
+            closeOtherCards(null);
+            closeAddPanel();
+            panel.classList.toggle('is-open', willOpen);
+            button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        });
+    });
+
+    document.querySelectorAll('[data-social-event-add-cancel]').forEach(button => {
+        button.addEventListener('click', () => {
+            const panel = document.querySelector('[data-social-event-add-panel]');
+            const toggle = document.querySelector('[data-social-event-add-toggle]');
+            const form = button.closest('form');
+            if (form) form.reset();
+            if (panel) panel.classList.remove('is-open');
+            if (toggle) toggle.setAttribute('aria-expanded', 'false');
+        });
+    });
+
     document.querySelectorAll('.service-edit-form, .service-add-form').forEach(form => {
         const card = form.closest('[data-service-card]');
         const manager = form.closest('.catalog-manager-card');
@@ -1550,12 +1477,18 @@ $dashboardNav = [
 
                 const variant = payload.variant || {};
                 if (card) {
-                    card.querySelector('[data-service-name-text]').textContent = variant.name || data.get('name') || 'Service';
-                    card.querySelector('[data-editor-title]').textContent = variant.name || data.get('name') || 'Service';
-                    card.querySelector('[data-service-category-text]').textContent = variant.category || data.get('category') || '';
-                    card.querySelector('[data-service-category-line]').textContent = variant.category || data.get('category') || '';
-                    card.querySelector('[data-service-price-text]').textContent = variant.priceLabel || money(data.get('price'));
-                    card.querySelector('[data-service-duration-text]').textContent = variant.duration || data.get('duration_label') || '';
+                    const nameText = card.querySelector('[data-service-name-text]');
+                    const editorTitle = card.querySelector('[data-editor-title]');
+                    const categoryText = card.querySelector('[data-service-category-text]');
+                    const categoryLine = card.querySelector('[data-service-category-line]');
+                    const priceText = card.querySelector('[data-service-price-text]');
+                    const durationText = card.querySelector('[data-service-duration-text]');
+                    if (nameText) nameText.textContent = variant.name || data.get('name') || 'Service';
+                    if (editorTitle) editorTitle.textContent = variant.name || data.get('name') || 'Service';
+                    if (categoryText) categoryText.textContent = variant.category || data.get('category') || '';
+                    if (categoryLine) categoryLine.textContent = variant.category || data.get('category') || '';
+                    if (priceText) priceText.textContent = variant.priceLabel || money(data.get('price'));
+                    if (durationText) durationText.textContent = variant.duration || data.get('duration_label') || '';
                     const status = card.querySelector('[data-service-status-text]');
                     if (status) {
                         const active = Boolean(variant.active ?? (data.get('active') === '1'));
