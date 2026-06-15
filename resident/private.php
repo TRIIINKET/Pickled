@@ -4,7 +4,7 @@ declare(strict_types=1);
 $pageTitle  = 'Private Events - Pickled';
 $activePage = 'private.php';
 $basePath   = '../';
-$extraHead  = '<link rel="stylesheet" href="../assets/css/private.css?v=20260615d"/>';
+$extraHead  = '<link rel="stylesheet" href="../assets/css/private.css?v=20260615a"/>';
 
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
@@ -52,8 +52,11 @@ include __DIR__ . '/../includes/header.php';
 
   <section class="private-service" id="packages">
     <div class="private-service__inner">
-      <h2>Private coaching packages</h2>
-      <p>Choose an available private package and send the team your preferred goals, timing, and group details.</p>
+      <div class="private-service__heading">
+        <p>Premium Packages</p>
+        <h2>Private packages</h2>
+        <span>Choose an available package and send the team your preferred goals, timing, and group details.</span>
+      </div>
 
       <?php if ($errorMsg !== ''): ?>
         <p class="private-alert private-alert--error"><?= private_h($errorMsg) ?></p>
@@ -63,19 +66,37 @@ include __DIR__ . '/../includes/header.php';
         <p>No private packages are available yet.</p>
       <?php endif; ?>
 
+      <div class="private-package-grid">
       <?php foreach ($packages as $package): ?>
         <article class="private-package-card">
+          <div class="private-package-card__head">
+            <span><?= private_h($package['category'] ?? 'Private Package') ?></span>
+            <strong>PHP <?= number_format((float) $package['price'], 2) ?></strong>
+          </div>
           <h3><?= private_h($package['title']) ?></h3>
           <p><?= private_h($package['description']) ?></p>
-          <p class="private-package-card__meta">
+          <p>
             <strong>PHP <?= number_format((float) $package['price'], 2) ?></strong>
             <span><?= private_h($package['duration']) ?></span>
             <span>Coach: <?= private_h($package['coach_name'] ?? 'Assigned coach') ?></span>
           </p>
 
-          <a href="<?= private_h(pickled_frontend_url('resident/contact.php')) ?>" class="private-service__button">Send inquiry</a>
+          <?php if ($isPlayer): ?>
+            <form method="post">
+              <input type="hidden" name="csrf_token" value="<?= private_h(pickled_csrf_token()) ?>">
+              <input type="hidden" name="private_package_id" value="<?= (int) $package['id'] ?>">
+              <label>
+                Inquiry message
+                <textarea name="message" rows="4" required placeholder="Tell us your preferred date, group size, and goals."></textarea>
+              </label>
+              <button class="private-service__button" type="submit">Send inquiry</button>
+            </form>
+          <?php else: ?>
+            <a href="../auth/login.php?redirect=resident/private.php" class="private-service__button">Log in to inquire</a>
+          <?php endif; ?>
         </article>
       <?php endforeach; ?>
+      </div>
     </div>
   </section>
 </main>
