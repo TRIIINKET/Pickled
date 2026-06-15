@@ -626,6 +626,9 @@ try {
     $errorMsg = $errorMsg ?: 'Catalog data is unavailable. Please apply the Court & Service Catalog schema.';
 }
 
+$defaultCatalogCapacity = max(1, (int) ($court['capacity'] ?? $allCourts[0]['capacity'] ?? 1));
+$defaultSessionCapacity = max(1, (int) ($allVariants[0]['capacity'] ?? $defaultCatalogCapacity));
+
 $pageTitle = $isSocialPlay ? 'Social Play' : (string) ($court['name'] ?? $pageTitle);
 $socialSessions = court_rows($pdo, "
     SELECT s.*,
@@ -781,7 +784,7 @@ $dashboardNav = [
                     <label><span>Duration</span><input type="text" name="duration_label" placeholder="1 hour" required></label>
                     <label><span>Price</span><input type="number" name="price" step="0.01" min="0" value="0.00" required></label>
                     <label><span>Limit</span><input type="number" name="participants_limit" min="1" value="1" required></label>
-                    <label><span>Capacity</span><input type="number" name="capacity" min="1" value="8" required></label>
+                    <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $defaultCatalogCapacity; ?>" required></label>
                     <label><span>Sort</span><input type="number" name="sort_order" min="0" value="0"></label>
                     <label><span>Image</span><input type="text" name="image" placeholder="assets/img/court/example.png"></label>
                     <label class="catalog-check"><input type="checkbox" name="active" value="1" checked> Active</label>
@@ -798,7 +801,7 @@ $dashboardNav = [
                     <label><span>Date</span><input type="date" name="session_date" value="<?php echo date('Y-m-d'); ?>" required></label>
                     <label><span>Start</span><input type="time" name="start_time" value="09:00" required></label>
                     <label><span>End</span><input type="time" name="end_time" value="10:00" required></label>
-                    <label><span>Capacity</span><input type="number" name="capacity" min="1" value="8" required></label>
+                    <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $defaultSessionCapacity; ?>" required></label>
                     <label><span>Booked</span><input type="number" name="booked_count" min="0" value="0" required></label>
                     <label><span>Status</span><select name="status"><option value="open">Open</option><option value="full">Full</option><option value="cancelled">Cancelled</option><option value="completed">Completed</option></select></label>
                     <button class="bookings-button primary" type="submit" name="action" value="create_session">Add Session</button>
@@ -927,7 +930,7 @@ $dashboardNav = [
                     <div class="social-session-table">
                         <div class="social-session-row head"><span>Date</span><span>Time</span><span>Session Type</span><span>Court</span><span>Players</span><span>Status</span><span>Actions</span></div>
                         <?php foreach ($socialSessions as $session): ?>
-                            <div class="social-session-row"><span><?php echo court_icon($icons, 'calendar'); ?> <strong><?php echo htmlspecialchars($session['session_date']); ?></strong></span><span><?php echo court_icon($icons, 'bell'); ?> <?php echo htmlspecialchars($session['session_time']); ?></span><span><em class="social-chip"><?php echo htmlspecialchars($session['name']); ?></em></span><span><em class="court-chip"><?php echo htmlspecialchars($session['court_name']); ?></em></span><span><?php echo number_format((int) $session['booked_count']); ?> / <?php echo number_format((int) ($session['variant_capacity'] ?? 16)); ?></span><span><b class="status-pill status-success">Open</b></span><span class="social-row-actions"><button><?php echo court_icon($icons, 'edit'); ?></button><button><?php echo court_icon($icons, 'plus'); ?></button><button><?php echo court_icon($icons, 'more'); ?></button></span></div>
+                            <div class="social-session-row"><span><?php echo court_icon($icons, 'calendar'); ?> <strong><?php echo htmlspecialchars($session['session_date']); ?></strong></span><span><?php echo court_icon($icons, 'bell'); ?> <?php echo htmlspecialchars($session['session_time']); ?></span><span><em class="social-chip"><?php echo htmlspecialchars($session['name']); ?></em></span><span><em class="court-chip"><?php echo htmlspecialchars($session['court_name']); ?></em></span><span><?php echo number_format((int) $session['booked_count']); ?> / <?php echo number_format((int) ($session['variant_capacity'] ?? $defaultSessionCapacity)); ?></span><span><b class="status-pill status-success">Open</b></span><span class="social-row-actions"><button><?php echo court_icon($icons, 'edit'); ?></button><button><?php echo court_icon($icons, 'plus'); ?></button><button><?php echo court_icon($icons, 'more'); ?></button></span></div>
                         <?php endforeach; ?>
                         <?php if (!$socialSessions): ?><div class="social-session-row"><span>No sessions scheduled yet.</span><span></span><span></span><span></span><span></span><span></span><span></span></div><?php endif; ?>
                     </div>
@@ -1379,7 +1382,9 @@ $dashboardNav = [
         const pricing = form.querySelector('[data-pricing-type]');
         const participantsLabel = form.querySelector('[data-participants-field]');
         const participants = participantsLabel?.querySelector('input');
+        const capacity = form.querySelector('input[name="capacity"]');
         const coach = form.querySelector('[data-coach-required]');
+        const capacityLimit = () => String(Math.max(1, Number(capacity?.value || participants?.value || 1)));
 
         const setValues = () => {
             const isCourtRental = category.includes('court') || name.includes('rental');
@@ -1402,7 +1407,7 @@ $dashboardNav = [
                 if (participants) participants.value = '2';
             } else if (isKidsOrYouth || isLesson) {
                 if (pricing) pricing.value = 'per_participant';
-                if (participants) participants.value = isKidsOrYouth ? '8' : (participants.value || '1');
+                if (participants) participants.value = participants.value || capacityLimit();
                 if (coach) coach.value = 'yes';
             } else if (isTraining) {
                 if (pricing) pricing.value = 'per_session';

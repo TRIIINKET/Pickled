@@ -52,7 +52,14 @@ final class AvailabilityService
         return [
             'variant' => [
                 'slug' => $variant['slug'],
+                'name' => $variant['name'],
+                'price' => (float) $variant['price'],
+                'duration_label' => $variant['duration_label'],
+                'participants_limit' => (int) $variant['participants_limit'],
                 'capacity' => (int) $variant['capacity'],
+                'court' => $variant['court'],
+                'court_slug' => $variant['court_slug'],
+                'court_capacity' => (int) ($variant['court_capacity'] ?? 0),
             ],
             'coaches' => array_map(static fn(array $coach): array => [
                 'id' => (int) $coach['id'],
@@ -117,7 +124,14 @@ final class AvailabilityService
         return [
             'variant' => [
                 'slug' => $variant['slug'],
+                'name' => $variant['name'],
+                'price' => (float) $variant['price'],
+                'duration_label' => $variant['duration_label'],
+                'participants_limit' => (int) $variant['participants_limit'],
                 'capacity' => (int) $variant['capacity'],
+                'court' => $variant['court'],
+                'court_slug' => $variant['court_slug'],
+                'court_capacity' => (int) ($variant['court_capacity'] ?? 0),
             ],
             'coaches' => array_map(static fn(array $coach): array => [
                 'id' => (int) $coach['id'],

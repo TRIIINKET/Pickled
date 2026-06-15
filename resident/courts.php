@@ -3,6 +3,9 @@ require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../app/services/CatalogService.php';
 require_once __DIR__ . '/../app/services/SchedulingService.php';
 pickled_init_csrf();
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 $pageTitle  = 'Courts - Pickled';
 $activePage = 'courts.php';
 $basePath   = '../';
@@ -25,6 +28,9 @@ function pickled_catalog_option(array $variant): array
   $name = (string) ($variant['name'] ?? 'Booking Service');
   $price = (float) ($variant['price'] ?? 0);
   $slug = (string) ($variant['slug'] ?? '');
+  $participantsLimit = max(1, (int) ($variant['participants_limit'] ?? 1));
+  $capacity = max(1, (int) ($variant['capacity'] ?? $participantsLimit));
+  $maxPlayers = max(1, min($participantsLimit, $capacity));
   $lower = strtolower($slug . ' ' . $name);
   $option = [
     'variant' => $slug,
@@ -34,11 +40,38 @@ function pickled_catalog_option(array $variant): array
     'court' => strtoupper((string) ($variant['court'] ?? 'Court')),
     'title' => strtoupper($name) . ' ₱' . number_format($price, 0),
     'note' => pickled_catalog_note($variant),
+    'participantsLimit' => $participantsLimit,
+    'capacity' => $capacity,
+    'maxPlayers' => $maxPlayers,
   ];
   if (str_contains($lower, 'coach') || str_contains($lower, 'private') || str_contains($lower, 'lesson') || str_contains($lower, 'training') || str_contains($lower, 'class') || str_contains($lower, 'kids') || str_contains($lower, 'youth') || str_contains($lower, 'parent')) {
     $option['dateMode'] = 'coach';
   }
   return $option;
+}
+
+function pickled_booking_rate_attrs(array $rate, bool $bookingButton = false): string
+{
+  $attrs = [
+    ($bookingButton ? 'data-booking-variant' : 'data-variant') => $rate['variant'] ?? '',
+    ($bookingButton ? 'data-booking-label' : 'data-label') => $rate['label'] ?? '',
+    ($bookingButton ? 'data-booking-note' : 'data-note') => $rate['note'] ?? '',
+    ($bookingButton ? 'data-booking-price' : 'data-price') => $rate['price'] ?? 0,
+    ($bookingButton ? 'data-booking-duration' : 'data-duration') => $rate['duration'] ?? '',
+    ($bookingButton ? 'data-booking-court' : 'data-court') => $rate['court'] ?? '',
+    'data-participants-limit' => $rate['participantsLimit'] ?? 1,
+    'data-capacity' => $rate['capacity'] ?? 1,
+    'data-max-players' => $rate['maxPlayers'] ?? 1,
+  ];
+  if (!empty($rate['dateMode'])) {
+    $attrs['data-date-mode'] = $rate['dateMode'];
+  }
+
+  $html = [];
+  foreach ($attrs as $name => $value) {
+    $html[] = $name . '="' . htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8') . '"';
+  }
+  return implode(' ', $html);
 }
 
 function pickled_court_image_path(string $path): string
@@ -169,13 +202,26 @@ $defaultRate = $courtRateCatalog[$defaultCourtKey][0] ?? [
   'court' => $defaultCourtAssets['title'],
   'title' => 'COURT BOOKING',
   'note' => 'No active booking services are available yet.',
+  'participantsLimit' => max(1, (int) ($defaultCourtAssets['capacity'] ?? 1)),
+  'capacity' => max(1, (int) ($defaultCourtAssets['capacity'] ?? 1)),
+  'maxPlayers' => max(1, (int) ($defaultCourtAssets['capacity'] ?? 1)),
 ];
 $privateCoachRate = $defaultRate;
+$kidsClassRate = $defaultRate;
 foreach ($courtRateCatalog as $rates) {
   foreach ($rates as $rate) {
     $search = strtolower(($rate['variant'] ?? '') . ' ' . ($rate['label'] ?? ''));
     if (str_contains($search, 'coach') || str_contains($search, 'private')) {
       $privateCoachRate = $rate;
+      break 2;
+    }
+  }
+}
+foreach ($courtRateCatalog as $rates) {
+  foreach ($rates as $rate) {
+    $search = strtolower(($rate['variant'] ?? '') . ' ' . ($rate['label'] ?? ''));
+    if (str_contains($search, 'kids') || str_contains($search, 'youth') || str_contains($search, 'class')) {
+      $kidsClassRate = $rate;
       break 2;
     }
   }
@@ -264,7 +310,7 @@ foreach ($coachRows as $index => $coachRow) {
 
         <div class="rate-list" aria-label="Court rates">
           <?php foreach (($courtRateCatalog[$defaultCourtKey] ?? []) as $index => $rate): ?>
-            <button class="rate-option <?= $index === 0 ? 'is-selected' : '' ?>" type="button" data-variant="<?= htmlspecialchars($rate['variant']) ?>" data-label="<?= htmlspecialchars($rate['label']) ?>" data-note="<?= htmlspecialchars($rate['note']) ?>" data-price="<?= htmlspecialchars((string) $rate['price']) ?>" data-duration="<?= htmlspecialchars($rate['duration']) ?>" data-court="<?= htmlspecialchars($rate['court']) ?>" <?= !empty($rate['dateMode']) ? 'data-date-mode="' . htmlspecialchars($rate['dateMode']) . '"' : '' ?>>
+            <button class="rate-option <?= $index === 0 ? 'is-selected' : '' ?>" type="button" <?= pickled_booking_rate_attrs($rate) ?>>
               <strong><?= htmlspecialchars($rate['title']) ?></strong>
               <span><?= htmlspecialchars($rate['note']) ?></span>
             </button>
@@ -306,8 +352,8 @@ foreach ($coachRows as $index => $coachRow) {
             <div>
               <p>Pickled Classes</p>
               <h3>PRIVATE AND SEMI-PRIVATE LESSON</h3>
-              <span>Up to 6 players with an internationally certified coach</span>
-              <button class="book-trigger" type="button" data-tooltip="Order now" data-booking-variant="<?= htmlspecialchars($privateCoachRate['variant']) ?>" data-booking-label="<?= htmlspecialchars($privateCoachRate['label']) ?>" data-booking-note="<?= htmlspecialchars($privateCoachRate['note']) ?>" data-booking-price="<?= htmlspecialchars((string) $privateCoachRate['price']) ?>" data-booking-duration="<?= htmlspecialchars($privateCoachRate['duration']) ?>" data-booking-court="<?= htmlspecialchars($privateCoachRate['court']) ?>" data-date-mode="<?= htmlspecialchars($privateCoachRate['dateMode'] ?? 'coach') ?>">Book now</button>
+              <span>Up to <?= (int) ($privateCoachRate['maxPlayers'] ?? 1) ?> players with an internationally certified coach</span>
+              <button class="book-trigger" type="button" data-tooltip="Order now" <?= pickled_booking_rate_attrs($privateCoachRate + ['dateMode' => $privateCoachRate['dateMode'] ?? 'coach'], true) ?>>Book now</button>
             </div>
           </article>
           <article class="class-slide" data-class-slide hidden>
@@ -315,8 +361,8 @@ foreach ($coachRows as $index => $coachRow) {
             <div>
               <p>Pickle &amp; Classes</p>
               <h3>KIDS</h3>
-              <span>4-8 players with internationally certified coach</span>
-              <button class="book-trigger" type="button" data-tooltip="Order now">Book now</button>
+              <span>Up to <?= (int) ($kidsClassRate['maxPlayers'] ?? 1) ?> players with internationally certified coach</span>
+              <button class="book-trigger" type="button" data-tooltip="Order now" <?= pickled_booking_rate_attrs($kidsClassRate + ['dateMode' => $kidsClassRate['dateMode'] ?? 'coach'], true) ?>>Book now</button>
             </div>
           </article>
         </div>
@@ -347,7 +393,7 @@ foreach ($coachRows as $index => $coachRow) {
         <p>Pickle &amp;</p>
         <h2>COACHES</h2>
         <span>Our team is a diverse group of internationally certified coaches united by a common goal, working together harmoniously to achieve success.</span>
-        <button class="book-trigger coaches-book" type="button" data-tooltip="Order now" data-booking-variant="<?= htmlspecialchars($privateCoachRate['variant']) ?>" data-booking-label="<?= htmlspecialchars($privateCoachRate['label']) ?>" data-booking-note="<?= htmlspecialchars($privateCoachRate['note']) ?>" data-booking-price="<?= htmlspecialchars((string) $privateCoachRate['price']) ?>" data-booking-duration="<?= htmlspecialchars($privateCoachRate['duration']) ?>" data-booking-court="<?= htmlspecialchars($privateCoachRate['court']) ?>" data-date-mode="<?= htmlspecialchars($privateCoachRate['dateMode'] ?? 'coach') ?>">BOOK NOW ›</button>
+        <button class="book-trigger coaches-book" type="button" data-tooltip="Order now" <?= pickled_booking_rate_attrs($privateCoachRate + ['dateMode' => $privateCoachRate['dateMode'] ?? 'coach'], true) ?>>BOOK NOW ›</button>
         <div class="coach-filter">
           <button class="is-active" type="button" data-coach-filter="all">All</button>
           <button type="button" data-coach-filter="mens">Men</button>
@@ -419,7 +465,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
         </div>
         <label class="person-row">
           <span>Person <span id="personCount">1</span></span>
-          <input id="personInput" type="range" min="1" max="8" value="1" />
+          <input id="personInput" type="range" min="1" max="<?= (int) ($defaultRate['maxPlayers'] ?? 1) ?>" value="1" />
           <strong id="bookingTotal">₱600.00</strong>
         </label>
         <label class="coach-row" id="coachRow" hidden>
@@ -573,6 +619,9 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     price: <?= json_encode((float) $defaultRate['price']) ?>,
     duration: <?= json_encode($defaultRate['duration'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
     court: <?= json_encode($defaultRate['court'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+    participantsLimit: <?= json_encode((int) ($defaultRate['participantsLimit'] ?? 1)) ?>,
+    capacity: <?= json_encode((int) ($defaultRate['capacity'] ?? 1)) ?>,
+    maxQty: <?= json_encode((int) ($defaultRate['maxPlayers'] ?? 1)) ?>,
     date: '',
     selectedTimes: [],
     qty: 1,
@@ -601,6 +650,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
   const courtThumbs = document.querySelector('.court-thumbs');
   const courtMainImage = document.getElementById('courtMainImage');
   const courtGalleryCatalog = <?= json_encode($courtGalleryCatalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+  const personInput = document.getElementById('personInput');
   const coachRow = document.getElementById('coachRow');
   const coachSelect = document.getElementById('coachSelect');
   const coachSchedule = document.getElementById('coachSchedule');
@@ -664,11 +714,68 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     return availability.dates[state.date] || null;
   }
 
+  function numericLimit(value, fallback){
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? Math.floor(number) : fallback;
+  }
+
+  function applyQuantityFields(source){
+    state.participantsLimit = numericLimit(source.participantsLimit ?? source.participants_limit, state.participantsLimit || 1);
+    state.capacity = numericLimit(source.capacity, state.capacity || state.participantsLimit || 1);
+    state.maxQty = numericLimit(source.maxPlayers ?? source.max_players, Math.min(state.participantsLimit, state.capacity));
+    state.maxQty = Math.max(1, Math.min(state.maxQty, state.participantsLimit, state.capacity));
+  }
+
+  function currentQuantityLimit(){
+    let limit = Math.max(1, Number(state.maxQty || state.participantsLimit || state.capacity || 1));
+    const dayAvailability = selectedDayAvailability();
+    if (dayAvailability && dayAvailability.slots && state.selectedTimes.length) {
+      state.selectedTimes.forEach(time => {
+        const slot = dayAvailability.slots[time];
+        if (slot && Number.isFinite(Number(slot.remaining))) {
+          limit = Math.min(limit, Math.max(1, Number(slot.remaining)));
+        }
+      });
+    }
+    return Math.max(1, Math.floor(limit));
+  }
+
+  function syncQuantityInput(){
+    const limit = currentQuantityLimit();
+    personInput.max = String(limit);
+    state.qty = Math.max(1, Math.min(Number(state.qty || 1), limit));
+    personInput.value = String(state.qty);
+  }
+
+  function syncVariantFromAvailability(payload){
+    const variant = payload && payload.variant ? payload.variant : {};
+    if (!variant.slug) return;
+    if (variant.name) state.label = String(variant.name).toUpperCase();
+    if (variant.price !== undefined) {
+      state.price = Number(variant.price || state.price);
+      document.getElementById('selectedCourtPrice').textContent = money(state.price);
+    }
+    if (variant.duration_label) state.duration = variant.duration_label;
+    if (variant.court) state.court = String(variant.court).toUpperCase();
+    applyQuantityFields({
+      participantsLimit: variant.participants_limit,
+      capacity: variant.capacity,
+      maxPlayers: Math.min(
+        numericLimit(variant.participants_limit, state.participantsLimit || 1),
+        numericLimit(variant.capacity, state.capacity || 1)
+      )
+    });
+    if (variant.court_capacity !== undefined) {
+      document.getElementById('selectedCourtCapacity').textContent = numericLimit(variant.court_capacity, state.capacity);
+    }
+  }
+
   async function loadAvailability(){
     const year = visibleMonth.getFullYear();
     const month = visibleMonth.getMonth() + 1;
-    const response = await fetch(availabilityEndpoint + '?variant=' + encodeURIComponent(state.variant) + '&year=' + year + '&month=' + month);
+    const response = await fetch(availabilityEndpoint + '?variant=' + encodeURIComponent(state.variant) + '&year=' + year + '&month=' + month + '&_=' + Date.now(), { cache: 'no-store' });
     availability = await response.json();
+    syncVariantFromAvailability(availability);
     renderCalendar();
     updateTimeSlots();
     renderTimeLabels();
@@ -735,6 +842,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
   }
 
   function updateTotals(){
+    syncQuantityInput();
     const hours = Math.max(state.selectedTimes.length, 1);
     const subtotal = state.price * state.qty * hours;
     const fee = subtotal * state.feeRate;
@@ -796,6 +904,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       }
     }
     state.selectedTimes = selected;
+    syncQuantityInput();
   }
 
   function applyBookingDataset(button){
@@ -807,6 +916,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     state.duration = button.dataset.bookingDuration || state.duration;
     state.court = button.dataset.bookingCourt || state.court;
     state.dateMode = button.dataset.dateMode || 'daily';
+    applyQuantityFields(button.dataset);
     document.getElementById('selectedCourtPrice').textContent = money(state.price);
   }
 
@@ -821,6 +931,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     state.duration = button.dataset.duration;
     state.court = button.dataset.court;
     state.dateMode = button.dataset.dateMode || 'daily';
+    applyQuantityFields(button.dataset);
     document.getElementById('selectedCourtPrice').textContent = money(state.price);
     updateBookingCopy();
   }
@@ -844,6 +955,9 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       button.dataset.price = String(option.price);
       button.dataset.duration = option.duration;
       button.dataset.court = option.court;
+      button.dataset.participantsLimit = String(option.participantsLimit || 1);
+      button.dataset.capacity = String(option.capacity || 1);
+      button.dataset.maxPlayers = String(option.maxPlayers || 1);
       if (option.dateMode) button.dataset.dateMode = option.dateMode;
 
       const title = document.createElement('strong');
@@ -925,6 +1039,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       state.duration = button.dataset.duration;
       state.court = button.dataset.court;
       state.dateMode = button.dataset.dateMode || 'daily';
+      applyQuantityFields(button.dataset);
       document.getElementById('selectedCourtPrice').textContent = money(state.price);
       updateBookingCopy();
       openModal();
@@ -988,7 +1103,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
   document.querySelector('.booking-close').addEventListener('click', closeModal);
   modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
 
-  document.getElementById('personInput').addEventListener('input', event => {
+  personInput.addEventListener('input', event => {
     state.qty = Number(event.target.value);
     updateTotals();
   });

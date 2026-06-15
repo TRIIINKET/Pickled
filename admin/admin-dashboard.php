@@ -122,22 +122,15 @@ $popularTotal = array_sum(array_map(fn($row) => (int) $row['total_quantity'], $p
 
 $courtRows = admin_rows($pdo, "
     SELECT c.name, c.slug,
+           c.capacity AS total_capacity,
            COALESCE(SUM(CASE WHEN bi.booking_date = ? THEN bi.quantity ELSE 0 END), 0) AS today_booked,
-           COALESCE(SUM(s.capacity), 0) AS total_capacity
     FROM courts c
     LEFT JOIN booking_variants bv ON bv.court_id = c.id
     LEFT JOIN sessions s ON s.variant_id = bv.id
     LEFT JOIN booking_items bi ON bi.session_id = s.id
-    GROUP BY c.id, c.name, c.slug
+    GROUP BY c.id, c.name, c.slug, c.capacity
     ORDER BY c.id ASC
 ", [$todaySql]);
-
-if (!$courtRows) {
-    $courtRows = [
-        ['name' => 'Court Green', 'slug' => 'green', 'today_booked' => 0, 'total_capacity' => 24],
-        ['name' => 'Court Pink', 'slug' => 'pink', 'today_booked' => 0, 'total_capacity' => 24],
-    ];
-}
 
 $dashboardNav = [
     ['type' => 'single', 'label' => 'Dashboard', 'href' => 'admin-dashboard.php', 'key' => 'dashboard', 'icon' => 'home'],
@@ -304,7 +297,7 @@ function admin_icon(array $icons, string $name): string {
                 <div class="panel-heading"><h2>Court Occupancy</h2></div>
                 <?php foreach ($courtRows as $court): ?>
                     <?php
-                    $capacity = max((int) ($court['total_capacity'] ?? 24), 24);
+                    $capacity = max(1, (int) ($court['total_capacity'] ?? 1));
                     $booked = (int) ($court['today_booked'] ?? 0);
                     $percent = min(100, (int) round(($booked / $capacity) * 100));
                     $isPink = str_contains(strtolower($court['name']), 'pink');

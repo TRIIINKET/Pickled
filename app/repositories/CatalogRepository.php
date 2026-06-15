@@ -75,7 +75,14 @@ final class CatalogRepository
 
     public function findVariantBySlug(string $slug, bool $includeInactive = false): ?array
     {
-        $sql = 'SELECT v.*, c.name AS court, c.slug AS court_slug, c.status AS court_status
+        $sql = 'SELECT v.*,
+                       c.name AS court,
+                       c.slug AS court_slug,
+                       c.status AS court_status,
+                       c.capacity AS court_capacity,
+                       c.operating_hours AS court_operating_hours,
+                       c.court_type AS court_type,
+                       c.description AS court_description
                 FROM booking_variants v
                 JOIN courts c ON c.id = v.court_id
                 WHERE v.slug = :slug';
