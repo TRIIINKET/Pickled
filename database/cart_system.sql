@@ -20,7 +20,12 @@ CREATE TABLE IF NOT EXISTS carts (
 CREATE TABLE IF NOT EXISTS cart_items (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   cart_id INT UNSIGNED NOT NULL,
-  session_id INT UNSIGNED NOT NULL,
+  session_id INT UNSIGNED NULL,
+  variant_id INT UNSIGNED NULL,
+  booking_date DATE NULL,
+  start_time TIME NULL,
+  end_time TIME NULL,
+  coach_user_id INT UNSIGNED NULL,
   quantity INT UNSIGNED NOT NULL DEFAULT 1,
   unit_price DECIMAL(10,2) NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -28,6 +33,8 @@ CREATE TABLE IF NOT EXISTS cart_items (
   UNIQUE KEY uq_cart_items_cart_session (cart_id, session_id),
   KEY idx_cart_items_cart_id (cart_id),
   KEY idx_cart_items_session_id (session_id),
+  KEY idx_cart_items_variant_slot (variant_id, booking_date, start_time, end_time),
+  KEY idx_cart_items_coach_slot (coach_user_id, booking_date, start_time, end_time),
   CONSTRAINT fk_cart_items_cart
     FOREIGN KEY (cart_id) REFERENCES carts(id)
     ON DELETE CASCADE

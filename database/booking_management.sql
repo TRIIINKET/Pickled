@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     FOREIGN KEY (user_id) REFERENCES users(id)
     ON DELETE RESTRICT
     ON UPDATE CASCADE,
-  CONSTRAINT chk_bookings_status CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled')),
+  CONSTRAINT chk_bookings_status CHECK (status IN ('pending', 'approved', 'confirmed', 'paid', 'completed', 'cancelled', 'rejected', 'expired', 'refunded')),
   CONSTRAINT chk_bookings_subtotal CHECK (subtotal >= 0),
   CONSTRAINT chk_bookings_payment_fee CHECK (payment_fee >= 0),
   CONSTRAINT chk_bookings_total CHECK (total >= 0)
@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS bookings (
 CREATE TABLE IF NOT EXISTS booking_items (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   booking_id INT UNSIGNED NOT NULL,
-  session_id INT UNSIGNED NOT NULL,
+  session_id INT UNSIGNED NULL,
+  coach_user_id INT UNSIGNED NULL,
   variant_slug VARCHAR(120) NOT NULL,
   name VARCHAR(160) NOT NULL,
   court VARCHAR(80) NOT NULL,
@@ -49,6 +50,7 @@ CREATE TABLE IF NOT EXISTS booking_items (
   PRIMARY KEY (id),
   KEY idx_booking_items_booking_id (booking_id),
   KEY idx_booking_items_session_id (session_id),
+  KEY idx_booking_items_coach_slot (coach_user_id, booking_date, start_time, end_time),
   KEY idx_booking_items_booking_date (booking_date),
   KEY idx_booking_items_service_date (name, booking_date),
   CONSTRAINT fk_booking_items_booking

@@ -85,11 +85,11 @@ final class SchedulingService
         return $this->schedules->sessionById($id, $forUpdate);
     }
 
-    public function findOrCreateSession(int $variantId, string $date, string $time, int $capacity): array
+    public function findOrCreateSession(int $variantId, string $date, string $time, int $capacity, ?int $coachUserId = null): array
     {
         $sessionDate = $this->date($date);
         [$start, $end] = $this->timeRange($time);
-        return $this->schedules->findOrCreateSession($variantId, $sessionDate, $start, $end, max(1, $capacity));
+        return $this->schedules->findOrCreateSession($variantId, $sessionDate, $start, $end, max(1, $capacity), $coachUserId);
     }
 
     public function sessionsForVariantMonth(int $variantId, int $year, int $month, bool $includeDisabled = false): array

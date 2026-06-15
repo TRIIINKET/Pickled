@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/CartRepository.php';
 require_once __DIR__ . '/../repositories/CatalogRepository.php';
+require_once __DIR__ . '/SchedulingService.php';
 
 final class CartService
 {
@@ -43,25 +44,51 @@ final class CartService
         }
 
         $quantity = max(1, min($quantity, (int) $variant['participants_limit']));
-        $session = $this->catalog->findOrCreateSession((int) $variant['id'], $date, $time, (int) $variant['capacity']);
+        try {
+            [$sessionDate, $startTime, $endTime] = $this->normalizeSlot($date, $time);
+        } catch (RuntimeException) {
+            return ['ok' => false, 'code' => 'invalid'];
+        }
+
         $cartId = $this->carts->saveTimerForUser($userId, $startedAt, $expiresAt);
+
+        if ($this->usesStandardCourtFlow($variant)) {
+            if ($this->carts->duplicateStandardItemInCart($cartId, (int) $variant['id'], $sessionDate, $startTime, $endTime)) {
+                return ['ok' => false, 'code' => 'duplicate'];
+            }
+            if ($this->carts->courtHasOverlap((int) $variant['court_id'], $sessionDate, $startTime, $endTime, (string) $variant['slug'], $userId)) {
+                return ['ok' => false, 'code' => 'conflict'];
+            }
+
+            $booked = $this->carts->bookedQuantityForStandardSlot((string) $variant['slug'], $sessionDate, $startTime, $endTime);
+            $held = $this->carts->activeHeldQuantityForStandardSlot((int) $variant['id'], $sessionDate, $startTime, $endTime, null, $userId);
+            if ($booked + $held + $quantity > (int) $variant['capacity']) {
+                return ['ok' => false, 'code' => 'capacity'];
+            }
+
+            $coachUserId = null;
+            if ($this->requiresCoach($variant)) {
+                $coachUserId = $this->firstAvailableCoachId($sessionDate, $time, $userId);
+                if ($coachUserId === null) {
+                    return ['ok' => false, 'code' => 'coach_unavailable'];
+                }
+            }
+
+            $this->carts->addStandardItem($cartId, (int) $variant['id'], $coachUserId, $sessionDate, $startTime, $endTime, $quantity, $unitPrice ?? (float) $variant['price']);
+            return ['ok' => true, 'code' => 'added'];
+        }
+
+        $session = $this->catalog->findOrCreateSession((int) $variant['id'], $date, $time, (int) $variant['capacity']);
         foreach ($this->carts->itemsForCart($cartId) as $item) {
-            if ((int) $item['session_id'] === (int) $session['id']) {
+            if ((int) ($item['session_id'] ?? 0) === (int) $session['id']) {
                 return ['ok' => false, 'code' => 'duplicate'];
             }
         }
         if (!$this->sessionCanHold($session, $quantity)) {
-            return ['ok' => false, 'code' => 'full'];
+            return ['ok' => false, 'code' => 'capacity'];
         }
 
-        try {
-            $this->carts->addItem($cartId, (int) $session['id'], $quantity, $unitPrice ?? (float) $variant['price']);
-        } catch (PDOException $e) {
-            if ($e->getCode() === '23000') {
-                return ['ok' => false, 'code' => 'duplicate'];
-            }
-            throw $e;
-        }
+        $this->carts->addItem($cartId, (int) $session['id'], $quantity, $unitPrice ?? (float) $variant['price']);
 
         return ['ok' => true, 'code' => 'added'];
     }
@@ -79,8 +106,19 @@ final class CartService
         }
 
         $quantity = max(1, min($quantity, (int) $item['participants_limit']));
-        if (!$this->sessionCanHold($item, $quantity, $cartItemId)) {
-            return ['ok' => false, 'code' => 'full'];
+        if (empty($item['session_id'])) {
+            $held = $this->carts->activeHeldQuantityForStandardSlot(
+                (int) $item['variant_id'],
+                (string) $item['booking_date'],
+                (string) $item['start_time'],
+                (string) $item['end_time'],
+                $cartItemId
+            );
+            if ($held + $quantity > (int) $item['capacity']) {
+                return ['ok' => false, 'code' => 'capacity'];
+            }
+        } elseif (!$this->sessionCanHold($item, $quantity, $cartItemId)) {
+            return ['ok' => false, 'code' => 'capacity'];
         }
 
         $this->carts->updateItemQuantity($cartItemId, (int) $item['cart_id'], $quantity);
@@ -132,13 +170,80 @@ final class CartService
         return (int) ($session['booked_count'] ?? 0) + $held + $quantity <= (int) ($session['capacity'] ?? 0);
     }
 
+    private function usesStandardCourtFlow(array $variant): bool
+    {
+        $courtSlug = strtolower((string) ($variant['court_slug'] ?? ''));
+        $category = strtolower((string) ($variant['category'] ?? ''));
+        $name = strtolower((string) ($variant['name'] ?? ''));
+
+        if (!in_array($courtSlug, ['green', 'pink'], true)) {
+            return false;
+        }
+
+        return !str_contains($category . ' ' . $name, 'social play')
+            && !str_contains($name, 'tournament')
+            && !str_contains($name, 'match-play');
+    }
+
+    private function requiresCoach(array $variant): bool
+    {
+        $label = strtolower((string) ($variant['category'] ?? '') . ' ' . (string) ($variant['name'] ?? ''));
+        foreach (['lesson', 'coaching', 'training', 'class', 'kids', 'youth', 'parent'] as $keyword) {
+            if (str_contains($label, $keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function firstAvailableCoachId(string $date, string $time, int $userId): ?int
+    {
+        [$sessionDate, $startTime, $endTime] = $this->normalizeSlot($date, $time);
+        foreach ((new SchedulingService())->availableCoachesForSlot($sessionDate, $time) as $coach) {
+            $coachId = (int) ($coach['id'] ?? 0);
+            if ($coachId > 0 && !$this->carts->coachHasOverlap($coachId, $sessionDate, $startTime, $endTime, $userId)) {
+                return $coachId;
+            }
+        }
+        return null;
+    }
+
+    private function normalizeSlot(string $date, string $time): array
+    {
+        try {
+            $sessionDate = (new DateTimeImmutable($date))->format('Y-m-d');
+        } catch (Throwable) {
+            throw new RuntimeException('Date is invalid.');
+        }
+
+        $parts = preg_split('/\s*-\s*/', trim($time));
+        if (!$parts || count($parts) !== 2) {
+            throw new RuntimeException('Time range is invalid.');
+        }
+
+        return [$sessionDate, $this->normalizeTime($parts[0]), $this->normalizeTime($parts[1])];
+    }
+
+    private function normalizeTime(string $value): string
+    {
+        $value = trim($value);
+        foreach (['H:i:s', 'H:i', 'g:i A', 'h:i A', 'g A', 'h A'] as $format) {
+            $time = DateTimeImmutable::createFromFormat($format, $value);
+            if ($time instanceof DateTimeImmutable) {
+                return $time->format('H:i:s');
+            }
+        }
+        throw new RuntimeException('Time is invalid.');
+    }
+
     private function hydrateItems(array $rows): array
     {
         $items = [];
         foreach ($rows as $row) {
             $items[(string) $row['cart_item_id']] = [
                 'id' => (string) $row['cart_item_id'],
-                'session_id' => (int) $row['session_id'],
+                'session_id' => $row['session_id'] === null ? null : (int) $row['session_id'],
+                'coach_user_id' => empty($row['coach_user_id']) ? null : (int) $row['coach_user_id'],
                 'variant_id' => $row['variant_id'],
                 'variant_slug' => $row['variant_slug'],
                 'name' => $row['name'],

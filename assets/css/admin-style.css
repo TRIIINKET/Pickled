@@ -3818,7 +3818,7 @@ details.private-preview-card[open] summary::after {
 .court-photo-card header button,
 .court-details-editor summary,
 .court-photo-manager summary,
-.service-edit-details summary,
+.service-edit-toggle,
 .service-actions button {
     min-height: 38px;
     display: inline-flex;
@@ -3839,21 +3839,18 @@ details.private-preview-card[open] summary::after {
 
 .court-details-editor,
 .court-photo-manager,
-.service-edit-details,
 .inline-create-panel {
     position: relative;
 }
 
 .court-details-editor summary,
 .court-photo-manager summary,
-.service-edit-details summary,
 .inline-create-panel summary {
     list-style: none;
 }
 
 .court-details-editor summary::-webkit-details-marker,
 .court-photo-manager summary::-webkit-details-marker,
-.service-edit-details summary::-webkit-details-marker,
 .inline-create-panel summary::-webkit-details-marker {
     display: none;
 }
@@ -3861,7 +3858,6 @@ details.private-preview-card[open] summary::after {
 .court-details-form,
 .court-photo-upload,
 .court-media-list,
-.service-edit-form,
 .inline-create-panel .catalog-admin-form {
     position: absolute;
     right: 0;
@@ -3898,10 +3894,6 @@ details.private-preview-card[open] summary::after {
     width: min(860px, calc(100vw - 48px));
 }
 
-.service-edit-form {
-    width: min(620px, calc(100vw - 48px));
-}
-
 .court-photo-upload,
 .court-media-list {
     width: min(540px, calc(100vw - 48px));
@@ -3916,6 +3908,111 @@ details.private-preview-card[open] summary::after {
     color: #344054;
     font-size: 12px;
     font-weight: 850;
+}
+
+.service-editor-header {
+    display: grid;
+    gap: 4px;
+    padding-bottom: 4px;
+}
+
+.service-editor-header h3,
+.service-form-section h4 {
+    margin: 0;
+    color: #111827;
+    font-weight: 950;
+}
+
+.service-editor-header h3 {
+    font-size: 18px;
+}
+
+.service-editor-header p,
+.service-form-section .field-help {
+    margin: 0;
+    color: #667085;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.service-form-section {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid rgba(17,24,39,.08);
+    border-radius: 12px;
+    background: #fbfcf8;
+}
+
+.service-form-section h4 {
+    font-size: 13px;
+}
+
+.service-field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.service-field-wide {
+    grid-column: 1 / -1;
+}
+
+.service-field-grid-small {
+    grid-template-columns: minmax(180px, 260px);
+}
+
+.service-advanced-settings summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 950;
+    cursor: pointer;
+}
+
+.service-advanced-settings summary::after {
+    content: '+';
+    font-size: 18px;
+    line-height: 1;
+}
+
+.service-advanced-settings[open] summary::after {
+    content: '-';
+}
+
+.service-advanced-settings .service-field-grid {
+    margin-top: 10px;
+}
+
+.service-edit-form .is-hidden {
+    display: none;
+}
+
+.service-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.service-form-feedback {
+    min-height: 18px;
+    color: #667085;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.service-form-feedback.is-error {
+    color: var(--pink);
+}
+
+.service-form-feedback.is-success {
+    color: var(--green);
 }
 
 .court-details-form input,
@@ -3951,6 +4048,12 @@ details.private-preview-card[open] summary::after {
     background: var(--lime);
     color: var(--green);
     font-weight: 950;
+}
+
+.service-edit-form .service-cancel-button {
+    background: #fff;
+    color: var(--green);
+    border: 1px solid rgba(38,68,20,.18);
 }
 
 .court-details-form-static {
@@ -4100,8 +4203,8 @@ details.private-preview-card[open] summary::after {
 
 .service-table-head {
     display: grid;
-    grid-template-columns: 42px minmax(220px, 1.35fr) minmax(140px, .75fr) minmax(105px, .5fr) minmax(110px, .55fr) minmax(100px, .5fr) minmax(240px, .95fr);
-    gap: 10px;
+    grid-template-columns: 42px minmax(220px, 1.45fr) minmax(140px, .75fr) minmax(105px, .55fr) minmax(110px, .6fr) minmax(100px, .5fr) minmax(165px, .7fr);
+    gap: 12px;
     align-items: center;
     padding: 0 14px 8px;
     color: #667085;
@@ -4121,9 +4224,9 @@ details.private-preview-card[open] summary::after {
 
 .service-card {
     display: grid;
-    grid-template-columns: 42px minmax(220px, 1.35fr) minmax(140px, .75fr) minmax(105px, .5fr) minmax(110px, .55fr) minmax(100px, .5fr) minmax(240px, .95fr);
+    grid-template-columns: 42px minmax(220px, 1.45fr) minmax(140px, .75fr) minmax(105px, .55fr) minmax(110px, .6fr) minmax(100px, .5fr) minmax(165px, .7fr);
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     min-height: 66px;
     padding: 10px 14px;
     border: 1px solid rgba(17,24,39,.08);
@@ -4132,10 +4235,20 @@ details.private-preview-card[open] summary::after {
     transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
 }
 
+.service-card.is-editing {
+    align-items: start;
+    border-color: rgba(38,68,20,.2);
+    box-shadow: 0 16px 32px rgba(17,24,39,.055);
+}
+
 .service-card:hover {
     transform: translateY(-2px);
     border-color: rgba(38,68,20,.18);
     box-shadow: 0 16px 32px rgba(17,24,39,.055);
+}
+
+.service-card.is-editing:hover {
+    transform: none;
 }
 
 .service-card > div > strong {
@@ -4177,11 +4290,6 @@ details.private-preview-card[open] summary::after {
     line-height: 1.35;
 }
 
-.service-session-summary {
-    color: var(--green) !important;
-    font-weight: 900 !important;
-}
-
 .service-table-list .service-card p {
     margin: 0;
 }
@@ -4202,10 +4310,6 @@ details.private-preview-card[open] summary::after {
     justify-content: center;
     flex-wrap: wrap;
     gap: 8px;
-}
-
-.session-manage-button {
-    min-width: 104px;
 }
 
 .service-actions > form .icon-button {
@@ -4234,6 +4338,34 @@ details.private-preview-card[open] summary::after {
 
 .service-actions form {
     margin: 0;
+}
+
+.service-edit-panel {
+    grid-column: 1 / -1;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height .25s ease, opacity .22s ease, margin-top .22s ease;
+}
+
+.service-card.is-editing .service-edit-panel {
+    max-height: 1800px;
+    opacity: 1;
+    margin-top: 12px;
+}
+
+.service-edit-form {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 24px;
+    border: 1px solid rgba(17,24,39,.08);
+    border-radius: 12px;
+    background: #fbfcf8;
+}
+
+.service-edit-form .service-form-section {
+    background: #fff;
 }
 
 .catalog-manager-card footer {
@@ -4785,222 +4917,6 @@ body.photo-modal-open {
     overflow: hidden;
 }
 
-.court-session-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    display: none;
-    padding: 24px;
-}
-
-.court-session-modal.is-open {
-    display: grid;
-    place-items: center;
-}
-
-.court-session-modal-backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(17, 24, 39, .38);
-    backdrop-filter: blur(3px);
-}
-
-.court-session-modal-panel {
-    position: relative;
-    z-index: 1;
-    width: min(1040px, calc(100vw - 48px));
-    max-height: calc(100vh - 48px);
-    overflow: auto;
-    padding: 22px;
-    border: 1px solid rgba(17,24,39,.10);
-    border-radius: 16px;
-    background: #fff;
-    box-shadow: 0 30px 70px rgba(17,24,39,.22);
-}
-
-.court-session-modal-panel > header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 18px;
-    margin-bottom: 18px;
-}
-
-.court-session-modal-panel h2 {
-    margin: 0;
-    color: #111827;
-    font-size: 20px;
-    letter-spacing: -.03em;
-}
-
-.court-session-modal-panel p {
-    margin: 6px 0 0;
-    color: #667085;
-    font-size: 13px;
-    font-weight: 750;
-}
-
-.court-session-modal-panel > header button {
-    width: 38px;
-    height: 38px;
-    border: 1px solid rgba(17,24,39,.10);
-    border-radius: 10px;
-    background: #f7f7f2;
-    color: #111827;
-    font-size: 24px;
-    line-height: 1;
-}
-
-.session-create-panel {
-    margin-bottom: 18px;
-    border: 1px solid rgba(17,24,39,.08);
-    border-radius: 12px;
-    background: #fff;
-}
-
-.session-create-panel > summary {
-    min-height: 52px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 16px;
-    color: var(--green);
-    font-size: 14px;
-    font-weight: 900;
-    list-style: none;
-    cursor: pointer;
-}
-
-.session-create-panel > summary::-webkit-details-marker {
-    display: none;
-}
-
-.session-edit-form {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-    padding: 16px;
-    border-top: 1px solid rgba(17,24,39,.08);
-}
-
-.session-edit-panel .session-edit-form {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 10px);
-    z-index: 30;
-    width: min(680px, calc(100vw - 64px));
-    border: 1px solid rgba(17,24,39,.10);
-    border-radius: 14px;
-    background: #fff;
-    box-shadow: 0 22px 48px rgba(17,24,39,.14);
-}
-
-.session-edit-form label {
-    display: grid;
-    gap: 7px;
-    color: #344054;
-    font-size: 12px;
-    font-weight: 850;
-}
-
-.session-edit-form input,
-.session-edit-form select {
-    width: 100%;
-    min-height: 42px;
-    padding: 10px 12px;
-    border: 1px solid rgba(17,24,39,.14);
-    border-radius: 9px;
-    background: #fff;
-    color: #111827;
-    font: inherit;
-    font-size: 13px;
-}
-
-.session-edit-form button {
-    min-height: 42px;
-    border-radius: 9px;
-    background: var(--lime);
-    color: var(--green);
-    font-weight: 950;
-}
-
-.session-list-table {
-    display: grid;
-    gap: 10px;
-}
-
-.session-list-head,
-.session-list-table article {
-    display: grid;
-    grid-template-columns: minmax(150px, 1fr) minmax(105px, .65fr) minmax(105px, .65fr) minmax(90px, .55fr) minmax(95px, .6fr) minmax(110px, .65fr) minmax(150px, .8fr);
-    gap: 12px;
-    align-items: center;
-}
-
-.session-list-head {
-    padding: 0 14px 8px;
-    color: #667085;
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-}
-
-.session-list-head span:last-child {
-    text-align: center;
-}
-
-.session-list-table article {
-    min-height: 58px;
-    padding: 12px 14px;
-    border: 1px solid rgba(17,24,39,.08);
-    border-radius: 12px;
-    color: #111827;
-    font-size: 13px;
-    font-weight: 800;
-}
-
-.session-row-actions {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-
-.session-row-actions form {
-    margin: 0;
-}
-
-.session-edit-panel {
-    position: relative;
-}
-
-.session-edit-panel summary {
-    min-height: 38px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 0 14px;
-    border: 1px solid rgba(38,68,20,.16);
-    border-radius: 9px;
-    background: #fff;
-    color: var(--green);
-    font-size: 13px;
-    font-weight: 850;
-    list-style: none;
-    cursor: pointer;
-}
-
-.session-edit-panel summary::-webkit-details-marker {
-    display: none;
-}
-
-body.session-modal-open {
-    overflow: hidden;
-}
-
 .court-manager-main svg,
 .court-actions-row svg,
 .court-editor-layout svg {
@@ -5068,34 +4984,29 @@ body.session-modal-open {
     }
 
     .court-photo-modal .court-photo-upload,
-    .court-media-grid,
-    .session-edit-form,
-    .session-list-head,
-    .session-list-table article {
+    .court-media-grid {
         grid-template-columns: 1fr;
     }
 
-    .court-photo-modal-panel,
-    .court-session-modal-panel {
+    .court-photo-modal-panel {
         width: min(100%, calc(100vw - 24px));
         max-height: calc(100vh - 24px);
         padding: 16px;
     }
 
-    .session-list-head {
-        display: none;
-    }
-
-    .session-row-actions {
-        justify-content: flex-start;
-    }
-
     .court-details-form,
-    .court-photo-upload,
-    .service-edit-form {
+    .court-photo-upload {
         left: 0;
         right: auto;
         width: min(100%, calc(100vw - 32px));
+        grid-template-columns: 1fr;
+    }
+
+    .service-edit-form {
+        padding: 16px;
+    }
+
+    .service-field-grid {
         grid-template-columns: 1fr;
     }
 

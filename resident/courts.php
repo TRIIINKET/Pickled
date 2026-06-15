@@ -35,7 +35,7 @@ function pickled_catalog_option(array $variant): array
     'title' => strtoupper($name) . ' ₱' . number_format($price, 0),
     'note' => pickled_catalog_note($variant),
   ];
-  if (str_contains($lower, 'coach') || str_contains($lower, 'private')) {
+  if (str_contains($lower, 'coach') || str_contains($lower, 'private') || str_contains($lower, 'lesson') || str_contains($lower, 'training') || str_contains($lower, 'class') || str_contains($lower, 'kids') || str_contains($lower, 'youth') || str_contains($lower, 'parent')) {
     $option['dateMode'] = 'coach';
   }
   return $option;
@@ -98,8 +98,18 @@ $coachRows = [];
 
 try {
   $catalogCourts = $catalogService->courts(false);
+  $standardCourtCatalog = [
+    'green' => ['green-court-rentals', 'green-lessons', 'green-private-coaching', 'green-training'],
+    'pink' => ['pink-base-rate', 'pink-kids-pickleball-class-ages-6-10', 'pink-youth-development-class-ages-11-17', 'pink-parent-child-session'],
+  ];
   foreach ($catalogCourts as $catalogCourt) {
-    $courtRateCatalog[(string) $catalogCourt['slug']] = array_map('pickled_catalog_option', $catalogService->variantsForCourtSlug((string) $catalogCourt['slug'], false));
+    $courtSlug = (string) $catalogCourt['slug'];
+    $courtVariants = $catalogService->variantsForCourtSlug($courtSlug, false);
+    if (isset($standardCourtCatalog[$courtSlug])) {
+      $allowedSlugs = array_flip($standardCourtCatalog[$courtSlug]);
+      $courtVariants = array_values(array_filter($courtVariants, static fn(array $variant): bool => isset($allowedSlugs[(string) ($variant['slug'] ?? '')])));
+    }
+    $courtRateCatalog[$courtSlug] = array_map('pickled_catalog_option', $courtVariants);
   }
   $coachRows = $schedulingService->coaches();
 } catch (Throwable $e) {

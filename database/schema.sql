@@ -41,10 +41,13 @@ CREATE TABLE IF NOT EXISTS booking_variants (
   court_id INT NOT NULL,
   slug VARCHAR(120) NOT NULL UNIQUE,
   name VARCHAR(160) NOT NULL,
+  description TEXT NULL,
   category VARCHAR(120) NOT NULL,
   duration_label VARCHAR(80) NOT NULL,
   price DECIMAL(10,2) NOT NULL,
+  pricing_type VARCHAR(40) NOT NULL DEFAULT 'per_session',
   participants_limit INT NOT NULL DEFAULT 1,
+  coach_required VARCHAR(20) NOT NULL DEFAULT 'no',
   capacity INT NOT NULL DEFAULT 1,
   image VARCHAR(255) NULL,
   active TINYINT(1) NOT NULL DEFAULT 1,
@@ -65,7 +68,12 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS cart_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   cart_id INT NOT NULL,
-  session_id INT NOT NULL,
+  session_id INT NULL,
+  variant_id INT NULL,
+  booking_date DATE NULL,
+  start_time TIME NULL,
+  end_time TIME NULL,
+  coach_user_id INT NULL,
   quantity INT NOT NULL DEFAULT 1,
   unit_price DECIMAL(10,2) NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -93,14 +101,16 @@ CREATE TABLE IF NOT EXISTS bookings (
 CREATE TABLE IF NOT EXISTS booking_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   booking_id INT NOT NULL,
-  session_id INT NOT NULL,
+  session_id INT NULL,
+  coach_user_id INT NULL,
   variant_id VARCHAR(120) NOT NULL,
   name VARCHAR(160) NOT NULL,
   court VARCHAR(120) NOT NULL,
   category VARCHAR(120) NOT NULL,
   duration_label VARCHAR(80) NOT NULL,
-  booking_date VARCHAR(80) NOT NULL,
-  booking_time VARCHAR(80) NOT NULL,
+  booking_date DATE NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
   quantity INT NOT NULL DEFAULT 1,
   unit_price DECIMAL(10,2) NOT NULL,
   image VARCHAR(255) NULL,
@@ -169,8 +179,8 @@ JOIN (
   UNION ALL SELECT 'green', 'green-open-match-play', 'Open Match-Play', 'Social Play', '2 hours', 350.00, 8, 16
   UNION ALL SELECT 'green', 'green-weekly-tournament', 'Weekly Tournament', 'Social Play', 'This week', 900.00, 1, 16
   UNION ALL SELECT 'pink', 'pink-base-rate', 'Court Rental', 'Court Reservation', '1 hour', 400.00, 6, 10
-  UNION ALL SELECT 'pink', 'pink-kids-pickleball-class-ages-6-10', 'Kids Pickleball Class (Ages 6-10)', 'Academy', '1 hour', 350.00, 8, 10
-  UNION ALL SELECT 'pink', 'pink-youth-development-class-ages-11-17', 'Youth Development Class (Ages 11-17)', 'Academy', '1 hour', 350.00, 8, 10
-  UNION ALL SELECT 'pink', 'pink-parent-child-session', 'Parent & Child Session', 'Academy', '1 hour', 500.00, 2, 10
+  UNION ALL SELECT 'pink', 'pink-kids-pickleball-class-ages-6-10', 'Kids Pickleball Class (Ages 6-10)', 'Class', '1 hour', 350.00, 8, 10
+  UNION ALL SELECT 'pink', 'pink-youth-development-class-ages-11-17', 'Youth Development Class (Ages 11-17)', 'Class', '1 hour', 350.00, 8, 10
+  UNION ALL SELECT 'pink', 'pink-parent-child-session', 'Parent & Child Session', 'Family Session', '1 hour', 500.00, 2, 10
 ) seed ON seed.court_slug = c.slug
 ON DUPLICATE KEY UPDATE name = VALUES(name), price = VALUES(price), capacity = VALUES(capacity);

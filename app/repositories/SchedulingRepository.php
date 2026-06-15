@@ -98,16 +98,17 @@ final class SchedulingRepository
         return $session ? $this->withDisplayFields($session) : null;
     }
 
-    public function findOrCreateSession(int $variantId, string $sessionDate, string $startTime, string $endTime, int $capacity): array
+    public function findOrCreateSession(int $variantId, string $sessionDate, string $startTime, string $endTime, int $capacity, ?int $coachUserId = null): array
     {
         $pdo = Database::connection();
         $stmt = $pdo->prepare(
-            'INSERT INTO sessions (variant_id, session_date, start_time, end_time, capacity, status)
-             VALUES (:variant_id, :session_date, :start_time, :end_time, :capacity, :status)
-             ON DUPLICATE KEY UPDATE capacity = VALUES(capacity), updated_at = CURRENT_TIMESTAMP'
+            'INSERT INTO sessions (variant_id, coach_user_id, session_date, start_time, end_time, capacity, status)
+             VALUES (:variant_id, :coach_user_id, :session_date, :start_time, :end_time, :capacity, :status)
+             ON DUPLICATE KEY UPDATE capacity = VALUES(capacity), coach_user_id = COALESCE(coach_user_id, VALUES(coach_user_id)), updated_at = CURRENT_TIMESTAMP'
         );
         $stmt->execute([
             'variant_id' => $variantId,
+            'coach_user_id' => $coachUserId,
             'session_date' => $sessionDate,
             'start_time' => $startTime,
             'end_time' => $endTime,
@@ -230,6 +231,7 @@ final class SchedulingRepository
                 WHERE u.role = 'coach'
                   AND ca.day_of_week = :day_of_week
                   AND ca.status = 'available'
+                  AND (cp.status IS NULL OR cp.status = 'active')
                   AND ca.start_time <= :start_time
                   AND ca.end_time >= :end_time";
         $params = [
