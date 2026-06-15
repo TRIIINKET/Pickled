@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) NOT NULL,
   role VARCHAR(20) NOT NULL DEFAULT 'player',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULTx CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_users_email (email),
   KEY idx_users_role (role),
@@ -66,8 +66,27 @@ CREATE TABLE IF NOT EXISTS coach_profiles (
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-ALTER TABLE coach_profiles
-  ADD COLUMN IF NOT EXISTS profile_image VARCHAR(255) NULL AFTER status;
+DROP PROCEDURE IF EXISTS add_coach_profiles_profile_image;
+
+DELIMITER //
+
+CREATE PROCEDURE add_coach_profiles_profile_image()
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'coach_profiles'
+      AND COLUMN_NAME = 'profile_image'
+  ) THEN
+    ALTER TABLE coach_profiles ADD COLUMN profile_image VARCHAR(255) NULL AFTER status;
+  END IF;
+END//
+
+CALL add_coach_profiles_profile_image()//
+DROP PROCEDURE IF EXISTS add_coach_profiles_profile_image//
+
+DELIMITER ;
 
 CREATE TABLE IF NOT EXISTS password_reset (
   id INT NOT NULL AUTO_INCREMENT,
