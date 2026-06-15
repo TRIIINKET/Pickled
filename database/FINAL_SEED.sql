@@ -107,14 +107,10 @@ WHERE email = 'coach@example.com'
   AND role = 'coach';
 
 INSERT INTO user_profiles (user_id, phone, city, province, avatar)
-SELECT id, '09171234567', 'Makati', 'Metro Manila', 'avatars/player-demo.png'
-FROM users
-WHERE email = 'player@example.com'
-ON DUPLICATE KEY UPDATE
-  phone = VALUES(phone),
-  city = VALUES(city),
-  province = VALUES(province),
-  avatar = VALUES(avatar);
+SELECT u.id, NULL, NULL, NULL, NULL
+FROM users u
+LEFT JOIN user_profiles up ON up.user_id = u.id
+WHERE up.user_id IS NULL;
 
 INSERT INTO coach_profiles (user_id, specialization, bio, experience, status, profile_image)
 SELECT u.id, seed.specialization, seed.bio, seed.experience, seed.status, seed.profile_image
