@@ -1081,6 +1081,11 @@ select {
   .flow-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .social-gallery,
+  .faq-layout aside {
+    top: auto;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1090,7 +1095,26 @@ select {
   }
 
   .social-hero {
-    min-height: 430px;
+    min-height: 360px;
+  }
+
+  .social-hero__overlay {
+    padding: calc(var(--nav-h) + 26px) 18px 30px;
+  }
+
+  .social-hero__overlay h1 {
+    font-size: clamp(36px, 12vw, 46px);
+  }
+
+  .social-intro,
+  .flow-section,
+  .social-booking,
+  .faq-section {
+    padding-block: 52px;
+  }
+
+  .intro-grid > img {
+    min-height: 300px;
   }
 
   .intro-grid article {
@@ -1119,6 +1143,21 @@ select {
     min-height: 300px;
   }
 
+  .social-product h2 {
+    margin-bottom: 22px;
+  }
+
+  .social-product-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .social-book-now,
+  .social-continue,
+  .social-form button,
+  .social-cart-button {
+    min-height: 48px;
+  }
+
   .social-benefits {
     grid-template-columns: 1fr;
   }
@@ -1143,19 +1182,77 @@ select {
   }
 
   .social-modal {
-    padding: 10px;
+    align-items: stretch;
+    padding: 0;
+  }
+
+  .social-modal__dialog {
+    width: 100%;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .social-modal__close {
+    top: 10px;
+    right: 10px;
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.84);
   }
 
   .social-calendar,
   .social-times,
-  .social-form {
+  .social-form,
+  .social-payment-form {
     padding: 26px 18px;
+  }
+
+  .calendar-grid {
+    gap: 5px;
+  }
+
+  .calendar-grid button {
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 13px;
   }
 
   .social-times label {
     grid-template-columns: 1fr;
     padding: 12px 16px;
     border-radius: 12px;
+  }
+
+  .social-time {
+    min-height: 46px;
+    padding-block: 8px;
+  }
+
+  .social-time small {
+    display: block;
+    float: none;
+    margin-top: 4px;
+  }
+
+  .social-summary dl {
+    gap: 8px;
+  }
+
+  .social-summary dd {
+    margin: 0 0 8px;
+  }
+}
+
+@media (max-width: 380px) {
+  .social-wrap,
+  .social-footer__top {
+    width: min(100% - 24px, 1290px);
+  }
+
+  .social-thumbs {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 

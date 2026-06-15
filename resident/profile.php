@@ -49,7 +49,7 @@ $city = $profile['city'] ?? 'Quezon City';
 $province = $profile['province'] ?? 'Metro Manila';
 $initial = strtoupper(substr($name !== '' ? $name : $email, 0, 1));
 
-$extraHead = '<link rel="stylesheet" href="../assets/css/player-profile.css?v=20260611a"/>';
+$extraHead = '<link rel="stylesheet" href="../assets/css/player-profile.css?v=20260615a"/>';
 
 include __DIR__ . '/../includes/header.php';
 ?>

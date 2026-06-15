@@ -159,7 +159,7 @@ $cartSecondsRemaining = !empty($_SESSION['cart_expires_at']) ? max(0, (int) $_SE
 $member = pickled_is_member();
 $waitlist = $_SESSION['waitlist'] ?? [];
 
-$extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260430d"/>';
+$extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260615a"/>';
 
 include __DIR__ . '/../includes/header.php';
 ?>

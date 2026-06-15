@@ -17,7 +17,7 @@ pickled_process_pending_booking_expiry();
 $bookingRepo = new BookingRepository();
 $bookings = $userId > 0 ? $bookingRepo->findByUserId($userId) : [];
 $hasBookings = !empty($bookings);
-$extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260430d"/>';
+$extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260615a"/>';
 
 include __DIR__ . '/../includes/header.php';
 ?>

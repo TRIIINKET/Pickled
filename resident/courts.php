@@ -6,7 +6,7 @@ pickled_init_csrf();
 $pageTitle  = 'Courts - Pickled';
 $activePage = 'courts.php';
 $basePath   = '../';
-$extraHead  = '<link rel="stylesheet" href="../assets/css/courts.css?v=20260610b"/>';
+$extraHead  = '<link rel="stylesheet" href="../assets/css/courts.css?v=20260615a"/>';
 
 function pickled_catalog_note(array $variant): string
 {
@@ -407,7 +407,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     <div class="booking-step booking-step--details">
       <aside class="booking-summary">
         <button class="back-to-dates" type="button">‹ Back to dates</button>
-        <img src="<?= htmlspecialchars($courtImages['green']['image']) ?>" alt="" />
+        <img src="<?= htmlspecialchars($defaultCourtAssets['image']) ?>" alt="" />
         <h3 id="summaryProduct">COURT RENTALS</h3>
         <p id="summaryNote">Selected booking details</p>
         <dl>
@@ -464,7 +464,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
         </div>
         <div class="confirmation-cart">
           <article class="confirmation-item">
-            <img src="<?= htmlspecialchars($courtImages['green']['image']) ?>" alt="" />
+            <img src="<?= htmlspecialchars($defaultCourtAssets['image']) ?>" alt="" />
             <div>
               <h3 id="confirmedProduct">COURT RENTALS</h3>
               <p id="confirmedCourt">COURT GREEN</p>

@@ -4,7 +4,7 @@ declare(strict_types=1);
 $pageTitle  = 'Private Events - Pickled';
 $activePage = 'private.php';
 $basePath   = '../';
-$extraHead  = '<link rel="stylesheet" href="../assets/css/private.css"/>';
+$extraHead  = '<link rel="stylesheet" href="../assets/css/private.css?v=20260615a"/>';
 
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';

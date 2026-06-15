@@ -323,7 +323,8 @@
 
 @media (max-width: 700px) {
   .login-page {
-    padding-top: calc(var(--nav-h) + 92px);
+    place-items: start center;
+    padding: calc(var(--nav-h) + 40px) 16px 48px;
   }
 
   .login-panel {
@@ -344,7 +345,8 @@
   }
 
   .login-form {
-    gap: 24px;
+    gap: 18px;
+    width: 100%;
   }
 
   .login-form input[type="email"],
@@ -367,5 +369,16 @@
   .login-links,
   .login-help a {
     font-size: 15px;
+  }
+}
+
+@media (max-width: 380px) {
+  .login-role-tab {
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  .login-panel h1 {
+    font-size: 32px;
   }
 }

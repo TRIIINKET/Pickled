@@ -35,7 +35,7 @@ $notifications = $notificationService->notificationsForUser($userId, 80);
 $unreadCount = $notificationService->unreadCount($userId);
 $pageTitle = 'Notifications - Pickled';
 $activePage = 'notifications.php';
-$extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260430d"/>';
+$extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260615a"/>';
 
 function notification_label(string $type): string {
   return ucwords(str_replace('_', ' ', $type));

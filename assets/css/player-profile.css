@@ -333,12 +333,27 @@
 
   .player-profile-nav {
     position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 640px) {
   .player-profile-page {
-    padding-inline: 14px;
+    padding: calc(var(--nav-h) + 32px) 14px 64px;
+  }
+
+  .player-profile-nav {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .player-profile-card {
+    padding: 18px;
+  }
+
+  .player-profile-card__header {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .player-profile-info,
@@ -351,6 +366,18 @@
   .player-profile-modal__actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .player-profile-modal {
+    align-items: end;
+    padding: 0;
+  }
+
+  .player-profile-modal__dialog {
+    width: 100%;
+    max-height: 92dvh;
+    overflow: auto;
+    border-radius: 18px 18px 0 0;
   }
 
   .player-profile-modal__cancel,

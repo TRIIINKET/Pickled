@@ -78,7 +78,7 @@ $payments = $booking ? $paymentService->paymentsForBooking((int) $booking['id'])
 $feedback = $booking ? $feedbackService->feedbackForBooking((int) $booking['id'], $userId) : null;
 $feedbackTargets = $booking ? $feedbackService->targetsForBooking((int) $booking['id'], $userId) : [];
 $latestPayment = $payments[0] ?? null;
-$extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260430d"/>';
+$extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260615a"/>';
 
 function booking_detail_status_key(string $status): string {
   $status = strtolower($status);

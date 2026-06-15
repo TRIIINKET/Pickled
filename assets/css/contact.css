@@ -203,3 +203,36 @@
     margin: -22px 12px 0;
   }
 }
+
+@media (max-width: 640px) {
+  .contact-service {
+    padding: calc(var(--nav-h) + 36px) 14px 46px;
+  }
+
+  .contact-info-bar {
+    display: grid;
+  }
+
+  .contact-info-bar a,
+  .contact-info-bar span,
+  .contact-form button,
+  .contact-location__card a {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .contact-location {
+    padding-inline: 14px;
+  }
+
+  .contact-location__visual {
+    min-height: 170px;
+    padding: 20px;
+  }
+
+  .contact-location__card {
+    margin-inline: 0;
+    padding: 18px;
+  }
+}

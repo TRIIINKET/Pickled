@@ -10,6 +10,15 @@ $links = [
   'private.php'     => 'Private',
   'contact.php'     => 'Contact',
 ];
+$mobileLinks = [
+  pickled_frontend_url('index.php') => 'Home',
+  pickled_frontend_url('resident/courts.php') => 'Courts',
+  pickled_frontend_url('resident/social-play.php') => 'Social Play',
+  pickled_frontend_url('resident/private.php') => 'Private',
+  pickled_frontend_url('index.php#pickleball-101') => 'About',
+  pickled_frontend_url('resident/contact.php') => 'Contact',
+  pickled_frontend_url('auth/login.php') => 'Login',
+];
 $darkNavPages = ['courts.php', 'social-play.php', 'login.php'];
 $useDarkNav = in_array($activePage, $darkNavPages, true);
 $logoFile = $useDarkNav ? 'nav-logo-lpink.png' : 'nav-logo-dgreen.png';
@@ -43,6 +52,12 @@ $accountInitial = strtoupper(substr($accountName !== '' ? $accountName : $accoun
     <a href="<?= htmlspecialchars(pickled_frontend_url('index.php')) ?>" class="logo">
       <img src="<?= htmlspecialchars($logoImage) ?>" alt="Pickled" class="logo-image" />
     </a>
+
+    <button class="nav-menu-toggle" type="button" aria-label="Open navigation menu" aria-controls="mobileNavDrawer" aria-expanded="false">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
 
     <div class="nav-links">
       <?php foreach ($links as $href => $label): ?>
@@ -135,6 +150,27 @@ $accountInitial = strtoupper(substr($accountName !== '' ? $accountName : $accoun
       <?php endif; ?>
     </div>
   </div>
+
+  <div class="nav-drawer-overlay" data-nav-close></div>
+  <aside class="nav-drawer" id="mobileNavDrawer" aria-hidden="true">
+    <div class="nav-drawer__head">
+      <img src="<?= htmlspecialchars($logoImage) ?>" alt="Pickled" class="nav-drawer__logo" />
+      <button class="nav-drawer__close" type="button" aria-label="Close navigation menu" data-nav-close>×</button>
+    </div>
+    <nav class="nav-drawer__links" aria-label="Mobile navigation">
+      <?php foreach ($mobileLinks as $href => $label): ?>
+        <?php if ($label === 'Login' && $loggedIn) continue; ?>
+        <a href="<?= htmlspecialchars($href) ?>"><?= htmlspecialchars($label) ?></a>
+      <?php endforeach; ?>
+    </nav>
+    <div class="nav-drawer__actions">
+      <a href="<?= htmlspecialchars($bookNowHref) ?>" class="btn btn-green">Book Now</a>
+      <a href="<?= htmlspecialchars(pickled_frontend_url('resident/cart.php')) ?>" class="btn btn-ghost">Cart<?= $cartCount ? ' (' . $cartCount . ')' : '' ?></a>
+      <?php if ($loggedIn): ?>
+        <a href="<?= htmlspecialchars(pickled_frontend_url('resident/profile.php')) ?>" class="btn btn-ghost">My Profile</a>
+      <?php endif; ?>
+    </div>
+  </aside>
 </nav>
 
 <script>
@@ -142,6 +178,30 @@ $accountInitial = strtoupper(substr($accountName !== '' ? $accountName : $accoun
   var nav = document.getElementById('mainNav');
   var promo = document.querySelector('.promo-bar');
   var account = document.querySelector('[data-account-menu]');
+  var menuToggle = document.querySelector('.nav-menu-toggle');
+  var drawer = document.getElementById('mobileNavDrawer');
+  var drawerClosers = document.querySelectorAll('[data-nav-close]');
+
+  function setDrawer(open) {
+    if (!menuToggle || !drawer) return;
+    nav.classList.toggle('nav--drawer-open', open);
+    document.body.classList.toggle('nav-drawer-lock', open);
+    menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    menuToggle.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
+    drawer.setAttribute('aria-hidden', open ? 'false' : 'true');
+  }
+
+  if (menuToggle && drawer) {
+    menuToggle.addEventListener('click', function(){
+      setDrawer(!nav.classList.contains('nav--drawer-open'));
+    });
+    drawerClosers.forEach(function(closer){
+      closer.addEventListener('click', function(){ setDrawer(false); });
+    });
+    drawer.querySelectorAll('a').forEach(function(link){
+      link.addEventListener('click', function(){ setDrawer(false); });
+    });
+  }
 
   if (account) {
     document.addEventListener('click', function(event){
@@ -153,6 +213,7 @@ $accountInitial = strtoupper(substr($accountName !== '' ? $accountName : $accoun
     document.addEventListener('keydown', function(event){
       if (event.key === 'Escape') {
         account.removeAttribute('open');
+        setDrawer(false);
       }
     });
 

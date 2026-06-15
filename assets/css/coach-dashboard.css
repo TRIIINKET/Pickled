@@ -3022,4 +3022,93 @@ body.coach-portal-body {
     .availability-list em {
         justify-self: start;
     }
+
+    .coach-app-shell {
+        display: block;
+    }
+
+    .coach-sidebar {
+        gap: 14px;
+        border-right: 0;
+        border-bottom: 1px solid rgba(38,68,20,.12);
+    }
+
+    .coach-brand {
+        justify-content: center;
+    }
+
+    .coach-nav a {
+        min-height: 44px;
+    }
+
+    .coach-main {
+        padding-inline: 14px;
+    }
+
+    .coach-topbar {
+        min-height: auto;
+        margin-bottom: 22px;
+        padding-block: 18px;
+    }
+
+    .week-calendar-grid {
+        display: block;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    .time-col {
+        display: none;
+    }
+
+    .day-col {
+        min-height: 0;
+        padding: 48px 12px 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        margin-bottom: 12px;
+        background-image: none;
+    }
+
+    .calendar-block {
+        position: static;
+        min-height: 0;
+        margin-bottom: 10px;
+    }
+
+    .schedule-table,
+    .coach-students-table,
+    .availability-grid-table,
+    .student-table {
+        overflow: visible;
+    }
+
+    .schedule-row,
+    .coach-student-row {
+        min-width: 0;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        min-height: 0;
+        padding: 14px;
+        margin-bottom: 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+    }
+
+    .schedule-row.head,
+    .coach-student-row.head {
+        display: none;
+    }
+
+    .schedule-row button,
+    .coach-student-row button,
+    .students-pagination button,
+    .save-notes {
+        min-height: 44px;
+    }
+
+    .students-pagination {
+        align-items: stretch;
+    }
 }

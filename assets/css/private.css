@@ -130,8 +130,17 @@
     --private-wrap: calc(100% - 32px);
   }
 
+  .private-hero {
+    padding: calc(var(--nav-h) + 54px) 0 58px;
+  }
+
+  .private-hero h1 {
+    font-size: clamp(36px, 12vw, 54px);
+  }
+
   .private-gallery__grid {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .private-gallery__large,
@@ -143,5 +152,21 @@
   .private-gallery__large img,
   .private-gallery__wide img {
     min-height: 320px;
+  }
+
+  .private-service__button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 380px) {
+  .private-page {
+    --private-wrap: calc(100% - 24px);
+  }
+
+  .private-gallery__large img,
+  .private-gallery__wide img,
+  .private-gallery img {
+    min-height: 240px;
   }
 }

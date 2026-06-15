@@ -4,7 +4,7 @@ pickled_init_csrf();
 $pageTitle  = 'Social Play - Pickled';
 $activePage = 'social-play.php';
 $basePath   = '../';
-$extraHead  = '<link rel="stylesheet" href="../assets/css/social-play.css?v=20260610b"/>';
+$extraHead  = '<link rel="stylesheet" href="../assets/css/social-play.css?v=20260615a"/>';
 include __DIR__ . '/../includes/header.php';
 
 $galleryImages = [
