@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
 require_once __DIR__ . '/../app/services/FeedbackService.php';
+require_once __DIR__ . '/../app/services/PrivatePackageService.php';
 
 pickled_start_secure_session();
 pickled_init_csrf();
@@ -15,11 +16,14 @@ $coach = $_SESSION['user'];
 $coachId = (int) ($coach['id'] ?? 0);
 $coachName = $coach['name'] ?? 'Coach Mia Santos';
 $feedbackService = new FeedbackService();
+$privatePackageService = new PrivatePackageService();
 $coachFeedbackStats = $feedbackService->statsForCoach($coachId);
 $recentCoachFeedback = $feedbackService->recentForCoach($coachId, 8);
+$coachPrivatePackages = $privatePackageService->packagesForCoach($coachId);
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
 $todayLabel = $today->format('M j, Y (D)');
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
+$showProfileToast = isset($_GET['saved']) || isset($_GET['updated']);
 
 function profile_icon(array $icons, string $name): string {
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['profile']) . '</svg>';
@@ -50,10 +54,10 @@ $navItems = [
 ];
 
 $stats = [
-    ['Reviews', number_format((int) $coachFeedbackStats['total_reviews'])],
-    ['Sessions This Month', '36'],
+    ['Total Students', '38'],
+    ['Sessions Completed', '126'],
+    ['Average Rating', number_format((float) $coachFeedbackStats['average_rating'], 1)],
     ['Years Coaching', '3'],
-    ['Rating', number_format((float) $coachFeedbackStats['average_rating'], 1)],
 ];
 
 $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
@@ -70,6 +74,7 @@ $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
     <link rel="stylesheet" href="<?php echo htmlspecialchars(pickled_asset_url('css/coach-dashboard.css?v=20260615a')); ?>">
 </head>
 <body class="coach-portal-body">
+<?php if ($showProfileToast): ?><div class="coach-toast"><?php echo profile_icon($icons, 'check'); ?>Profile updated successfully</div><?php endif; ?>
 <div class="coach-app-shell">
     <aside class="coach-sidebar">
         <a class="coach-brand" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/dashboard.php')); ?>"><img src="<?php echo htmlspecialchars(pickled_asset_url('img/LM-DGreen.png')); ?>" alt="Pickled"><span>Coach</span></a>
@@ -84,7 +89,7 @@ $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
         <header class="coach-topbar">
             <div><h1>Profile</h1></div>
             <div class="coach-top-actions">
-                <button class="coach-date-pill" type="button"><?php echo profile_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button>
+                <span class="coach-date-pill"><?php echo profile_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></span>
                 <a class="coach-notification" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/announcements.php')); ?>" aria-label="Announcements"><?php echo profile_icon($icons, 'bell'); ?><em>4</em></a>
                 <details class="coach-top-profile">
                     <summary><span class="coach-photo small"><img src="<?php echo htmlspecialchars(pickled_asset_url('img/court/academy.png')); ?>" alt="<?php echo htmlspecialchars($coachName); ?>"></span><span><strong>Coach</strong><small>Pickleball Coach</small></span><b>⌄</b></summary>
@@ -94,8 +99,8 @@ $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
         </header>
 
         <section class="page-intro page-first-section">
-            <p>Manage your coaching account and personal details.</p>
-            <span><?php echo profile_icon($icons, 'check'); ?>Changes saved</span>
+            <p>Keep your coaching profile accurate for players and admins.</p>
+            <a class="intro-action" href="#public-preview"><?php echo profile_icon($icons, 'eye'); ?>Preview Public Profile</a>
         </section>
 
         <section class="profile-workspace">
@@ -109,33 +114,48 @@ $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
                     <div class="profile-stats">
                         <?php foreach ($stats as [$label, $value]): ?><article><strong><?php echo htmlspecialchars($value); ?></strong><span><?php echo htmlspecialchars($label); ?></span></article><?php endforeach; ?>
                     </div>
-                    <div class="profile-actions"><button><?php echo profile_icon($icons, 'camera'); ?>Change Photo</button><a href="#"><?php echo profile_icon($icons, 'eye'); ?>View Public Profile</a></div>
+                    <div class="profile-actions"><button type="button" disabled title="Profile photo upload is not connected yet."><?php echo profile_icon($icons, 'camera'); ?>Change Photo</button><a href="#public-preview"><?php echo profile_icon($icons, 'eye'); ?>View Public Profile</a></div>
                 </article>
             </aside>
 
             <div class="profile-settings">
                 <section class="coach-card profile-form-card">
-                    <header><h2>Account Information</h2><span><?php echo profile_icon($icons, 'check'); ?>Changes saved</span></header>
+                    <header><h2>Personal Information</h2></header>
                     <form class="profile-form-grid">
-                        <label>First Name<input type="text" value="Mia"></label>
-                        <label>Last Name<input type="text" value="Santos"></label>
-                        <label>Email<input type="email" value="mia.coach@pickled.ph"></label>
+                        <label class="full">Name<input type="text" value="<?php echo htmlspecialchars($coachName); ?>"></label>
+                        <label>Email<input type="email" value="<?php echo htmlspecialchars($coach['email'] ?? 'mia.coach@pickled.ph'); ?>"></label>
                         <label>Phone Number<input type="tel" value="0912 345 6789"></label>
-                        <label>City<input type="text" value="Makati"></label>
-                        <label>Province<input type="text" value="Metro Manila"></label>
+                        <label class="full">Location<input type="text" value="Makati, Metro Manila"></label>
                     </form>
                 </section>
 
                 <section class="coach-card profile-form-card">
-                    <header><h2>Coaching Information</h2><span><?php echo profile_icon($icons, 'check'); ?>Changes saved</span></header>
-                    <div class="coach-check-list">
-                        <?php foreach ($specializations as $item): ?><label><input type="checkbox" checked> <?php echo htmlspecialchars($item); ?></label><?php endforeach; ?>
+                    <header><h2>Coaching Profile</h2><span>Read-only preview</span></header>
+                    <div class="coach-specialization-pills">
+                        <?php foreach ($specializations as $item): ?><span><?php echo htmlspecialchars($item); ?></span><?php endforeach; ?>
                     </div>
                     <form class="profile-form-grid">
                         <label>Experience<input type="text" value="3 Years Coaching"></label>
                         <label>Certifications<input type="text" value="PPR Certified Coach"></label>
                         <label class="full">Bio<textarea>Patient and encouraging pickleball coach focused on beginner confidence, youth development, and practical game habits.</textarea></label>
                     </form>
+                </section>
+
+                <section class="coach-card profile-form-card">
+                    <header><h2>Coaching Statistics</h2></header>
+                    <div class="profile-stat-grid">
+                        <?php foreach ($stats as [$label, $value]): ?><article><strong><?php echo htmlspecialchars($value); ?></strong><span><?php echo htmlspecialchars($label); ?></span></article><?php endforeach; ?>
+                    </div>
+                </section>
+
+                <section class="coach-card profile-form-card" id="private-packages">
+                    <header><h2>Private Packages</h2></header>
+                    <div class="package-list">
+                        <?php foreach (array_slice($coachPrivatePackages, 0, 4) as $package): ?>
+                            <article><strong><?php echo htmlspecialchars($package['title']); ?></strong><span>PHP <?php echo number_format((float) $package['price'], 2); ?> - <?php echo htmlspecialchars($package['duration']); ?></span><em><?php echo htmlspecialchars(ucfirst((string) $package['status'])); ?></em></article>
+                        <?php endforeach; ?>
+                        <?php if (!$coachPrivatePackages): ?><p>No assigned private packages yet.</p><?php endif; ?>
+                    </div>
                 </section>
 
                 <section class="coach-card profile-form-card" id="feedback">
@@ -153,8 +173,23 @@ $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
                     </div>
                 </section>
 
+                <section class="coach-card profile-form-card" id="public-preview">
+                    <header><h2><?php echo profile_icon($icons, 'eye'); ?>Public Profile Preview</h2></header>
+                    <article class="public-profile-preview">
+                        <span class="coach-photo"><img src="<?php echo htmlspecialchars(pickled_asset_url('img/court/academy.png')); ?>" alt="<?php echo htmlspecialchars($coachName); ?>"></span>
+                        <div>
+                            <h3><?php echo htmlspecialchars($coachName); ?></h3>
+                            <p>Patient and encouraging pickleball coach focused on beginner confidence, youth development, and practical game habits.</p>
+                            <div class="coach-specialization-pills">
+                                <?php foreach ($specializations as $item): ?><span><?php echo htmlspecialchars($item); ?></span><?php endforeach; ?>
+                            </div>
+                        </div>
+                        <strong><?php echo number_format((float) $coachFeedbackStats['average_rating'], 1); ?> / 5</strong>
+                    </article>
+                </section>
+
                 <section class="coach-card profile-form-card">
-                    <header><h2>Availability Preferences</h2><span><?php echo profile_icon($icons, 'check'); ?>Changes saved</span></header>
+                    <header><h2>Availability Preferences</h2></header>
                     <form class="profile-form-grid">
                         <label>Preferred Coaching Hours<select><option>Morning</option><option>Afternoon</option><option>Evening</option></select></label>
                         <label>Preferred Court<select><option>Court Green</option><option>Court Pink</option></select></label>
@@ -163,8 +198,8 @@ $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
                 </section>
 
                 <section class="coach-card profile-form-card security-card">
-                    <header><h2><?php echo profile_icon($icons, 'shield'); ?>Security</h2><span><?php echo profile_icon($icons, 'check'); ?>Changes saved</span></header>
-                    <div class="password-summary"><label>Password<input type="password" value="password" readonly></label><button type="button">Change Password</button></div>
+                    <header><h2><?php echo profile_icon($icons, 'shield'); ?>Security</h2></header>
+                    <div class="password-summary"><label>Password<input type="password" value="password" readonly></label><button type="button" disabled title="Password changes are handled through account recovery.">Change Password</button></div>
                 </section>
             </div>
         </section>

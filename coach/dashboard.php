@@ -3,7 +3,6 @@ require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
 require_once __DIR__ . '/../app/services/SchedulingService.php';
 require_once __DIR__ . '/../app/services/FeedbackService.php';
-require_once __DIR__ . '/../app/services/PrivatePackageService.php';
 require_once __DIR__ . '/../app/repositories/BookingRepository.php';
 
 pickled_start_secure_session();
@@ -26,7 +25,6 @@ $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $schedulingService = new SchedulingService();
 $bookingRepository = new BookingRepository();
 $feedbackService = new FeedbackService();
-$privatePackageService = new PrivatePackageService();
 
 function coach_icon(array $icons, string $name): string {
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['calendar']) . '</svg>';
@@ -63,23 +61,36 @@ $coachSessions = $coachId ? $schedulingService->sessionsBetween($coachId, $today
 $coachBookingItems = $coachId ? $bookingRepository->getItemsForCoach($coachId, $today->format('Y-m-d'), $today->modify('+30 days')->format('Y-m-d')) : [];
 $coachFeedbackStats = $feedbackService->statsForCoach($coachId);
 $recentCoachFeedback = $feedbackService->recentForCoach($coachId, 3);
-$coachPrivatePackages = $privatePackageService->packagesForCoach($coachId);
 $activeStudentCount = array_sum(array_map(static fn(array $item): int => (int) $item['quantity'], $coachBookingItems));
 $todaySessions = array_values(array_filter($coachSessions, fn(array $session): bool => $session['session_date'] === $todayDate));
-$sessions = array_map(static function (array $session): array {
-    $tone = str_contains(strtolower((string) $session['court']), 'pink') ? 'pink' : 'green';
-    $icon = str_contains(strtolower((string) $session['category']), 'private') ? 'profile' : 'students';
+$todayBookingItems = array_values(array_filter($coachBookingItems, static fn(array $item): bool => (string) ($item['booking_date_raw'] ?? '') === $todayDate));
+$sessions = array_map(static function (array $item): array {
+    $tone = str_contains(strtolower((string) ($item['court'] ?? '')), 'pink') ? 'pink' : 'green';
     return [
-        (new DateTimeImmutable('1970-01-01 ' . $session['start_time']))->format('h:i A'),
-        (new DateTimeImmutable('1970-01-01 ' . $session['end_time']))->format('h:i A'),
-        $session['name'],
-        $session['court'],
-        (int) $session['booked_count'] . ' / ' . (int) $session['capacity'] . ' players',
-        ucfirst((string) $session['status']),
+        (new DateTimeImmutable('1970-01-01 ' . $item['start_time']))->format('h:i A'),
+        (new DateTimeImmutable('1970-01-01 ' . $item['end_time']))->format('h:i A'),
+        (string) ($item['user_name'] ?? 'Booked student'),
+        (string) ($item['name'] ?? 'Coaching session'),
+        (string) ($item['court'] ?? 'Court assignment pending'),
+        ucfirst((string) ($item['booking_status'] ?? 'confirmed')),
         $tone,
-        $icon,
     ];
-}, $todaySessions ?: array_slice($coachSessions, 0, 4));
+}, array_slice($todayBookingItems, 0, 5));
+
+if (!$sessions) {
+    $sessions = array_map(static function (array $session): array {
+        $tone = str_contains(strtolower((string) $session['court']), 'pink') ? 'pink' : 'green';
+        return [
+            (new DateTimeImmutable('1970-01-01 ' . $session['start_time']))->format('h:i A'),
+            (new DateTimeImmutable('1970-01-01 ' . $session['end_time']))->format('h:i A'),
+            'Booked student',
+            (string) $session['name'],
+            (string) $session['court'],
+            ucfirst((string) $session['status']),
+            $tone,
+        ];
+    }, array_slice($todaySessions ?: $coachSessions, 0, 5));
+}
 
 $students = array_map(static function (array $item): array {
     $name = (string) ($item['user_name'] ?? 'Player');
@@ -97,6 +108,7 @@ $students = array_map(static function (array $item): array {
 }, array_slice($coachBookingItems, 0, 5));
 
 $availabilityRows = $coachId ? $schedulingService->availabilityForCoach($coachId, true) : [];
+$availableDays = count(array_unique(array_map(static fn(array $row): int => (int) $row['day_of_week'], array_filter($availabilityRows, static fn(array $row): bool => $row['status'] === 'available'))));
 $availability = array_map(static fn(array $row): array => [
     strtoupper((string) $row['day_label']),
     $row['day_label'],
@@ -110,7 +122,21 @@ $announcements = [
     ['Holiday Hours', 'Please check the adjusted operating hours on June 12.', 'orange', 'clock'],
 ];
 
-$nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No court', '0 players', 'Open', 'green', 'calendar'];
+$nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No program', 'No court', 'Open', 'green'];
+$nextCountdown = 'No upcoming session';
+if (($nextSession[0] ?? '--') !== '--') {
+    $nextStart = DateTimeImmutable::createFromFormat('Y-m-d h:i A', $todayDate . ' ' . $nextSession[0], new DateTimeZone('Asia/Manila'));
+    if ($nextStart instanceof DateTimeImmutable) {
+        $minutesUntil = (int) floor(($nextStart->getTimestamp() - $today->getTimestamp()) / 60);
+        if ($minutesUntil <= 0) {
+            $nextCountdown = 'In progress';
+        } elseif ($minutesUntil < 60) {
+            $nextCountdown = 'Starts in ' . $minutesUntil . ' mins';
+        } else {
+            $nextCountdown = 'Starts in ' . (int) ceil($minutesUntil / 60) . ' hrs';
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -149,7 +175,7 @@ $nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No court',
                 <h1>Dashboard</h1>
             </div>
             <div class="coach-top-actions">
-                <button class="coach-date-pill" type="button"><?php echo coach_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button>
+                <span class="coach-date-pill"><?php echo coach_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></span>
                 <a class="coach-notification" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/announcements.php')); ?>" aria-label="Announcements"><?php echo coach_icon($icons, 'bell'); ?><em>4</em></a>
                 <details class="coach-top-profile">
                     <summary>
@@ -167,36 +193,43 @@ $nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No court',
 
         <section class="coach-welcome">
             <h2>Good morning, <?php echo htmlspecialchars($firstName); ?>!</h2>
-            <p>Here's your overview for today.</p>
+            <p>Start with today's sessions, student follow-ups, and availability updates.</p>
         </section>
 
         <section class="coach-kpi-grid" aria-label="Coach overview">
-            <article class="coach-kpi green"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Today's Sessions</span><strong><?php echo number_format(count($todaySessions)); ?></strong><small>From MySQL</small></div></article>
-            <article class="coach-kpi pink"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Upcoming This Week</span><strong><?php echo number_format(count($coachSessions)); ?></strong><small>Sessions</small></div></article>
-            <article class="coach-kpi orange"><?php echo coach_icon($icons, 'students'); ?><div><span>Active Students</span><strong><?php echo number_format($activeStudentCount); ?></strong><small>From bookings</small></div></article>
-            <article class="coach-kpi purple"><?php echo coach_icon($icons, 'star'); ?><div><span>Average Rating</span><strong><?php echo number_format((float) $coachFeedbackStats['average_rating'], 1); ?></strong><small><?php echo number_format((int) $coachFeedbackStats['total_reviews']); ?> reviews</small></div></article>
-            <article class="coach-kpi green"><?php echo coach_icon($icons, 'trophy'); ?><div><span>Private Packages</span><strong><?php echo number_format(count($coachPrivatePackages)); ?></strong><small>Assigned offers</small></div></article>
+            <article class="coach-kpi green"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Today's Sessions</span><strong><?php echo number_format(count($sessions)); ?></strong><small>Coach today</small></div></article>
+            <article class="coach-kpi pink"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Upcoming Sessions</span><strong><?php echo number_format(count($coachSessions)); ?></strong><small>Next 7 days</small></div></article>
+            <article class="coach-kpi orange"><?php echo coach_icon($icons, 'students'); ?><div><span>Active Students</span><strong><?php echo number_format($activeStudentCount); ?></strong><small>Booked players</small></div></article>
+            <article class="coach-kpi purple"><?php echo coach_icon($icons, 'clock'); ?><div><span>Availability</span><strong><?php echo number_format($availableDays); ?></strong><small>Available days</small></div></article>
+        </section>
+
+        <section class="quick-actions-card" aria-label="Quick actions">
+            <a href="<?php echo htmlspecialchars(pickled_frontend_url('coach/schedule.php')); ?>"><?php echo coach_icon($icons, 'calendar'); ?><span>View Schedule</span></a>
+            <a href="<?php echo htmlspecialchars(pickled_frontend_url('coach/availability.php')); ?>"><?php echo coach_icon($icons, 'clock'); ?><span>Update Availability</span></a>
+            <a href="<?php echo htmlspecialchars(pickled_frontend_url('coach/students.php')); ?>"><?php echo coach_icon($icons, 'students'); ?><span>View Students</span></a>
+            <a href="<?php echo htmlspecialchars(pickled_frontend_url('coach/announcements.php')); ?>"><?php echo coach_icon($icons, 'megaphone'); ?><span>View Announcements</span></a>
         </section>
 
         <section class="coach-content-grid">
             <div class="coach-center-column">
                 <article class="coach-card today-schedule-card" id="schedule">
-                    <header><h2><?php echo coach_icon($icons, 'calendar'); ?> Today's Schedule</h2><span><?php echo htmlspecialchars($scheduleDateLabel); ?></span><a href="#schedule">View Full Schedule <?php echo coach_icon($icons, 'arrow'); ?></a></header>
+                    <header><h2><?php echo coach_icon($icons, 'calendar'); ?> Today's Schedule</h2><span><?php echo htmlspecialchars($scheduleDateLabel); ?></span><a href="<?php echo htmlspecialchars(pickled_frontend_url('coach/schedule.php')); ?>">View Full Schedule <?php echo coach_icon($icons, 'arrow'); ?></a></header>
                     <div class="coach-session-list">
-                        <?php foreach ($sessions as [$start, $end, $name, $court, $studentsCount, $status, $tone, $icon]): ?>
+                        <?php foreach ($sessions as [$start, $end, $student, $program, $court, $status, $tone]): ?>
                             <article class="coach-session-item <?php echo $tone; ?>">
                                 <time><strong><?php echo htmlspecialchars($start); ?></strong><span><?php echo htmlspecialchars($end); ?></span></time>
-                                <i><?php echo coach_icon($icons, $icon); ?></i>
-                                <div><strong><?php echo htmlspecialchars($name); ?></strong><span><?php echo htmlspecialchars($court); ?> • <?php echo htmlspecialchars($studentsCount); ?></span></div>
+                                <i><?php echo coach_icon($icons, 'profile'); ?></i>
+                                <div><strong><?php echo htmlspecialchars($student); ?></strong><span><?php echo htmlspecialchars($program); ?> • <?php echo htmlspecialchars($court); ?></span></div>
                                 <em class="session-status <?php echo strtolower($status); ?>"><?php echo htmlspecialchars($status); ?></em>
                             </article>
                         <?php endforeach; ?>
+                        <?php if (!$sessions): ?><p class="empty-note">No sessions scheduled today.</p><?php endif; ?>
                     </div>
                 </article>
 
                 <section class="coach-lower-grid">
                     <article class="coach-card students-card" id="students">
-                        <header><h2>Active Students</h2><a href="#students">View all</a></header>
+                        <header><h2>Active Students</h2><a href="<?php echo htmlspecialchars(pickled_frontend_url('coach/students.php')); ?>">View all</a></header>
                         <div class="student-table">
                             <div class="student-row head"><span>Student</span><span>Program</span><span>Session Date</span><span>Status</span></div>
                             <?php foreach ($students as [$initials, $name, $program, $lastSession, $status, $tone]): ?>
@@ -204,7 +237,7 @@ $nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No court',
                             <?php endforeach; ?>
                             <?php if (!$students): ?><div class="student-row"><span>No booked students yet.</span><span></span><span></span><strong></strong></div><?php endif; ?>
                         </div>
-                        <a class="coach-card-link" href="#students">See all students <?php echo coach_icon($icons, 'arrow'); ?></a>
+                        <a class="coach-card-link" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/students.php')); ?>">See all students <?php echo coach_icon($icons, 'arrow'); ?></a>
                     </article>
 
                     <article class="coach-card availability-card" id="availability">
@@ -220,11 +253,12 @@ $nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No court',
 
             <aside class="coach-right-panel">
                 <article class="coach-card next-session-card">
-                    <header><h2>Next Session</h2><em>In 1 hour</em></header>
+                    <header><h2>Next Session</h2><em><?php echo htmlspecialchars($nextCountdown); ?></em></header>
                     <strong><?php echo htmlspecialchars($nextSession[0]); ?></strong>
                     <h3><?php echo htmlspecialchars($nextSession[2]); ?></h3>
-                    <span class="court-badge"><?php echo htmlspecialchars($nextSession[3]); ?></span>
-                    <div><p><?php echo coach_icon($icons, 'students'); ?><b><?php echo htmlspecialchars($nextSession[4]); ?></b><small>Booked</small></p><p><?php echo coach_icon($icons, 'clock'); ?><b><?php echo htmlspecialchars($nextSession[0] . ' - ' . $nextSession[1]); ?></b><small>Time</small></p></div>
+                    <p class="next-program"><?php echo htmlspecialchars($nextSession[3]); ?></p>
+                    <span class="court-badge"><?php echo htmlspecialchars($nextSession[4]); ?></span>
+                    <a class="coach-card-link primary" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/schedule.php')); ?>">View Details <?php echo coach_icon($icons, 'arrow'); ?></a>
                 </article>
 
                 <article class="coach-card announcements-card" id="announcements">
@@ -248,23 +282,6 @@ $nextSession = $sessions[0] ?? ['--', '--', 'No sessions scheduled', 'No court',
                     <?php endforeach; ?>
                     <?php if (!$recentCoachFeedback): ?>
                         <article class="announcement-item green"><i><?php echo coach_icon($icons, 'star'); ?></i><div><strong>No reviews yet</strong><span>Completed session feedback will appear here.</span></div><b></b></article>
-                    <?php endif; ?>
-                </article>
-
-                <article class="coach-card announcements-card" id="private-packages">
-                    <header><h2>Assigned Private Packages</h2></header>
-                    <?php foreach (array_slice($coachPrivatePackages, 0, 4) as $package): ?>
-                        <article class="announcement-item green">
-                            <i><?php echo coach_icon($icons, 'trophy'); ?></i>
-                            <div>
-                                <strong><?php echo htmlspecialchars($package['title']); ?></strong>
-                                <span>PHP <?php echo number_format((float) $package['price'], 2); ?> - <?php echo htmlspecialchars($package['duration']); ?> - <?php echo htmlspecialchars(ucfirst((string) $package['status'])); ?></span>
-                            </div>
-                            <b></b>
-                        </article>
-                    <?php endforeach; ?>
-                    <?php if (!$coachPrivatePackages): ?>
-                        <article class="announcement-item green"><i><?php echo coach_icon($icons, 'trophy'); ?></i><div><strong>No assigned private packages</strong><span>Admin-assigned packages will appear here.</span></div><b></b></article>
                     <?php endif; ?>
                 </article>
 

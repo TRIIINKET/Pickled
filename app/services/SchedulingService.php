@@ -9,6 +9,15 @@ final class SchedulingService
 {
     private const SESSION_STATUSES = ['open', 'full', 'cancelled', 'completed'];
     private const AVAILABILITY_STATUSES = ['available', 'unavailable', 'leave'];
+    private const TIME_OFF_STATUSES = ['pending', 'approved', 'rejected', 'completed', 'cancelled'];
+    private const TIME_OFF_REASONS = [
+        'Vacation',
+        'Personal Leave',
+        'Medical Appointment',
+        'Family Commitment',
+        'Tournament Participation',
+        'Other',
+    ];
 
     public function __construct(
         private readonly SchedulingRepository $schedules = new SchedulingRepository(),
@@ -137,6 +146,42 @@ final class SchedulingService
         return $this->schedules->availabilityForCoach($coachUserId, $includeUnavailable);
     }
 
+    public function createTimeOffRequest(array $input): int
+    {
+        $data = $this->timeOffData($input);
+        $data['status'] = 'pending';
+        if ($this->schedules->coachHasApprovedTimeOff((int) $data['coach_user_id'], (string) $data['start_date'], (string) $data['end_date'])) {
+            throw new RuntimeException('This request overlaps an approved time-off period.');
+        }
+        return $this->schedules->createTimeOffRequest($data);
+    }
+
+    public function updateTimeOffRequest(int $id, array $input): bool
+    {
+        if ($id <= 0) {
+            throw new RuntimeException('Time off request is required.');
+        }
+        $data = $this->timeOffData($input);
+        $data['status'] = 'pending';
+        if ($this->schedules->coachHasApprovedTimeOff((int) $data['coach_user_id'], (string) $data['start_date'], (string) $data['end_date'], $id)) {
+            throw new RuntimeException('This request overlaps an approved time-off period.');
+        }
+        return $this->schedules->updateTimeOffRequest($id, $data);
+    }
+
+    public function cancelTimeOffRequest(int $id, int $coachUserId): bool
+    {
+        if ($id <= 0 || $coachUserId <= 0) {
+            throw new RuntimeException('Time off request is required.');
+        }
+        return $this->schedules->cancelTimeOffRequest($id, $coachUserId);
+    }
+
+    public function timeOffRequestsForCoach(int $coachUserId): array
+    {
+        return $coachUserId > 0 ? $this->schedules->timeOffRequestsForCoach($coachUserId) : [];
+    }
+
     public function allAvailability(bool $includeUnavailable = true): array
     {
         return $this->schedules->allAvailability($includeUnavailable);
@@ -230,7 +275,7 @@ final class SchedulingService
         }
 
         $dayOfWeek = (int) (new DateTimeImmutable((string) $data['session_date']))->format('w');
-        if (!$this->schedules->coachAvailableForSlot((int) $coachUserId, $dayOfWeek, (string) $data['start_time'], (string) $data['end_time'])) {
+        if (!$this->schedules->coachAvailableForDatedSlot((int) $coachUserId, $dayOfWeek, (string) $data['start_time'], (string) $data['end_time'], (string) $data['session_date'])) {
             throw new RuntimeException('Assigned coach is not available for that schedule.');
         }
         if ($this->schedules->coachSessionOverlap((int) $coachUserId, (string) $data['session_date'], (string) $data['start_time'], (string) $data['end_time'], $ignoreSessionId)) {
@@ -301,6 +346,35 @@ final class SchedulingService
             $status = 'unavailable';
         }
         return in_array($status, self::AVAILABILITY_STATUSES, true) ? $status : 'available';
+    }
+
+    private function timeOffData(array $input): array
+    {
+        $coachUserId = (int) ($input['coach_user_id'] ?? 0);
+        $startDate = $this->date((string) ($input['start_date'] ?? ''));
+        $endDate = $this->date((string) ($input['end_date'] ?? ''));
+        $reason = trim((string) ($input['reason'] ?? ''));
+        $notes = trim((string) ($input['notes'] ?? ''));
+        $status = strtolower(trim((string) ($input['status'] ?? 'pending')));
+
+        if ($coachUserId <= 0 || !$this->schedules->coachById($coachUserId)) {
+            throw new RuntimeException('A valid coach is required.');
+        }
+        if ($endDate < $startDate) {
+            throw new RuntimeException('End date cannot be before start date.');
+        }
+        if (!in_array($reason, self::TIME_OFF_REASONS, true)) {
+            throw new RuntimeException('Choose a valid time off reason.');
+        }
+
+        return [
+            'coach_user_id' => $coachUserId,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'reason' => $reason,
+            'notes' => $notes !== '' ? substr($notes, 0, 1000) : null,
+            'status' => in_array($status, self::TIME_OFF_STATUSES, true) ? $status : 'pending',
+        ];
     }
 
     private function adminId(array $input, ?int $adminId): int

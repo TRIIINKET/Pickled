@@ -81,22 +81,30 @@ include __DIR__ . '/../includes/header.php';
               $packageDescription = $package['description'] ?? 'A private event package tailored for your group.';
               $packagePrice = (float) ($package['price'] ?? 0);
               $packageDuration = $package['duration'] ?? $package['duration_label'] ?? 'Custom duration';
-              $coachName = $package['coach_name'] ?? 'Assigned coach';
+              $packageCapacity = (int) ($package['capacity'] ?? 0);
+              $coachName = trim((string) ($package['coach_name'] ?? ''));
+              $coachLabel = $coachName !== '' ? $coachName : 'Coach Included';
+              $capacityLabel = $packageCapacity > 1
+                ? number_format($packageCapacity) . (str_contains(strtolower((string) $packageCategory), 'coaching') ? ' Players' : ' Guests')
+                : 'Custom Capacity';
+              $isPremiumPackage = $packagePrice >= 10000 || str_contains(strtolower((string) $packageCategory), 'event');
             ?>
 
-            <article class="private-package-card">
+            <article class="private-package-card<?= $isPremiumPackage ? ' private-package-card--premium' : '' ?>">
               <div class="private-package-card__head">
-                <span><?= private_h($packageCategory) ?></span>
-                <strong>PHP <?= number_format($packagePrice, 2) ?></strong>
+                <span class="private-package-card__badge"><?= private_h($packageCategory) ?></span>
               </div>
 
               <h3><?= private_h($packageTitle) ?></h3>
               <p><?= private_h($packageDescription) ?></p>
 
-              <p class="private-package-card__meta">
+              <strong class="private-package-card__price">PHP <?= number_format($packagePrice, 2) ?></strong>
+
+              <div class="private-package-card__meta" aria-label="Package details">
                 <span><?= private_h($packageDuration) ?></span>
-                <span>Coach: <?= private_h($coachName) ?></span>
-              </p>
+                <span><?= private_h($capacityLabel) ?></span>
+                <span><?= private_h($coachLabel) ?></span>
+              </div>
 
               <?php if ($isPlayer): ?>
                 <form method="post">
@@ -108,10 +116,10 @@ include __DIR__ . '/../includes/header.php';
                     <textarea name="message" rows="4" required placeholder="Tell us your preferred date, group size, and goals."></textarea>
                   </label>
 
-                  <button class="private-service__button" type="submit">Send inquiry</button>
+                  <button class="private-service__button" type="submit">Inquire About Package</button>
                 </form>
               <?php else: ?>
-                <a href="../auth/login.php?redirect=resident/private.php" class="private-service__button">Log in to inquire</a>
+                <a href="../auth/login.php?redirect=resident/private.php" class="private-service__button">Inquire About Package</a>
               <?php endif; ?>
             </article>
           <?php endforeach; ?>

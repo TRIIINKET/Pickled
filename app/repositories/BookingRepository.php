@@ -553,7 +553,7 @@ final class BookingRepository
         }
 
         $dayOfWeek = (int) (new DateTimeImmutable($bookingDate))->format('w');
-        if (!$this->schedules->coachAvailableForSlot($coachUserId, $dayOfWeek, $startTime, $endTime)) {
+        if (!$this->schedules->coachAvailableForDatedSlot($coachUserId, $dayOfWeek, $startTime, $endTime, $bookingDate)) {
             return false;
         }
         if ($this->schedules->coachSessionOverlap($coachUserId, $bookingDate, $startTime, $endTime)) {

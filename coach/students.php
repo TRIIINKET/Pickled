@@ -30,9 +30,7 @@ $icons = [
     'bell' => '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
     'phone' => '<path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 3.08 5.18 2 2 0 0 1 5.06 3h3a2 2 0 0 1 2 1.72c.12.9.33 1.77.63 2.61a2 2 0 0 1-.45 2.11L9 10.69a16 16 0 0 0 4.31 4.31l1.25-1.24a2 2 0 0 1 2.11-.45c.84.3 1.71.51 2.61.63A2 2 0 0 1 22 16.92Z"/>',
     'search' => '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
-    'download' => '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
     'eye' => '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
-    'more' => '<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
     'star' => '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z"/>',
     'trend' => '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
 ];
@@ -47,21 +45,16 @@ $navItems = [
 ];
 
 $students = [
-    ['MR', 'Mia Reyes', 'Kids Class (6-10)', 'Beginner', 'Jun 10, 2026', '92%', 'pink', 'beginner'],
-    ['JD', 'Juan Dela Cruz', 'Youth Development', 'Intermediate', 'Jun 9, 2026', '88%', 'green', 'intermediate'],
-    ['AS', 'Alyssa Santos', 'Private Coaching', 'Advanced', 'Jun 10, 2026', '95%', 'purple', 'advanced'],
-    ['BR', 'Beatrice Ramos', 'Kids Class (6-10)', 'Beginner', 'Jun 8, 2026', '90%', 'pink', 'beginner'],
-    ['CL', 'Caleb Lim', 'Youth Development', 'Intermediate', 'Jun 9, 2026', '85%', 'orange', 'intermediate'],
-    ['SG', 'Sophia Garcia', 'Private Coaching', 'Advanced', 'Jun 7, 2026', '93%', 'purple', 'advanced'],
-    ['MT', 'Miguel Tan', 'Social Play', 'Beginner', 'Jun 7, 2026', '78%', 'orange', 'beginner'],
-    ['LP', 'Liam Ong', 'Kids Class (6-10)', 'Beginner', 'Jun 6, 2026', '89%', 'green', 'beginner'],
+    ['MR', 'Mia Reyes', 'Beginner', 'Beginner Fundamentals', 'Today, 8:00 AM', '92%', '4.8', 'pink'],
+    ['JD', 'Juan Dela Cruz', 'Youth Development', 'Youth Development', 'Today, 9:00 AM', '88%', '4.6', 'green'],
+    ['AS', 'Alyssa Santos', 'Private Coaching', 'Private Coaching', 'Wed, Jun 17', '95%', '5.0', 'purple'],
+    ['BR', 'Beatrice Ramos', 'Beginner', 'Beginner Fundamentals', 'Thu, Jun 18', '90%', '4.7', 'pink'],
+    ['CL', 'Caleb Lim', 'Youth Development', 'Youth Development', 'Fri, Jun 19', '85%', '4.5', 'orange'],
+    ['SG', 'Sophia Garcia', 'Private Coaching', 'Private Coaching', 'Sat, Jun 20', '93%', '4.9', 'purple'],
+    ['MT', 'Miguel Tan', 'Social Play', 'Social Play', 'Sun, Jun 21', '78%', '4.2', 'orange'],
+    ['LP', 'Liam Ong', 'Beginner', 'Beginner Fundamentals', 'Mon, Jun 22', '89%', '4.4', 'green'],
 ];
 
-$recentSessions = [
-    ['Jun 10', 'Kids Class (6-10)', 'Court Pink', '9:00 AM - 10:00 AM', 'Attended', 'success'],
-    ['Jun 8', 'Kids Class (6-10)', 'Court Pink', '9:00 AM - 10:00 AM', 'Attended', 'success'],
-    ['Jun 6', 'Kids Class (6-10)', 'Court Pink', '9:00 AM - 10:00 AM', 'Absent', 'danger'],
-];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -89,7 +82,7 @@ $recentSessions = [
         <header class="coach-topbar">
             <div><h1>Students</h1></div>
             <div class="coach-top-actions">
-                <button class="coach-date-pill" type="button"><?php echo students_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button>
+                <span class="coach-date-pill"><?php echo students_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></span>
                 <a class="coach-notification" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/announcements.php')); ?>" aria-label="Announcements"><?php echo students_icon($icons, 'bell'); ?><em>4</em></a>
                 <details class="coach-top-profile">
                     <summary><span class="coach-photo small"><img src="<?php echo htmlspecialchars(pickled_asset_url('img/court/academy.png')); ?>" alt="<?php echo htmlspecialchars($coachName); ?>"></span><span><strong>Coach</strong><small>Pickleball Coach</small></span><b>⌄</b></summary>
@@ -98,40 +91,74 @@ $recentSessions = [
             </div>
         </header>
 
-        <section class="coach-kpi-grid students-kpis page-first-section">
-            <article class="coach-kpi green"><?php echo students_icon($icons, 'students'); ?><div><span>My Students</span><strong>38</strong><small>Active</small></div></article>
-            <article class="coach-kpi pink"><?php echo students_icon($icons, 'calendar'); ?><div><span>Sessions This Week</span><strong>12</strong><small>With my students</small></div></article>
-            <article class="coach-kpi orange"><?php echo students_icon($icons, 'trend'); ?><div><span>Average Attendance</span><strong>91%</strong><small>This month</small></div></article>
-            <article class="coach-kpi purple"><?php echo students_icon($icons, 'star'); ?><div><span>Programs</span><strong>4</strong><small>You are coaching</small></div></article>
-        </section>
-
-        <section class="students-workspace">
-            <section class="coach-card students-table-card">
-                <div class="students-toolbar">
-                    <label class="schedule-search"><?php echo students_icon($icons, 'search'); ?><input type="search" placeholder="Search student name..."></label>
-                    <select><option>All Programs</option><option>Kids Class</option><option>Youth Development</option><option>Private Coaching</option></select>
-                    <select><option>All Levels</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select>
-                    <button><?php echo students_icon($icons, 'download'); ?> Export</button>
+        <section class="coach-card students-roster-card page-first-section">
+            <header class="student-list-header">
+                <div>
+                    <h2>Active Students</h2>
+                    <p>Search, sort, and jump into scheduling without extra panels.</p>
                 </div>
-                <div class="coach-students-table">
-                    <div class="coach-student-row head"><span>Student</span><span>Program</span><span>Level</span><span>Last Session</span><span>Attendance</span><span>Actions</span></div>
-                    <?php foreach ($students as [$initials, $name, $program, $level, $last, $attendance, $tone, $levelKey]): ?>
-                        <div class="coach-student-row <?php echo $name === 'Mia Reyes' ? 'selected' : ''; ?>"><span><b class="<?php echo $tone; ?>"><?php echo htmlspecialchars($initials); ?></b><strong><?php echo htmlspecialchars($name); ?></strong></span><span><?php echo htmlspecialchars($program); ?></span><span><em class="skill-badge <?php echo $levelKey; ?>"><?php echo htmlspecialchars($level); ?></em></span><span><?php echo htmlspecialchars($last); ?></span><span class="<?php echo (int) $attendance < 80 ? 'attendance-warn' : ''; ?>"><?php echo htmlspecialchars($attendance); ?></span><span><button>View</button><button class="icon-only"><?php echo students_icon($icons, 'more'); ?></button></span></div>
-                    <?php endforeach; ?>
-                </div>
-                <footer class="students-pagination"><span>Showing 1 to 8 of 38 students</span><div><button disabled>‹</button><button class="active">1</button><button>2</button><button>3</button><button>4</button><button>5</button><button>›</button></div></footer>
-            </section>
-
-            <aside class="coach-card student-detail-panel">
-                <header class="student-panel-head"><div><span class="student-photo"><img src="<?php echo htmlspecialchars(pickled_asset_url('img/court/academy.png')); ?>" alt="Mia Reyes"></span><div><h2>Mia Reyes <em>Active</em></h2><p>Age 9 • Student ID: STU-0001</p></div></div><button>×</button></header>
-                <nav class="student-tabs"><a class="active" href="#">Overview</a><a href="#">Sessions</a><a href="#">Attendance</a><a href="#">Notes</a></nav>
-                <section class="student-info-grid"><p><small>Program</small><strong>Kids Class (6-10)</strong></p><p><small>Email (Parent)</small><strong>dan.reyes@email.com</strong></p><p><small>Level</small><strong>Beginner</strong></p><p><small>Phone (Parent)</small><strong>0917 123 4567</strong></p><p><small>Court Preference</small><strong>Court Pink</strong></p><p><small>Joined</small><strong>May 20, 2026</strong></p></section>
-                <section class="profile-widget"><header><h3>Recent Sessions</h3><a href="#">View all</a></header><?php foreach ($recentSessions as [$date, $session, $court, $time, $status, $tone]): ?><article><time><?php echo htmlspecialchars($date); ?></time><div><strong><?php echo htmlspecialchars($session); ?></strong><span><?php echo htmlspecialchars($court); ?> • <?php echo htmlspecialchars($time); ?></span></div><em class="status-pill status-<?php echo $tone; ?>"><?php echo htmlspecialchars($status); ?></em></article><?php endforeach; ?></section>
-                <section class="profile-widget progress-widget"><header><h3>Progress Tracker</h3></header><?php foreach ([['Forehand',4],['Backhand',2],['Serve',3],['Footwork',4],['Game Sense',2]] as [$skill, $rating]): ?><p><span><?php echo htmlspecialchars($skill); ?></span><strong><?php echo str_repeat('★', $rating) . str_repeat('☆', 5 - $rating); ?></strong></p><?php endforeach; ?></section>
-                <section class="profile-widget notes-widget"><header><h3>Coach Notes</h3><button>Edit</button></header><p>Mia has good footwork and rallies well.</p><p>Needs more consistency on backhand.</p><p>Keep encouraging her during drills.</p></section>
-            </aside>
+                <span><?php echo count($students); ?> students</span>
+            </header>
+            <div class="students-toolbar">
+                <label class="schedule-search"><?php echo students_icon($icons, 'search'); ?><input id="studentSearch" type="search" placeholder="Search student name or program..."></label>
+                <label class="student-sort-control">Sort by
+                    <select id="studentSort">
+                        <option value="name">Student Name</option>
+                        <option value="program">Program</option>
+                        <option value="attendance">Attendance Rate</option>
+                        <option value="session">Next Session</option>
+                        <option value="rating">Rating</option>
+                    </select>
+                </label>
+            </div>
+            <div class="student-list-table" id="studentList">
+                <div class="student-list-row head"><span>Student Name</span><span>Program</span><span>Attendance Rate</span><span>Next Session</span><span>Rating</span><span>Actions</span></div>
+                <?php foreach ($students as [$initials, $name, $filter, $program, $upcoming, $attendance, $rating, $tone]): ?>
+                    <article class="student-list-row" data-name="<?php echo htmlspecialchars(strtolower($name)); ?>" data-program="<?php echo htmlspecialchars(strtolower($program)); ?>" data-attendance="<?php echo (int) $attendance; ?>" data-session="<?php echo htmlspecialchars($upcoming); ?>" data-rating="<?php echo htmlspecialchars($rating); ?>">
+                        <span class="student-list-name"><b class="<?php echo htmlspecialchars($tone); ?>"><?php echo htmlspecialchars($initials); ?></b><strong><?php echo htmlspecialchars($name); ?></strong></span>
+                        <span><?php echo htmlspecialchars($program); ?></span>
+                        <span class="<?php echo (int) $attendance < 80 ? 'attendance-warn' : ''; ?>"><?php echo htmlspecialchars($attendance); ?></span>
+                        <span><?php echo htmlspecialchars($upcoming); ?></span>
+                        <span><?php echo students_icon($icons, 'star'); ?><?php echo htmlspecialchars($rating); ?></span>
+                        <span class="student-list-actions">
+                            <button type="button" disabled title="Student profile pages are not connected yet.">View Student</button>
+                            <a class="student-action-primary" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/schedule.php')); ?>">Schedule Session</a>
+                        </span>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+            <p class="students-empty-note" id="studentEmpty" hidden>No students match your search.</p>
         </section>
     </main>
 </div>
+<script>
+(() => {
+    const search = document.getElementById('studentSearch');
+    const sort = document.getElementById('studentSort');
+    const list = document.getElementById('studentList');
+    const empty = document.getElementById('studentEmpty');
+    if (!search || !sort || !list || !empty) return;
+    const rows = Array.from(list.querySelectorAll('.student-list-row:not(.head)'));
+    const apply = () => {
+        const query = search.value.trim().toLowerCase();
+        const key = sort.value;
+        rows.sort((a, b) => {
+            if (key === 'attendance') return Number(b.dataset.attendance) - Number(a.dataset.attendance);
+            if (key === 'rating') return Number(b.dataset.rating) - Number(a.dataset.rating);
+            return String(a.dataset[key] || '').localeCompare(String(b.dataset[key] || ''));
+        });
+        let visible = 0;
+        rows.forEach(row => {
+            const match = !query || row.dataset.name.includes(query) || row.dataset.program.includes(query);
+            row.hidden = !match;
+            if (match) visible++;
+            list.appendChild(row);
+        });
+        empty.hidden = visible > 0;
+    };
+    search.addEventListener('input', apply);
+    sort.addEventListener('change', apply);
+})();
+</script>
 </body>
 </html>
