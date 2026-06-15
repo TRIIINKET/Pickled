@@ -225,7 +225,7 @@ $dashboardNav = [
     ]],
     ['type' => 'group', 'label' => 'Programs & Events', 'href' => 'manage-events.php', 'key' => 'events', 'icon' => 'target', 'children' => [
         ['Social Play', 'manage-events.php?program=social-play', ''],
-        ['Private Sessions', 'private-sessions.php', ''],
+        ['Private Packages', 'private-sessions.php', ''],
     ]],
 ['type' => 'single', 'label' => 'Content', 'href' => 'content.php', 'key' => 'content', 'icon' => 'image'],
 ['type' => 'single', 'label' => 'Reports', 'href' => 'reports.php', 'key' => 'reports', 'icon' => 'chart'],

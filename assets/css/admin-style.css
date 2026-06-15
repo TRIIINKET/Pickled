@@ -4344,6 +4344,12 @@ details.private-preview-card[open] summary::after {
     margin-bottom: 16px;
 }
 
+.service-add-panel.is-open {
+    max-height: 1800px;
+    opacity: 1;
+    margin-bottom: 16px;
+}
+
 .service-edit-form {
     display: grid;
     grid-template-columns: 1fr;
@@ -5033,7 +5039,7 @@ body.photo-modal-open {
 
 .social-play-layout {
     display: grid;
-    grid-template-columns: minmax(0, 4fr) minmax(320px, .95fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 22px;
     align-items: start;
 }
@@ -5208,7 +5214,7 @@ body.photo-modal-open {
 
 .social-session-row {
     display: grid;
-    grid-template-columns: 1fr 1.25fr 1.25fr 1fr .75fr .7fr .75fr;
+    grid-template-columns: minmax(130px, 1fr) minmax(150px, 1.1fr) minmax(150px, 1.05fr) minmax(110px, .8fr) minmax(70px, .55fr) minmax(70px, .55fr) minmax(90px, .6fr) minmax(130px, .8fr);
     align-items: center;
     gap: 14px;
     min-height: 62px;
@@ -5441,7 +5447,7 @@ body.photo-modal-open {
     }
 }
 
-/* Private Sessions content manager */
+/* Private Packages content manager */
 .private-sessions-main .admin-topbar {
     margin-bottom: 12px;
 }
@@ -5450,7 +5456,16 @@ body.photo-modal-open {
     display: flex;
     align-items: center;
     gap: 12px;
-    color: var(--green);
+    color: #111827;
+}
+
+.program-context {
+    max-width: 760px;
+    margin: 6px 0 0;
+    color: #667085;
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.45;
 }
 
 .private-page-actions {
@@ -5469,7 +5484,7 @@ body.photo-modal-open {
 
 .private-admin-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(340px, 500px);
+    grid-template-columns: minmax(0, 1fr);
     gap: 22px;
     align-items: start;
 }
@@ -5687,7 +5702,7 @@ body.photo-modal-open {
 .private-inquiry-row {
     min-width: 860px;
     display: grid;
-    grid-template-columns: 1fr 1.15fr .9fr 1.8fr .8fr 110px;
+    grid-template-columns: 1fr 1.15fr .8fr .8fr 1fr .8fr minmax(180px, 1.2fr);
     align-items: center;
     gap: 14px;
     min-height: 58px;
@@ -5856,24 +5871,43 @@ body.photo-modal-open {
 }
 
 .operational-package-list .package-item {
-    grid-template-columns: 54px minmax(0, 1fr);
-    align-items: start;
+    grid-template-columns: 54px minmax(190px, 1.35fr) minmax(118px, .7fr) minmax(100px, .55fr) minmax(110px, .6fr) minmax(120px, .65fr) minmax(105px, .55fr) auto;
+    align-items: center;
     min-height: 0;
     padding: 18px;
 }
 
+.private-package-card.is-editing {
+    border-color: rgba(38,68,20,.2);
+    box-shadow: 0 16px 32px rgba(17,24,39,.055);
+}
+
+.private-package-card .service-edit-panel {
+    grid-column: 1 / -1;
+}
+
+.private-package-card.is-editing .service-edit-panel,
+.private-admin-card.is-adding .private-package-add-panel {
+    max-height: 1600px;
+    opacity: 1;
+    margin-top: 12px;
+}
+
+.private-package-add-panel {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height .25s ease, opacity .22s ease, margin-top .22s ease;
+}
+
 .operational-package-list .package-item > form:first-of-type {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(160px, 1fr));
-    gap: 12px;
-    align-items: end;
+    display: block;
 }
 
 .operational-package-list .package-item > form:last-of-type {
-    grid-column: 2;
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 10px;
+    grid-column: auto;
+    display: block;
+    margin-top: 0;
 }
 
 .operational-package-list .package-item label {
@@ -5922,7 +5956,11 @@ body.photo-modal-open {
 }
 
 .operational-package-list .package-item > form:first-of-type button {
-    justify-self: start;
+    justify-self: auto;
+}
+
+.private-package-card .service-actions form {
+    margin: 0;
 }
 
 .private-row-actions form {

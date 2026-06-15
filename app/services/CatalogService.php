@@ -187,7 +187,7 @@ final class CatalogService
         if ($pricingType === 'per_court_session') {
             return 'per_court';
         }
-        return in_array($pricingType, ['per_court', 'per_participant', 'per_session'], true) ? $pricingType : 'per_session';
+        return in_array($pricingType, ['per_court', 'per_participant', 'per_session', 'per_team'], true) ? $pricingType : 'per_session';
     }
 
     private function coachRequired(string $coachRequired): string
