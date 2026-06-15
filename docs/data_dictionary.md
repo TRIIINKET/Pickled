@@ -13,10 +13,12 @@ Stores account information and access credentials for all registered users of th
 | Field Name | Description | Data Type | Field Size | Constraints |
 |---|---|---|---|---|
 | user_id | Unique identifier assigned to each user account. | INT | 11 | PK, NOT NULL, AUTO_INCREMENT |
+| user_code | Stores a unique human-readable identification code assigned to each user for easier tracking and record management. | VARCHAR | 20 | UNIQUE, NOT NULL |
 | name | Stores the complete name of the user. | VARCHAR | 100 | NOT NULL |
 | email | Stores the user's email address used for authentication and communication. | VARCHAR | 255 | NOT NULL, UNIQUE |
 | password_hash | Stores the hashed password used for secure user authentication. | VARCHAR | 255 | NOT NULL |
 | role | Defines the authorization level of the user within the system. | ENUM('player','coach','admin') | - | NOT NULL, DEFAULT 'player' |
+| is_verified | Indicates whether the user's email address has been successfully verified through the OTP verification process. A value of 0 means the account is not verified, while 1 means the account is verified. | TINYINT | 1 | NOT NULL, DEFAULT 0 |
 | created_at | Stores the date and time when the user account was created. | TIMESTAMP | - | NOT NULL, DEFAULT CURRENT_TIMESTAMP |
 | updated_at | Stores the date and time when the user account was last modified. | TIMESTAMP | - | NOT NULL, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP |
 
@@ -118,6 +120,7 @@ Stores scheduled sessions, participant capacity, coach assignments, and availabi
 | Field Name | Description | Data Type | Field Size | Constraints |
 |---|---|---|---|---|
 | session_id | Unique identifier assigned to each scheduled session. | INT | 11 | PK, NOT NULL, AUTO_INCREMENT |
+| session_code | Stores a unique human-readable identification code assigned to each session for scheduling, tracking, and reference purposes. | VARCHAR | 20 | UNIQUE, NOT NULL |
 | variant_id | References the booking variant associated with the session. | INT | 11 | FK, NOT NULL |
 | coach_user_id | References the assigned coach responsible for the session; null for non-coaching sessions. | INT | 11 | FK, NULL |
 | availability_id | References the coach availability slot used to create the session. | INT | 11 | FK, NULL |
@@ -202,6 +205,7 @@ Stores payment review and receipt information for booking transactions.
 | Field Name | Description | Data Type | Field Size | Constraints |
 |---|---|---|---|---|
 | payment_id | Unique identifier assigned to each payment record. | INT | 11 | PK, NOT NULL, AUTO_INCREMENT |
+| payment_code | Stores a unique human-readable identification code assigned to each payment transaction for tracking and verification purposes. | VARCHAR | 20 | UNIQUE, NOT NULL |
 | booking_id | References the booking associated with the payment; unique to enforce one payment record per booking. | INT | 11 | FK, UNIQUE, NOT NULL |
 | amount | Stores how much was paid or submitted. | DECIMAL | 10,2 | NOT NULL, DEFAULT 0.00 |
 | proof_of_payment | Stores the file path or reference of the uploaded proof of payment. | VARCHAR | 255 | NULL |
@@ -273,6 +277,7 @@ Stores user inquiries and booking requests for private packages.
 | Field Name | Description | Data Type | Field Size | Constraints |
 |---|---|---|---|---|
 | inquiry_id | Unique identifier assigned to each private inquiry. | INT | 11 | PK, NOT NULL, AUTO_INCREMENT |
+| inquiry_code | Stores a unique human-readable identification code assigned to each private inquiry for monitoring and reference purposes. | VARCHAR | 20 | UNIQUE, NOT NULL |
 | user_id | References the user who submitted the inquiry. | INT | 11 | FK, NOT NULL |
 | private_package_id | References the private package being requested. | INT | 11 | FK, NOT NULL |
 | name | Stores the name of the inquiry contact person. | VARCHAR | 150 | NOT NULL |
