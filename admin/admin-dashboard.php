@@ -85,10 +85,11 @@ $recentBookings = admin_rows($pdo, "
     SELECT b.*, u.name AS user_name, u.email AS user_email,
            GROUP_CONCAT(DISTINCT bi.name ORDER BY bi.id SEPARATOR ', ') AS program_names,
            GROUP_CONCAT(DISTINCT bi.court ORDER BY bi.id SEPARATOR ', ') AS courts,
-           MIN(DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y')) AS booking_date
+           DATE_FORMAT(MIN(COALESCE(bi.booking_date, s.session_date)), '%W, %M %e, %Y') AS booking_date
     FROM bookings b
     LEFT JOIN users u ON u.id = b.user_id
     LEFT JOIN booking_items bi ON bi.booking_id = b.id
+    LEFT JOIN sessions s ON s.id = bi.session_id
     GROUP BY b.id
     ORDER BY b.created_at DESC
     LIMIT 5
@@ -96,14 +97,15 @@ $recentBookings = admin_rows($pdo, "
 
 $scheduleRows = admin_rows($pdo, "
     SELECT bi.*,
-           bi.booking_date AS booking_date_sql,
-           DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y') AS booking_date,
+           COALESCE(bi.booking_date, s.session_date) AS booking_date_sql,
+           DATE_FORMAT(COALESCE(bi.booking_date, s.session_date), '%W, %M %e, %Y') AS booking_date,
            CONCAT(TIME_FORMAT(bi.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(bi.end_time, '%h:%i %p')) AS booking_time,
            b.reference, b.status, b.payment_status, u.name AS user_name
     FROM booking_items bi
     JOIN bookings b ON b.id = bi.booking_id
+    LEFT JOIN sessions s ON s.id = bi.session_id
     LEFT JOIN users u ON u.id = b.user_id
-    ORDER BY b.created_at DESC, bi.id ASC
+    ORDER BY COALESCE(bi.booking_date, s.session_date) ASC, bi.start_time ASC, bi.id ASC
     LIMIT 12
 ");
 

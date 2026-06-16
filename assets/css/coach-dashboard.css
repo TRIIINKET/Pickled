@@ -491,9 +491,14 @@ button:disabled {
 }
 
 .schedule-tabs button,
+.schedule-tabs a,
 .schedule-range button,
+.schedule-range a,
 .schedule-toolbar select {
     min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border: 1px solid var(--line);
     border-radius: 7px;
     background: #fff;
@@ -502,11 +507,13 @@ button:disabled {
     padding: 0 12px;
 }
 
-.schedule-tabs button {
+.schedule-tabs button,
+.schedule-tabs a {
     border: 0;
 }
 
-.schedule-tabs button.active {
+.schedule-tabs button.active,
+.schedule-tabs a.active {
     background: var(--green);
     color: #fff;
 }

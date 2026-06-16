@@ -2085,6 +2085,26 @@ body.admin-dashboard-body {
     background: var(--lime);
 }
 
+.booking-week-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.booking-week-nav strong {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 16px;
+    border: 1px solid rgba(17,24,39,.12);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--green);
+    font-weight: 900;
+}
+
 .booking-summary-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));

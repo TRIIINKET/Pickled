@@ -58,23 +58,11 @@ final class FeedbackRepository
             "SELECT 1
              FROM bookings b
              WHERE b.id = :booking_id
-               AND (
-                    LOWER(b.status) = 'completed'
-                    OR (
-                        LOWER(b.status) NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
-                        AND LOWER(b.payment_status) IN ('paid', 'verified', 'approved', 'completed')
-                        AND EXISTS (
-                            SELECT 1
-                            FROM booking_items bi
-                            WHERE bi.booking_id = b.id
-                        )
-                        AND NOT EXISTS (
-                            SELECT 1
-                            FROM booking_items bi
-                            WHERE bi.booking_id = b.id
-                              AND TIMESTAMP(bi.booking_date, bi.end_time) > NOW()
-                        )
-                    )
+               AND LOWER(b.status) NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+               AND EXISTS (
+                   SELECT 1
+                   FROM booking_items bi
+                   WHERE bi.booking_id = b.id
                )
              LIMIT 1"
         );

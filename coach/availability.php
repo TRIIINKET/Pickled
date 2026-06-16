@@ -92,6 +92,7 @@ $navItems = [
 
 $availabilityRows = $coachId ? $schedulingService->availabilityForCoach($coachId, true) : [];
 $weekStart = $today->modify('monday this week');
+$weekEnd = $weekStart->modify('+6 days');
 $times = ['7 AM', '8 AM', '9 AM', '10 AM', '11 AM', '12 PM', '1 PM', '2 PM', '3 PM', '4 PM', '5 PM', '6 PM', '7 PM', '8 PM'];
 $days = [];
 $dayNumbers = [1, 2, 3, 4, 5, 6, 0];
@@ -134,7 +135,7 @@ $rules = [
     ['Min Notice for Booking', '2 hours', 'clock'],
 ];
 
-$coachSessions = $coachId ? $schedulingService->sessionsBetween($coachId, $today->format('Y-m-d'), $today->modify('+30 days')->format('Y-m-d')) : [];
+$coachSessions = $coachId ? $schedulingService->sessionsBetween($coachId, $weekStart->format('Y-m-d'), $weekEnd->format('Y-m-d')) : [];
 $timeOffRequests = $schedulingService->timeOffRequestsForCoach($coachId);
 $approvedTimeOff = array_values(array_filter($timeOffRequests, static fn(array $request): bool => ($request['status'] ?? '') === 'approved'));
 foreach ($days as [$key, , , , $dateSql]) {

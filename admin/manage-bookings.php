@@ -23,6 +23,19 @@ $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
 $todaySql = $today->format('Y-m-d');
 $todayLabel = $today->format('M j, Y (D)');
 $todayBookingLabel = $today->format('l, F j, Y');
+$weekInput = trim((string) ($_GET['week_start'] ?? ''));
+try {
+    $selectedWeekDate = $weekInput !== ''
+        ? new DateTimeImmutable($weekInput, new DateTimeZone('Asia/Manila'))
+        : $today;
+} catch (Throwable) {
+    $selectedWeekDate = $today;
+}
+$weekStart = $selectedWeekDate->modify('monday this week');
+$weekEnd = $weekStart->modify('+6 days');
+$weekStartSql = $weekStart->format('Y-m-d');
+$weekEndSql = $weekEnd->format('Y-m-d');
+$weekRangeLabel = $weekStart->format('M j') . ' - ' . $weekEnd->format('M j, Y');
 $view = ($_GET['view'] ?? 'table') === 'calendar' ? 'calendar' : 'table';
 $query = trim((string) ($_GET['q'] ?? ''));
 $statusFilter = trim((string) ($_GET['status'] ?? 'all'));
@@ -109,6 +122,20 @@ function booking_public_url(string $path): string {
     $position = strpos($script, '/admin/');
     $base = $position === false ? rtrim(dirname($script), '/') . '/' : substr($script, 0, $position + 1);
     return htmlspecialchars($base . ltrim($path, '/'), ENT_QUOTES, 'UTF-8');
+}
+
+function booking_admin_query_path(array $overrides = []): string {
+    $query = $_GET;
+    unset($query['id']);
+    foreach ($overrides as $key => $value) {
+        if ($value === null || $value === '') {
+            unset($query[$key]);
+        } else {
+            $query[$key] = $value;
+        }
+    }
+
+    return 'manage-bookings.php' . ($query ? '?' . http_build_query($query) : '');
 }
 
 function booking_proof_is_image(string $path): bool {
@@ -368,7 +395,7 @@ if ($programFilter !== 'all') {
     $params['program'] = $programFilter;
 }
 if ($dateFilter !== '') {
-    $where[] = "(bi.booking_date = :date_filter_exact OR DATE(b.created_at) = :date_filter_exact)";
+    $where[] = "COALESCE(bi.booking_date, sched.session_date) = :date_filter_exact";
     $params['date_filter_exact'] = $dateFilter;
 }
 $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
@@ -378,9 +405,9 @@ $bookings = booking_rows($pdo, "
            GROUP_CONCAT(DISTINCT bi.name ORDER BY bi.id SEPARATOR ', ') AS program_names,
            GROUP_CONCAT(DISTINCT bi.court ORDER BY bi.id SEPARATOR ', ') AS courts,
            SUM(bi.quantity) AS players,
-           MIN(bi.booking_date) AS booking_date_raw,
+           MIN(COALESCE(bi.booking_date, sched.session_date)) AS booking_date_raw,
            MIN(bi.end_time) AS booking_end_time_raw,
-           MIN(DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y')) AS booking_date,
+           DATE_FORMAT(MIN(COALESCE(bi.booking_date, sched.session_date)), '%W, %M %e, %Y') AS booking_date,
            MIN(CONCAT(TIME_FORMAT(bi.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(bi.end_time, '%h:%i %p'))) AS booking_time,
             lp.id AS latest_payment_id,
             lp.status AS latest_payment_status,
@@ -391,6 +418,7 @@ $bookings = booking_rows($pdo, "
     FROM bookings b
     LEFT JOIN users u ON u.id = b.user_id
     LEFT JOIN booking_items bi ON bi.booking_id = b.id
+    LEFT JOIN sessions sched ON sched.id = bi.session_id
     LEFT JOIN payments lp ON lp.id = (
         SELECT p2.id FROM payments p2 WHERE p2.booking_id = b.id ORDER BY p2.created_at DESC, p2.id DESC LIMIT 1
     )
@@ -402,16 +430,22 @@ $bookings = booking_rows($pdo, "
 
 $allBookingItems = booking_rows($pdo, "
     SELECT bi.*,
-           bi.booking_date AS booking_date_sql,
-           DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y') AS booking_date,
+           COALESCE(bi.booking_date, sched.session_date) AS booking_date_sql,
+           DATE_FORMAT(COALESCE(bi.booking_date, sched.session_date), '%W, %M %e, %Y') AS booking_date,
            CONCAT(TIME_FORMAT(bi.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(bi.end_time, '%h:%i %p')) AS booking_time,
            b.id AS booking_id, b.reference, b.status, b.payment_status, b.total, u.name AS user_name, u.email AS user_email
     FROM booking_items bi
     JOIN bookings b ON b.id = bi.booking_id
+    LEFT JOIN sessions sched ON sched.id = bi.session_id
     LEFT JOIN users u ON u.id = b.user_id
-    ORDER BY b.created_at DESC, bi.id ASC
-    LIMIT 80
-");
+    WHERE COALESCE(bi.booking_date, sched.session_date) BETWEEN :week_start AND :week_end
+      AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+      " . ($where ? 'AND ' . implode(' AND ', $where) : '') . "
+    ORDER BY COALESCE(bi.booking_date, sched.session_date) ASC, bi.start_time ASC, bi.id ASC
+", [
+    'week_start' => $weekStartSql,
+    'week_end' => $weekEndSql,
+] + $params);
 
 $currentBooking = $bookingId ? $adminService->getBookingDetail($bookingId) : null;
 
@@ -419,7 +453,7 @@ $totalBookings = (int) booking_scalar($pdo, 'SELECT COUNT(*) FROM bookings');
 $weekBookings = (int) booking_scalar($pdo, 'SELECT COUNT(*) FROM bookings WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)');
 $pendingPayments = (int) booking_scalar($pdo, "SELECT COUNT(*) FROM bookings b LEFT JOIN payments p ON p.id = (SELECT p2.id FROM payments p2 WHERE p2.booking_id = b.id ORDER BY p2.created_at DESC, p2.id DESC LIMIT 1) WHERE COALESCE(p.status, b.payment_status, 'pending') = 'pending' AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')");
 $expiredBookings = (int) booking_scalar($pdo, "SELECT COUNT(*) FROM bookings WHERE status = 'cancelled' AND LOWER(cancellation_label) LIKE '%expired%'");
-$todaySessions = (int) booking_scalar($pdo, "SELECT COUNT(DISTINCT bi.booking_id) FROM booking_items bi JOIN bookings b ON b.id = bi.booking_id WHERE bi.booking_date = ? AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')", [$todaySql]);
+$todaySessions = (int) booking_scalar($pdo, "SELECT COUNT(DISTINCT bi.booking_id) FROM booking_items bi JOIN bookings b ON b.id = bi.booking_id LEFT JOIN sessions s ON s.id = bi.session_id WHERE COALESCE(bi.booking_date, s.session_date) = ? AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')", [$todaySql]);
 $monthlyRevenue = (float) booking_scalar($pdo, "SELECT COALESCE(SUM(b.total), 0) FROM bookings b LEFT JOIN payments p ON p.id = (SELECT p2.id FROM payments p2 WHERE p2.booking_id = b.id ORDER BY p2.created_at DESC, p2.id DESC LIMIT 1) WHERE MONTH(b.created_at) = MONTH(CURRENT_DATE()) AND YEAR(b.created_at) = YEAR(CURRENT_DATE()) AND (LOWER(b.payment_status) IN ('verified', 'paid', 'completed') OR p.status = 'approved')");
 $courts = booking_rows($pdo, 'SELECT name FROM courts ORDER BY id ASC');
 $programs = booking_rows($pdo, 'SELECT DISTINCT name FROM booking_items ORDER BY name ASC');
@@ -472,9 +506,8 @@ $dashboardNav = [
 ];
 
 $weekDays = [];
-$start = $today->modify('sunday this week');
 for ($i = 0; $i < 7; $i++) {
-    $day = $start->modify('+' . $i . ' days');
+    $day = $weekStart->modify('+' . $i . ' days');
     $weekDays[] = [
         'label' => strtoupper($day->format('D')),
         'date' => $day->format('M j'),
@@ -611,6 +644,12 @@ $calendarLanes = [
                 <footer class="table-pagination"><span>Showing <?php echo count($bookings); ?> of <?php echo number_format($totalBookings); ?> bookings</span><div><button disabled>‹</button><button class="active">1</button><button>2</button><button>3</button><button>›</button></div></footer>
             </section>
         <?php else: ?>
+            <nav class="booking-week-nav" aria-label="Calendar week navigation">
+                <a class="bookings-button ghost" href="<?php echo pickled_admin_url(booking_admin_query_path(['view' => 'calendar', 'week_start' => $weekStart->modify('-7 days')->format('Y-m-d')])); ?>">Previous Week</a>
+                <strong><?php echo htmlspecialchars($weekRangeLabel); ?></strong>
+                <a class="bookings-button ghost" href="<?php echo pickled_admin_url(booking_admin_query_path(['view' => 'calendar', 'week_start' => $today->modify('monday this week')->format('Y-m-d')])); ?>">Current Week</a>
+                <a class="bookings-button ghost" href="<?php echo pickled_admin_url(booking_admin_query_path(['view' => 'calendar', 'week_start' => $weekStart->modify('+7 days')->format('Y-m-d')])); ?>">Next Week</a>
+            </nav>
             <section class="calendar-workspace">
                 <aside class="court-lane-cards">
                     <?php foreach ($calendarLanes as [$courtName, $tone, $image]): ?>

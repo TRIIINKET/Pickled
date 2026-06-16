@@ -122,7 +122,7 @@ final class FeedbackService
         }
 
         if (!$this->feedback->bookingEligibleForFeedback((int) $booking['id'])) {
-            throw new RuntimeException('Feedback opens after the booking or session is completed.');
+            throw new RuntimeException('Feedback is not available for this booking.');
         }
 
         return $booking;

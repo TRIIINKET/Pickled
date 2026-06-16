@@ -21,6 +21,10 @@ $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
 $todayDate = $today->format('Y-m-d');
 $todayLabel = $today->format('M j, Y (D)');
 $scheduleDateLabel = $today->format('l, F j, Y');
+$weekStart = $today->modify('monday this week');
+$weekEnd = $weekStart->modify('+6 days');
+$weekStartSql = $weekStart->format('Y-m-d');
+$weekEndSql = $weekEnd->format('Y-m-d');
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $schedulingService = new SchedulingService();
 $bookingRepository = new BookingRepository();
@@ -57,8 +61,8 @@ $navItems = [
     ['Profile', pickled_frontend_url('coach/profile.php'), 'profile', false],
 ];
 
-$coachSessions = $coachId ? $schedulingService->sessionsBetween($coachId, $today->format('Y-m-d'), $today->modify('+7 days')->format('Y-m-d')) : [];
-$coachBookingItems = $coachId ? $bookingRepository->getItemsForCoach($coachId, $today->format('Y-m-d'), $today->modify('+30 days')->format('Y-m-d')) : [];
+$coachSessions = $coachId ? $schedulingService->sessionsBetween($coachId, $weekStartSql, $weekEndSql) : [];
+$coachBookingItems = $coachId ? $bookingRepository->getItemsForCoach($coachId, $weekStartSql, $weekEndSql) : [];
 $coachFeedbackStats = $feedbackService->statsForCoach($coachId);
 $recentCoachFeedback = $feedbackService->recentForCoach($coachId, 3);
 $activeStudentCount = array_sum(array_map(static fn(array $item): int => (int) $item['quantity'], $coachBookingItems));
@@ -198,7 +202,7 @@ if (($nextSession[0] ?? '--') !== '--') {
 
         <section class="coach-kpi-grid" aria-label="Coach overview">
             <article class="coach-kpi green"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Today's Sessions</span><strong><?php echo number_format(count($sessions)); ?></strong><small>Coach today</small></div></article>
-            <article class="coach-kpi pink"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Upcoming Sessions</span><strong><?php echo number_format(count($coachSessions)); ?></strong><small>Next 7 days</small></div></article>
+            <article class="coach-kpi pink"><?php echo coach_icon($icons, 'calendar'); ?><div><span>Upcoming Sessions</span><strong><?php echo number_format(count($coachSessions) + count($coachBookingItems)); ?></strong><small>This week</small></div></article>
             <article class="coach-kpi orange"><?php echo coach_icon($icons, 'students'); ?><div><span>Active Students</span><strong><?php echo number_format($activeStudentCount); ?></strong><small>Booked players</small></div></article>
             <article class="coach-kpi purple"><?php echo coach_icon($icons, 'clock'); ?><div><span>Availability</span><strong><?php echo number_format($availableDays); ?></strong><small>Available days</small></div></article>
         </section>

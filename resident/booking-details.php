@@ -228,7 +228,7 @@ include __DIR__ . '/../includes/header.php';
                   <p>Coach: <?= htmlspecialchars((string) $feedback['coach_name']) ?></p>
                 <?php endif; ?>
               <?php else: ?>
-                <p>Tell us how the completed booking went.</p>
+                <p>Tell us about your booking experience or anything you want the team to know.</p>
               <?php endif; ?>
 
               <?php if ($feedbackEligible): ?>
@@ -270,7 +270,7 @@ include __DIR__ . '/../includes/header.php';
               <?php endif; ?>
             </section>
           <?php else: ?>
-            <div class="cart-message cart-message--warning">Feedback opens after this booking is completed or the paid scheduled time has ended.</div>
+            <div class="cart-message cart-message--warning">Feedback is not available for this booking.</div>
           <?php endif; ?>
         </article>
       </section>

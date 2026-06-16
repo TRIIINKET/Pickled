@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
 require_once __DIR__ . '/../app/services/SchedulingService.php';
+require_once __DIR__ . '/../app/repositories/BookingRepository.php';
 
 pickled_start_secure_session();
 pickled_init_csrf();
@@ -18,11 +19,38 @@ $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
 $todayDate = $today->format('Y-m-d');
 $todayLabel = $today->format('M j, Y (D)');
 $scheduleDateLabel = $today->format('l, F j, Y');
+$weekInput = trim((string) ($_GET['week_start'] ?? ''));
+try {
+    $selectedWeekDate = $weekInput !== ''
+        ? new DateTimeImmutable($weekInput, new DateTimeZone('Asia/Manila'))
+        : $today;
+} catch (Throwable) {
+    $selectedWeekDate = $today;
+}
+$weekStart = $selectedWeekDate->modify('monday this week');
+$weekEnd = $weekStart->modify('+6 days');
+$weekStartSql = $weekStart->format('Y-m-d');
+$weekEndSql = $weekEnd->format('Y-m-d');
+$weekRangeLabel = $weekStart->format('M j') . ' - ' . $weekEnd->format('M j, Y');
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $schedulingService = new SchedulingService();
+$bookingRepository = new BookingRepository();
 
 function schedule_icon(array $icons, string $name): string {
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['calendar']) . '</svg>';
+}
+
+function schedule_query_path(array $overrides = []): string {
+    $query = $_GET;
+    foreach ($overrides as $key => $value) {
+        if ($value === null || $value === '') {
+            unset($query[$key]);
+        } else {
+            $query[$key] = $value;
+        }
+    }
+
+    return 'coach/schedule.php' . ($query ? '?' . http_build_query($query) : '');
 }
 
 $icons = [
@@ -51,41 +79,98 @@ $navItems = [
     ['Profile', pickled_frontend_url('coach/profile.php'), 'profile', false],
 ];
 
-$weekStart = $today->modify('monday this week');
-$weekEnd = $weekStart->modify('+6 days');
-$coachSessions = $coachId ? $schedulingService->sessionsBetween($coachId, $weekStart->format('Y-m-d'), $weekEnd->format('Y-m-d')) : [];
+$weekDays = [];
+for ($i = 0; $i < 7; $i++) {
+    $day = $weekStart->modify('+' . $i . ' days');
+    $weekDays[] = [
+        'key' => strtolower($day->format('D')),
+        'label' => strtoupper($day->format('D')) . ' ' . $day->format('j'),
+        'today' => $day->format('Y-m-d') === $todayDate,
+    ];
+}
+
+$coachSessions = $coachId ? $schedulingService->sessionsBetween($coachId, $weekStartSql, $weekEndSql) : [];
+$coachBookingItems = $coachId ? $bookingRepository->getItemsForCoach($coachId, $weekStartSql, $weekEndSql) : [];
 $dayKeyByNumber = [0 => 'sun', 1 => 'mon', 2 => 'tue', 3 => 'wed', 4 => 'thu', 5 => 'fri', 6 => 'sat'];
-$sessions = array_map(static function (array $session) use ($dayKeyByNumber): array {
-    $dayNumber = (int) (new DateTimeImmutable($session['session_date']))->format('w');
+$scheduleEntries = [];
+foreach ($coachSessions as $session) {
+    $date = (string) $session['session_date'];
     $startHour = (int) substr((string) $session['start_time'], 0, 2);
     $endHour = (int) substr((string) $session['end_time'], 0, 2);
     $tone = str_contains(strtolower((string) $session['court']), 'pink') ? 'pink' : 'green';
-    return [
-        $session['name'],
-        $session['session_time'],
-        $session['court'],
-        (int) $session['booked_count'] . ' / ' . (int) $session['capacity'] . ' players',
-        ucfirst((string) $session['status']),
-        $tone,
-        $dayKeyByNumber[$dayNumber] ?? 'mon',
-        (string) $startHour,
-        (string) max(1, ($endHour - $startHour) * 1.7),
+    $dayNumber = (int) (new DateTimeImmutable($date))->format('w');
+    $scheduleEntries[] = [
+        'name' => (string) $session['name'],
+        'category' => (string) ($session['category'] ?? 'Session'),
+        'date' => $date,
+        'display_date' => (string) ($session['display_date'] ?? date('M j, Y', strtotime($date))),
+        'time' => (string) $session['session_time'],
+        'start_time' => (string) $session['start_time'],
+        'end_time' => (string) $session['end_time'],
+        'court' => (string) $session['court'],
+        'count' => (int) $session['booked_count'] . ' / ' . (int) $session['capacity'] . ' players',
+        'status' => ucfirst((string) $session['status']),
+        'tone' => $tone,
+        'day' => $dayKeyByNumber[$dayNumber] ?? 'mon',
+        'start' => (string) $startHour,
+        'span' => (string) max(1, ($endHour - $startHour) * 1.7),
+        'quantity' => (int) $session['booked_count'],
     ];
-}, $coachSessions);
+}
+foreach ($coachBookingItems as $item) {
+    $date = (string) ($item['booking_date_raw'] ?? '');
+    if ($date === '') {
+        continue;
+    }
+    $startHour = (int) substr((string) $item['start_time'], 0, 2);
+    $endHour = (int) substr((string) $item['end_time'], 0, 2);
+    $tone = str_contains(strtolower((string) ($item['court'] ?? '')), 'pink') ? 'pink' : 'green';
+    $dayNumber = (int) (new DateTimeImmutable($date))->format('w');
+    $student = trim((string) ($item['user_name'] ?? ''));
+    $scheduleEntries[] = [
+        'name' => (string) ($item['name'] ?? 'Booked session'),
+        'category' => (string) ($item['category'] ?? 'Booking'),
+        'date' => $date,
+        'display_date' => (string) ($item['booking_date'] ?? date('M j, Y', strtotime($date))),
+        'time' => (string) ($item['booking_time'] ?? ''),
+        'start_time' => (string) $item['start_time'],
+        'end_time' => (string) $item['end_time'],
+        'court' => (string) ($item['court'] ?? 'Court assignment pending'),
+        'count' => (int) ($item['quantity'] ?? 1) . ' player' . ((int) ($item['quantity'] ?? 1) === 1 ? '' : 's'),
+        'status' => ucfirst((string) ($item['booking_status'] ?? 'pending')),
+        'tone' => $tone,
+        'day' => $dayKeyByNumber[$dayNumber] ?? 'mon',
+        'start' => (string) $startHour,
+        'span' => (string) max(1, ($endHour - $startHour) * 1.7),
+        'quantity' => (int) ($item['quantity'] ?? 1),
+        'student' => $student !== '' ? $student : 'Booked student',
+    ];
+}
+usort($scheduleEntries, static fn(array $a, array $b): int => [$a['date'], $a['start_time']] <=> [$b['date'], $b['start_time']]);
 
-$todaySessions = array_map(static function (array $session): array {
-    $tone = str_contains(strtolower((string) $session['court']), 'pink') ? 'pink' : 'green';
-    return [
-        $session['session_time'],
-        $session['name'],
-        $session['court'],
-        (int) $session['booked_count'] . ' / ' . (int) $session['capacity'] . ' players',
-        ucfirst((string) $session['status']),
-        $tone,
-    ];
-}, array_values(array_filter($coachSessions, fn(array $session): bool => $session['session_date'] === $todayDate)));
-$nextScheduleSession = $coachSessions[0] ?? null;
-$studentsToday = array_sum(array_map(static fn(array $session): int => (int) $session['booked_count'], array_filter($coachSessions, fn(array $session): bool => $session['session_date'] === $todayDate)));
+$sessions = array_map(static fn(array $entry): array => [
+    $entry['name'],
+    $entry['time'],
+    $entry['court'],
+    $entry['count'],
+    $entry['status'],
+    $entry['tone'],
+    $entry['day'],
+    $entry['start'],
+    $entry['span'],
+], $scheduleEntries);
+
+$todayEntries = array_values(array_filter($scheduleEntries, static fn(array $entry): bool => $entry['date'] === $todayDate));
+$todaySessions = array_map(static fn(array $entry): array => [
+    $entry['time'],
+    $entry['name'],
+    $entry['court'],
+    $entry['count'],
+    $entry['status'],
+    $entry['tone'],
+], $todayEntries);
+$nextScheduleSession = $scheduleEntries[0] ?? null;
+$studentsToday = array_sum(array_map(static fn(array $entry): int => (int) $entry['quantity'], $todayEntries));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -127,7 +212,7 @@ $studentsToday = array_sum(array_map(static fn(array $session): int => (int) $se
                 <article class="coach-kpi green"><?php echo schedule_icon($icons, 'calendar'); ?><div><span>Today's Sessions</span><strong><?php echo number_format(count($todaySessions)); ?></strong><small>From MySQL</small></div></article>
                 <article class="coach-kpi pink"><?php echo schedule_icon($icons, 'calendar'); ?><div><span>Upcoming This Week</span><strong><?php echo number_format(count($coachSessions)); ?></strong><small>Sessions</small></div></article>
                 <article class="coach-kpi orange"><?php echo schedule_icon($icons, 'students'); ?><div><span>Students Today</span><strong><?php echo number_format($studentsToday); ?></strong><small>Across sessions</small></div></article>
-                <article class="coach-kpi purple"><?php echo schedule_icon($icons, 'clock'); ?><div><span>Next Session</span><strong><?php echo htmlspecialchars($nextScheduleSession['session_time'] ?? 'None'); ?></strong><small><?php echo htmlspecialchars($nextScheduleSession['name'] ?? 'No upcoming session'); ?></small></div></article>
+                <article class="coach-kpi purple"><?php echo schedule_icon($icons, 'clock'); ?><div><span>Next Session</span><strong><?php echo htmlspecialchars($nextScheduleSession['time'] ?? 'None'); ?></strong><small><?php echo htmlspecialchars($nextScheduleSession['name'] ?? 'No upcoming session'); ?></small></div></article>
             </div>
             <label class="availability-toggle"><span>Available Today</span><input type="checkbox" checked><b></b></label>
         </section>
@@ -136,16 +221,17 @@ $studentsToday = array_sum(array_map(static fn(array $session): int => (int) $se
             <div class="schedule-main-column">
                 <section class="coach-card calendar-card">
                     <div class="schedule-toolbar">
-                        <div class="schedule-tabs"><button type="button" disabled title="Calendar view switching is not connected yet.">Today</button><button class="active" type="button" disabled title="Current schedule view.">Week</button><button type="button" disabled title="Calendar view switching is not connected yet.">Month</button></div>
-                        <div class="schedule-range"><button type="button" disabled title="Week navigation is not connected yet.">‹</button><span><?php echo schedule_icon($icons, 'calendar'); ?> Jun 9 - Jun 15, 2026</span><button type="button" disabled title="Week navigation is not connected yet.">›</button></div>
+                        <div class="schedule-tabs"><a href="<?php echo htmlspecialchars(pickled_frontend_url(schedule_query_path(['week_start' => $today->modify('monday this week')->format('Y-m-d')]))); ?>">Current Week</a><button class="active" type="button" disabled>Week</button></div>
+                        <div class="schedule-range"><a href="<?php echo htmlspecialchars(pickled_frontend_url(schedule_query_path(['week_start' => $weekStart->modify('-7 days')->format('Y-m-d')]))); ?>">Previous Week</a><span><?php echo schedule_icon($icons, 'calendar'); ?> <?php echo htmlspecialchars($weekRangeLabel); ?></span><a href="<?php echo htmlspecialchars(pickled_frontend_url(schedule_query_path(['week_start' => $weekStart->modify('+7 days')->format('Y-m-d')]))); ?>">Next Week</a></div>
                         <label class="schedule-search"><?php echo schedule_icon($icons, 'search'); ?><input type="search" placeholder="Search session..."></label>
                         <select><option>All Courts</option><option>Court Green</option><option>Court Pink</option></select>
                         <select><option>All Programs</option><option>Kids Class</option><option>Private Coaching</option><option>Social Play</option></select>
                     </div>
                     <div class="week-calendar-grid">
                         <div class="time-col"><?php foreach (['8 AM','9 AM','10 AM','11 AM','12 PM','1 PM','2 PM','3 PM','4 PM','5 PM','6 PM','7 PM'] as $time): ?><span><?php echo $time; ?></span><?php endforeach; ?></div>
-                        <?php foreach ([['mon','MON 9'],['tue','TUE 10'],['wed','WED 11'],['thu','THU 12'],['fri','FRI 13'],['sat','SAT 14'],['sun','SUN 15']] as [$dayKey, $dayLabel]): ?>
-                            <div class="day-col <?php echo $dayKey === 'wed' ? 'today' : ''; ?>"><strong><?php echo $dayLabel; ?></strong>
+                        <?php foreach ($weekDays as $dayMeta): ?>
+                            <?php $dayKey = $dayMeta['key']; ?>
+                            <div class="day-col <?php echo $dayMeta['today'] ? 'today' : ''; ?>"><strong><?php echo htmlspecialchars($dayMeta['label']); ?></strong>
                                 <?php foreach ($sessions as [$name, $time, $court, $count, $status, $tone, $day, $start, $span]): ?>
                                     <?php if ($day === $dayKey): ?><article class="calendar-block <?php echo $tone; ?>" style="--start:<?php echo htmlspecialchars($start); ?>;--span:<?php echo htmlspecialchars($span); ?>"><b><?php echo htmlspecialchars($name); ?></b><span><?php echo htmlspecialchars($time); ?></span><small><?php echo htmlspecialchars($court); ?></small><small><?php echo htmlspecialchars($count); ?></small></article><?php endif; ?>
                                 <?php endforeach; ?>
@@ -167,13 +253,13 @@ $studentsToday = array_sum(array_map(static fn(array $session): int => (int) $se
             </div>
 
             <aside class="coach-card session-details-panel">
-                <header><h2>Session Details</h2><em class="session-status confirmed"><?php echo htmlspecialchars(ucfirst((string) ($nextScheduleSession['status'] ?? 'open'))); ?></em></header>
+                <header><h2>Session Details</h2><em class="session-status confirmed"><?php echo htmlspecialchars((string) ($nextScheduleSession['status'] ?? 'Open')); ?></em></header>
                 <div class="session-detail-title"><i><?php echo schedule_icon($icons, 'calendar'); ?></i><div><strong><?php echo htmlspecialchars($nextScheduleSession['name'] ?? 'No session selected'); ?></strong><span><?php echo htmlspecialchars($nextScheduleSession['category'] ?? 'Schedule details'); ?></span></div></div>
                 <dl>
-                    <div><dt><?php echo schedule_icon($icons, 'clock'); ?> Time</dt><dd><?php echo htmlspecialchars($nextScheduleSession['session_time'] ?? 'Not scheduled'); ?></dd></div>
+                    <div><dt><?php echo schedule_icon($icons, 'clock'); ?> Time</dt><dd><?php echo htmlspecialchars($nextScheduleSession['time'] ?? 'Not scheduled'); ?></dd></div>
                     <div><dt><?php echo schedule_icon($icons, 'calendar'); ?> Date</dt><dd><?php echo htmlspecialchars($nextScheduleSession['display_date'] ?? 'Not scheduled'); ?></dd></div>
                     <div><dt><?php echo schedule_icon($icons, 'court'); ?> Court</dt><dd><?php echo htmlspecialchars($nextScheduleSession['court'] ?? 'No court'); ?></dd></div>
-                    <div><dt><?php echo schedule_icon($icons, 'students'); ?> Students</dt><dd><?php echo htmlspecialchars(isset($nextScheduleSession['booked_count']) ? ((int) $nextScheduleSession['booked_count'] . ' / ' . (int) $nextScheduleSession['capacity']) : '0'); ?></dd></div>
+                    <div><dt><?php echo schedule_icon($icons, 'students'); ?> Students</dt><dd><?php echo htmlspecialchars($nextScheduleSession['count'] ?? '0'); ?></dd></div>
                     <div><dt><?php echo schedule_icon($icons, 'profile'); ?> Coach</dt><dd><?php echo htmlspecialchars($coachName); ?></dd></div>
                 </dl>
                 <section class="attendance-box"><h3>Attendance</h3><div><button class="active" type="button" disabled title="Attendance saving is not connected yet."><?php echo schedule_icon($icons, 'check'); ?> Present</button><button type="button" disabled title="Attendance saving is not connected yet."><?php echo schedule_icon($icons, 'x'); ?> Absent</button><button type="button" disabled title="Attendance saving is not connected yet."><?php echo schedule_icon($icons, 'clock'); ?> Late</button></div></section>

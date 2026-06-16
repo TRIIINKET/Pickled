@@ -357,8 +357,8 @@ final class BookingRepository
                        bi.court,
                        bi.category,
                        bi.duration_label,
-                       bi.booking_date AS booking_date_raw,
-                       DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y') AS booking_date,
+                       COALESCE(bi.booking_date, s.session_date) AS booking_date_raw,
+                       DATE_FORMAT(COALESCE(bi.booking_date, s.session_date), '%W, %M %e, %Y') AS booking_date,
                        bi.start_time,
                        bi.end_time,
                        CONCAT(TIME_FORMAT(bi.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(bi.end_time, '%h:%i %p')) AS booking_time,
@@ -374,21 +374,22 @@ final class BookingRepository
                        u.email AS user_email
                 FROM booking_items bi
                 JOIN bookings b ON b.id = bi.booking_id
+                LEFT JOIN sessions s ON s.id = bi.session_id
                 LEFT JOIN users u ON u.id = b.user_id
-                WHERE bi.coach_user_id = :coach_user_id
+                WHERE COALESCE(bi.coach_user_id, s.coach_user_id) = :coach_user_id
                   AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')";
         $params = ['coach_user_id' => $coachUserId];
 
         if ($startDate) {
-            $sql .= ' AND bi.booking_date >= :start_date';
+            $sql .= ' AND COALESCE(bi.booking_date, s.session_date) >= :start_date';
             $params['start_date'] = $startDate;
         }
         if ($endDate) {
-            $sql .= ' AND bi.booking_date <= :end_date';
+            $sql .= ' AND COALESCE(bi.booking_date, s.session_date) <= :end_date';
             $params['end_date'] = $endDate;
         }
 
-        $sql .= ' ORDER BY bi.booking_date ASC, bi.start_time ASC';
+        $sql .= ' ORDER BY COALESCE(bi.booking_date, s.session_date) ASC, bi.start_time ASC';
         $stmt = Database::connection()->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll() ?: [];
