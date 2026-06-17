@@ -14,7 +14,7 @@ require_once __DIR__ . '/paths.php';
 
       <section class="footer-address">
         <h2>Address</h2>
-        <p class="footer-address__line">Makati, Metro Manila<br>Open daily for bookings and sessions</p>
+        <p class="footer-address__line">Makati, Metro Manila<br>Open daily, 8:00 AM – 10:00 PM</p>
         <div class="footer-socials" aria-label="Social links">
           <a href="https://www.facebook.com/" target="_blank" rel="noopener noreferrer" aria-label="Facebook">f</a>
           <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
@@ -177,7 +177,7 @@ require_once __DIR__ . '/paths.php';
         <li>“Pickle &amp; Club” or “The Club” refers to our venue where pickleball and community events happen.</li>
         <li>We may update these rules from time to time. Any changes will be posted on our website and at The Club.</li>
         <li>Be respectful, play fair, and follow the house rules so everyone can enjoy the space.</li>
-        <li>We are open daily from 10:00 AM to 10:00 PM.</li>
+        <li>We are open daily, 8:00 AM – 10:00 PM.</li>
       </ul>
 
       <h2>Booking, Payments &amp; Refunds (Plan Ahead, Play More!)</h2>

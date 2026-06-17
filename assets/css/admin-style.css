@@ -2352,9 +2352,21 @@ body.admin-dashboard-body {
 }
 
 .court-mini-card {
+    display: block;
     padding: 12px;
+    border: 1px solid rgba(17,24,39,.08);
     border-radius: 14px;
     background: #fff;
+    color: inherit;
+    text-decoration: none;
+    transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.court-mini-card:hover,
+.court-mini-card.is-active {
+    border-color: rgba(36,95,73,.38);
+    box-shadow: 0 12px 24px rgba(17,24,39,.08);
+    transform: translateY(-1px);
 }
 
 .court-mini-card img {
@@ -2365,7 +2377,8 @@ body.admin-dashboard-body {
 }
 
 .court-mini-card strong,
-.court-mini-card span {
+.court-mini-card span,
+.court-mini-card small {
     display: block;
     margin-top: 8px;
 }
@@ -2376,23 +2389,12 @@ body.admin-dashboard-body {
     font-weight: 700;
 }
 
-.court-mini-card div {
-    height: 8px;
-    margin-top: 10px;
-    border-radius: 999px;
-    background: #e5e7eb;
-    overflow: hidden;
+.court-mini-card small {
+    color: var(--green);
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
 }
-
-.court-mini-card i {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: var(--green);
-}
-
-.court-mini-card.pink i { background: var(--pink); }
-.court-mini-card.orange i { background: var(--orange); }
 
 .week-calendar {
     min-width: 930px;
@@ -2445,7 +2447,7 @@ body.admin-dashboard-body {
 }
 
 .calendar-cell {
-    min-height: 78px;
+    min-height: 58px;
 }
 
 .calendar-event {
@@ -2457,6 +2459,14 @@ body.admin-dashboard-body {
     color: var(--green);
     text-decoration: none;
     border: 1px solid rgba(38,68,20,.12);
+}
+
+.calendar-empty-state {
+    margin: 0;
+    padding: 18px;
+    color: #6b7280;
+    font-size: 13px;
+    font-weight: 800;
 }
 
 .calendar-event.pink {

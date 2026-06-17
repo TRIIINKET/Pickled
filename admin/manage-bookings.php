@@ -10,6 +10,7 @@ require_once __DIR__ . '/../app/services/AdminLogService.php';
 require_once __DIR__ . '/../app/services/BookingExpiryService.php';
 require_once __DIR__ . '/../app/services/NotificationService.php';
 require_once __DIR__ . '/../app/services/EmailService.php';
+require_once __DIR__ . '/../includes/upload-helper.php';
 require_once __DIR__ . '/../database/Database.php';
 
 pickled_init_csrf();
@@ -31,9 +32,28 @@ $statusFilter = trim((string) ($_GET['status'] ?? 'all'));
 $courtFilter = trim((string) ($_GET['court'] ?? 'all'));
 $programFilter = trim((string) ($_GET['program'] ?? 'all'));
 $dateFilter = trim((string) ($_GET['date'] ?? ''));
+$weekStartFilter = trim((string) ($_GET['week_start'] ?? ''));
 $bookingId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $successMsg = '';
 $errorMsg = '';
+
+function booking_week_start(DateTimeImmutable $today, string $weekStart, string $dateFilter): DateTimeImmutable {
+    $timezone = $today->getTimezone();
+    $source = $dateFilter !== '' ? $dateFilter : $weekStart;
+    if ($source !== '') {
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $source, $timezone);
+        if ($date && $date->format('Y-m-d') === $source) {
+            return $date->modify('monday this week');
+        }
+    }
+
+    return $today->modify('monday this week');
+}
+
+function booking_query_url(array $params): string {
+    $params = array_filter($params, static fn($value): bool => $value !== '' && $value !== null);
+    return pickled_admin_url('manage-bookings.php?' . http_build_query($params));
+}
 
 if (($_GET['created'] ?? '') === 'walkin') {
     $successMsg = 'Walk-in booking created successfully.';
@@ -91,10 +111,48 @@ function booking_payment_key(string $status): string {
 function booking_admin_label(string $status): string {
     $status = strtolower(trim($status));
     return match ($status) {
-        'confirmed' => 'Approved',
-        'paid' => 'Approved',
+        'confirmed' => 'Confirmed',
+        'paid' => 'Paid',
         default => ucwords(str_replace('_', ' ', $status ?: 'pending')),
     };
+}
+
+function booking_program_filter_options(): array {
+    return [
+        'Court Rental',
+        'Lessons',
+        'Private Coaching',
+        'Training',
+        'Kids Pickleball Class',
+        'Youth Development Class',
+        'Parent & Child Session',
+        'Open Match-Play',
+        'Weekly Tournament',
+    ];
+}
+
+function booking_program_aliases(string $program): array {
+    $program = trim($program);
+    return match ($program) {
+        'Court Rental' => ['Court Rental', 'Court Rentals'],
+        'Kids Pickleball Class' => ['Kids Pickleball Class', 'Kids Pickleball Class (Ages 6-10)'],
+        'Youth Development Class' => ['Youth Development Class', 'Youth Development Class (Ages 11-17)'],
+        default => [$program],
+    };
+}
+
+function booking_status_filter_options(array $allowedStatuses): array {
+    $preferred = ['pending', 'confirmed', 'completed', 'cancelled', 'rejected', 'expired', 'refunded'];
+    $allowed = array_flip(array_map('strtolower', $allowedStatuses));
+    $options = [];
+
+    foreach ($preferred as $status) {
+        if (isset($allowed[$status]) || in_array($status, ['expired', 'refunded'], true)) {
+            $options[$status] = booking_admin_label($status);
+        }
+    }
+
+    return $options;
 }
 
 function booking_is_rejected_action(array $booking): bool {
@@ -137,6 +195,71 @@ function booking_public_url(string $path): string {
 
 function booking_proof_is_image(string $path): bool {
     return (bool) preg_match('/\.(jpe?g|png|webp)$/i', $path);
+}
+
+function booking_payment_proof_column(PDO $pdo): string {
+    static $column = null;
+    if ($column !== null) {
+        return $column;
+    }
+
+    foreach (['proof_of_payment', 'proof_image'] as $candidate) {
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*)
+             FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = :table_name
+               AND COLUMN_NAME = :column_name'
+        );
+        $stmt->execute([
+            'table_name' => 'payments',
+            'column_name' => $candidate,
+        ]);
+        if ((int) $stmt->fetchColumn() > 0) {
+            return $column = $candidate;
+        }
+    }
+
+    return $column = 'proof_image';
+}
+
+function booking_payment_empty_proof(PDO $pdo): ?string {
+    return booking_payment_proof_column($pdo) === 'proof_of_payment' ? null : '';
+}
+
+function booking_payment_proof_path(array $payment): string {
+    return trim((string) ($payment['proof_of_payment'] ?? $payment['proof_image'] ?? ''));
+}
+
+function booking_upload_has_file(array $file): bool {
+    $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    return $error !== UPLOAD_ERR_NO_FILE;
+}
+
+function booking_store_payment_proof(int $bookingId, array $file): string {
+    try {
+        return pickled_upload_file(
+            $file,
+            'uploads/payments',
+            [
+                'jpg' => ['image/jpeg'],
+                'jpeg' => ['image/jpeg'],
+                'png' => ['image/png'],
+                'webp' => ['image/webp'],
+                'pdf' => ['application/pdf', 'application/x-pdf'],
+            ],
+            10485760,
+            'payment_' . $bookingId
+        );
+    } catch (RuntimeException $e) {
+        if (str_contains($e->getMessage(), 'too large')) {
+            throw new RuntimeException('Receipt file must be 10MB or smaller.');
+        }
+        if (str_contains($e->getMessage(), 'type')) {
+            throw new RuntimeException('Receipt must be a JPG, JPEG, PNG, WEBP, or PDF file.');
+        }
+        throw new RuntimeException('Receipt upload failed. Please try again.');
+    }
 }
 
 function booking_admin_payment_db_status(string $status): string {
@@ -300,34 +423,57 @@ function booking_filter_parts(string $query, string $statusFilter, string $court
         $params['q'] = '%' . $query . '%';
     }
     if ($statusFilter === 'expired') {
-        $where[] = "b.status = 'cancelled' AND LOWER(b.cancellation_label) LIKE '%expired%'";
+        $where[] = "(LOWER(b.status) = 'expired' OR (LOWER(b.status) = 'cancelled' AND LOWER(COALESCE(b.cancellation_label, '')) LIKE '%expired%') OR LOWER(b.payment_status) = 'expired')";
+    } elseif ($statusFilter === 'refunded') {
+        $where[] = "(LOWER(b.status) = 'refunded' OR LOWER(b.payment_status) = 'refunded')";
     } elseif ($statusFilter !== 'all') {
         $normalizedFilter = match (strtolower($statusFilter)) {
             'approved' => 'confirmed',
-            'rejected' => 'cancelled',
             default => strtolower($statusFilter),
         };
         $where[] = 'LOWER(b.status) = :status';
         $params['status'] = $normalizedFilter;
     }
-    if ($courtFilter !== 'all') {
+    if ($courtFilter === 'social-play') {
+        $where[] = "(LOWER(bi.category) = 'social play' OR bi.name IN ('Open Match-Play', 'Weekly Tournament') OR LOWER(bi.court) LIKE '%social%')";
+    } elseif ($courtFilter !== 'all') {
         $where[] = "bi.court = :court";
         $params['court'] = $courtFilter;
     }
     if ($programFilter !== 'all') {
-        $where[] = "bi.name = :program";
-        $params['program'] = $programFilter;
+        $programAliases = booking_program_aliases($programFilter);
+        $programPlaceholders = [];
+        foreach ($programAliases as $index => $programAlias) {
+            $key = 'program_' . $index;
+            $programPlaceholders[] = ':' . $key;
+            $params[$key] = $programAlias;
+        }
+        $where[] = 'bi.name IN (' . implode(', ', $programPlaceholders) . ')';
     }
     if ($dateFilter !== '') {
-        $where[] = "(bi.booking_date = :date_filter_exact OR DATE(b.created_at) = :date_filter_exact)";
+        $where[] = "(COALESCE(bi.booking_date, s.session_date) = :date_filter_exact OR DATE(b.created_at) = :date_created_exact)";
         $params['date_filter_exact'] = $dateFilter;
+        $params['date_created_exact'] = $dateFilter;
     }
 
     return [$where ? 'WHERE ' . implode(' AND ', $where) : '', $params];
 }
 
+function booking_add_week_filter(string $whereSql, array $params, string $weekStart, string $weekEnd): array {
+    $rangeClause = 'COALESCE(bi.booking_date, s.session_date) BETWEEN :week_start AND :week_end';
+    $whereSql = $whereSql !== '' ? $whereSql . ' AND ' . $rangeClause : 'WHERE ' . $rangeClause;
+    $params['week_start'] = $weekStart;
+    $params['week_end'] = $weekEnd;
+    return [$whereSql, $params];
+}
+
 function booking_filtered_rows(?PDO $pdo, string $whereSql, array $params, ?int $limit = 10): array {
+    if (!$pdo) {
+        return [];
+    }
+
     $limitSql = $limit !== null ? 'LIMIT ' . max(1, $limit) : '';
+    $proofColumn = booking_payment_proof_column($pdo);
     return booking_rows($pdo, "
         SELECT b.*, u.name AS user_name, u.email AS user_email,
                GROUP_CONCAT(DISTINCT bi.name ORDER BY bi.id SEPARATOR ', ') AS program_names,
@@ -340,12 +486,13 @@ function booking_filtered_rows(?PDO $pdo, string $whereSql, array $params, ?int 
                lp.id AS latest_payment_id,
                lp.status AS latest_payment_status,
                lp.reference_number AS latest_payment_reference,
-               lp.proof_image AS latest_payment_proof,
+               lp.$proofColumn AS latest_payment_proof,
                lp.reviewed_by AS latest_payment_reviewed_by,
                lp.reviewed_at AS latest_payment_reviewed_at
         FROM bookings b
         LEFT JOIN users u ON u.id = b.user_id
         LEFT JOIN booking_items bi ON bi.booking_id = b.id
+        LEFT JOIN sessions s ON s.id = bi.session_id
         LEFT JOIN payments lp ON lp.id = (
             SELECT p2.id FROM payments p2 WHERE p2.booking_id = b.id ORDER BY p2.created_at DESC, p2.id DESC LIMIT 1
         )
@@ -353,6 +500,45 @@ function booking_filtered_rows(?PDO $pdo, string $whereSql, array $params, ?int 
         GROUP BY b.id
         ORDER BY b.created_at DESC
         $limitSql
+    ", $params);
+}
+
+function booking_calendar_items(?PDO $pdo, string $whereSql, array $params, string $weekStart, string $weekEnd): array {
+    if (!$pdo) {
+        return [];
+    }
+
+    $rangeClause = "COALESCE(bi.booking_date, s.session_date) BETWEEN :week_start AND :week_end";
+    if ($whereSql !== '') {
+        $whereSql .= ' AND ' . $rangeClause;
+    } else {
+        $whereSql = 'WHERE ' . $rangeClause;
+    }
+    $params['week_start'] = $weekStart;
+    $params['week_end'] = $weekEnd;
+
+    return booking_rows($pdo, "
+        SELECT bi.*,
+               COALESCE(bi.booking_date, s.session_date) AS schedule_date,
+               DATE_FORMAT(COALESCE(bi.booking_date, s.session_date), '%W, %M %e, %Y') AS schedule_date_label,
+               COALESCE(bi.start_time, s.start_time) AS schedule_start_time,
+               COALESCE(bi.end_time, s.end_time) AS schedule_end_time,
+               CONCAT(TIME_FORMAT(COALESCE(bi.start_time, s.start_time), '%h:%i %p'), ' - ', TIME_FORMAT(COALESCE(bi.end_time, s.end_time), '%h:%i %p')) AS schedule_time,
+               b.id AS booking_id,
+               b.reference,
+               b.status,
+               b.payment_status,
+               b.cancellation_label,
+               b.notes,
+               b.total,
+               u.name AS user_name,
+               u.email AS user_email
+        FROM booking_items bi
+        JOIN bookings b ON b.id = bi.booking_id
+        LEFT JOIN sessions s ON s.id = bi.session_id
+        LEFT JOIN users u ON u.id = b.user_id
+        $whereSql
+        ORDER BY schedule_date ASC, schedule_start_time ASC, bi.id ASC
     ", $params);
 }
 
@@ -534,7 +720,7 @@ function booking_available_coach(PDO $pdo, string $bookingDate, string $startTim
     return $coachId > 0 ? $coachId : null;
 }
 
-function booking_create_walkin(PDO $pdo, array $input, int $adminId): int {
+function booking_create_walkin(PDO $pdo, array $input, int $adminId, array $files = []): int {
     $name = trim((string) ($input['customer_name'] ?? ''));
     $email = trim((string) ($input['customer_email'] ?? ''));
     $phone = trim((string) ($input['customer_phone'] ?? ''));
@@ -675,11 +861,18 @@ function booking_create_walkin(PDO $pdo, array $input, int $adminId): int {
         'image' => $variant['image'] ?? null,
     ]);
 
-    $paymentColumns = ['booking_id', 'proof_image', 'amount', 'payment_method', 'reference_number', 'status', 'reviewed_by', 'reviewed_at', 'remarks'];
+    $proofColumn = booking_payment_proof_column($pdo);
+    $proofPath = booking_payment_empty_proof($pdo);
+    $receiptFile = $files['payment_receipt'] ?? [];
+    if ($paymentMethod === 'GCash' && booking_upload_has_file($receiptFile)) {
+        $proofPath = booking_store_payment_proof($bookingId, $receiptFile);
+    }
+
+    $paymentColumns = ['booking_id', $proofColumn, 'amount', 'payment_method', 'reference_number', 'status', 'reviewed_by', 'reviewed_at', 'remarks'];
     $paymentPlaceholders = [':booking_id', ':proof_image', ':amount', ':payment_method', ':reference_number', ':status', ':reviewed_by', ':reviewed_at', ':remarks'];
     $paymentParams = [
         'booking_id' => $bookingId,
-        'proof_image' => '',
+        'proof_image' => $proofPath,
         'amount' => $subtotal,
         'payment_method' => $paymentMethod,
         'reference_number' => 'WALKIN-' . $reference,
@@ -800,11 +993,12 @@ function booking_admin_mark_paid(PDO $pdo, int $bookingId, int $adminId, string 
                 'remarks' => $remarks !== '' ? $remarks : 'Marked as paid by admin',
             ]);
         } else {
-            $paymentColumns = ['booking_id', 'proof_image', 'amount', 'payment_method', 'reference_number', 'status', 'reviewed_by', 'reviewed_at', 'remarks'];
+            $proofColumn = booking_payment_proof_column($pdo);
+            $paymentColumns = ['booking_id', $proofColumn, 'amount', 'payment_method', 'reference_number', 'status', 'reviewed_by', 'reviewed_at', 'remarks'];
             $paymentPlaceholders = [':booking_id', ':proof_image', ':amount', ':payment_method', ':reference_number', "'approved'", ':admin_id', 'NOW()', ':remarks'];
             $paymentParams = [
                 'booking_id' => $bookingId,
-                'proof_image' => '',
+                'proof_image' => booking_payment_empty_proof($pdo),
                 'amount' => (float) ($booking['total'] ?? 0),
                 'payment_method' => (string) ($booking['payment_method'] ?? 'Admin verified'),
                 'reference_number' => 'ADMIN-' . (string) ($booking['reference'] ?? $bookingId),
@@ -822,6 +1016,18 @@ function booking_admin_mark_paid(PDO $pdo, int $bookingId, int $adminId, string 
             );
             $insertPayment->execute($paymentParams);
         }
+
+        $updateBooking = $pdo->prepare(
+            'UPDATE bookings
+             SET status = :booking_status,
+                 payment_status = :payment_status
+             WHERE id = :booking_id'
+        );
+        $updateBooking->execute([
+            'booking_id' => $bookingId,
+            'booking_status' => booking_admin_status_value($pdo, 'confirmed'),
+            'payment_status' => booking_payment_status_value($pdo, 'approved'),
+        ]);
 
         if ($started) {
             $pdo->commit();
@@ -857,7 +1063,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($action === 'create_walkin_booking' && $pdo) {
                 $pdo->beginTransaction();
                 try {
-                    booking_create_walkin($pdo, $_POST, (int) $_SESSION['user']['id']);
+                    booking_create_walkin($pdo, $_POST, (int) $_SESSION['user']['id'], $_FILES);
                     $pdo->commit();
                     if (ob_get_length() !== false) {
                         ob_end_clean();
@@ -923,22 +1129,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$selectedWeekStart = booking_week_start($today, $weekStartFilter, $dateFilter);
+$selectedWeekEnd = $selectedWeekStart->modify('+6 days');
+$selectedWeekStartSql = $selectedWeekStart->format('Y-m-d');
+$selectedWeekEndSql = $selectedWeekEnd->format('Y-m-d');
+$selectedWeekLabel = $selectedWeekStart->format('M j') . ' – ' . $selectedWeekEnd->format('M j, Y');
+
 [$whereSql, $params] = booking_filter_parts($query, $statusFilter, $courtFilter, $programFilter, $dateFilter);
+if (isset($_GET['week_start']) && $dateFilter === '') {
+    [$whereSql, $params] = booking_add_week_filter($whereSql, $params, $selectedWeekStartSql, $selectedWeekEndSql);
+}
 
 $bookings = booking_filtered_rows($pdo, $whereSql, $params, 10);
 
-$allBookingItems = booking_rows($pdo, "
-    SELECT bi.*,
-           bi.booking_date AS booking_date_sql,
-           DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y') AS booking_date,
-           CONCAT(TIME_FORMAT(bi.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(bi.end_time, '%h:%i %p')) AS booking_time,
-           b.id AS booking_id, b.reference, b.status, b.payment_status, b.total, u.name AS user_name, u.email AS user_email
-    FROM booking_items bi
-    JOIN bookings b ON b.id = bi.booking_id
-    LEFT JOIN users u ON u.id = b.user_id
-    ORDER BY b.created_at DESC, bi.id ASC
-    LIMIT 80
-");
+[$calendarWhereSql, $calendarParams] = booking_filter_parts($query, $statusFilter, $courtFilter, $programFilter, '');
+$allBookingItems = booking_calendar_items($pdo, $calendarWhereSql, $calendarParams, $selectedWeekStartSql, $selectedWeekEndSql);
 
 $currentBooking = $bookingId ? $adminService->getBookingDetail($bookingId) : null;
 
@@ -950,7 +1155,7 @@ $todaySessions = (int) booking_scalar($pdo, "SELECT COUNT(DISTINCT bi.booking_id
 $monthlyRevenue = (float) booking_scalar($pdo, "SELECT COALESCE(SUM(b.total), 0) FROM bookings b LEFT JOIN payments p ON p.id = (SELECT p2.id FROM payments p2 WHERE p2.booking_id = b.id ORDER BY p2.created_at DESC, p2.id DESC LIMIT 1) WHERE MONTH(b.created_at) = MONTH(CURRENT_DATE()) AND YEAR(b.created_at) = YEAR(CURRENT_DATE()) AND (LOWER(b.payment_status) IN ('verified', 'paid', 'completed') OR p.status = 'approved')");
 $courts = booking_rows($pdo, 'SELECT id, name FROM courts ORDER BY id ASC');
 $activeCourts = booking_rows($pdo, "SELECT id, name FROM courts WHERE status = 'active' ORDER BY id ASC");
-$programs = booking_rows($pdo, 'SELECT DISTINCT name FROM booking_items ORDER BY name ASC');
+$programs = array_map(static fn(string $name): array => ['name' => $name], booking_program_filter_options());
 $activeVariants = booking_rows($pdo, "
     SELECT v.id, v.name, v.category, v.price, v.capacity, v.participants_limit, v.duration_label, v.coach_required, c.id AS court_id, c.name AS court_name
     FROM booking_variants v
@@ -959,6 +1164,7 @@ $activeVariants = booking_rows($pdo, "
     ORDER BY c.name ASC, v.name ASC
 ");
 $bookingStatusOptions = $pdo ? booking_allowed_statuses($pdo) : ['pending', 'confirmed', 'completed', 'cancelled'];
+$statusFilterOptions = booking_status_filter_options($bookingStatusOptions);
 $showWalkinPanel = ($_GET['walkin'] ?? '') === '1';
 $currentQueryParams = [
     'view' => $view,
@@ -967,12 +1173,22 @@ $currentQueryParams = [
     'program' => $programFilter,
     'status' => $statusFilter,
     'date' => $dateFilter,
+    'week_start' => ($view === 'calendar' || $weekStartFilter !== '') ? $selectedWeekStartSql : '',
 ];
 $exportQueryParams = array_filter($currentQueryParams + ['export' => 'csv'], static fn($value): bool => $value !== '' && $value !== null);
 $newBookingQueryParams = array_filter($currentQueryParams + ['walkin' => '1'], static fn($value): bool => $value !== '' && $value !== null);
+$tableViewUrl = booking_query_url(array_merge($currentQueryParams, ['view' => 'table']));
+$calendarViewUrl = booking_query_url(array_merge($currentQueryParams, ['view' => 'calendar', 'week_start' => $selectedWeekStartSql]));
+$formWeekStartValue = (string) ($currentQueryParams['week_start'] ?: ($view === 'calendar' ? $selectedWeekStartSql : ''));
 $exportUrl = pickled_admin_url('manage-bookings.php?' . http_build_query($exportQueryParams));
 $newBookingUrl = pickled_admin_url('manage-bookings.php?' . http_build_query($newBookingQueryParams));
 $closePanelUrl = pickled_admin_url('manage-bookings.php?' . http_build_query(array_filter($currentQueryParams, static fn($value): bool => $value !== '' && $value !== null)));
+$weekNavBaseParams = $currentQueryParams;
+$weekNavBaseParams['view'] = 'calendar';
+unset($weekNavBaseParams['date']);
+$previousWeekUrl = booking_query_url(array_merge($weekNavBaseParams, ['week_start' => $selectedWeekStart->modify('-7 days')->format('Y-m-d')]));
+$currentWeekUrl = booking_query_url(array_merge($weekNavBaseParams, ['week_start' => $today->modify('monday this week')->format('Y-m-d')]));
+$nextWeekUrl = booking_query_url(array_merge($weekNavBaseParams, ['week_start' => $selectedWeekStart->modify('+7 days')->format('Y-m-d')]));
 
 $icons = [
     'home' => '<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>',
@@ -1022,22 +1238,20 @@ $dashboardNav = [
 ];
 
 $weekDays = [];
-$start = $today->modify('sunday this week');
 for ($i = 0; $i < 7; $i++) {
-    $day = $start->modify('+' . $i . ' days');
+    $day = $selectedWeekStart->modify('+' . $i . ' days');
     $weekDays[] = [
         'label' => strtoupper($day->format('D')),
         'date' => $day->format('M j'),
-        'match' => $day->format('l, F j, Y'),
         'match_sql' => $day->format('Y-m-d'),
         'today' => $day->format('Y-m-d') === $todaySql,
     ];
 }
 
 $calendarLanes = [
-    ['Court Green', 'green', 'img/court/court green-1.png'],
-    ['Court Pink', 'pink', 'img/court/court pink-1.webp'],
-    ['Social Play Area', 'orange', 'img/court/social play-1.png'],
+    ['Court Green', 'green', 'img/court/court green-1.png', 'Court Green'],
+    ['Court Pink', 'pink', 'img/court/court pink-1.webp', 'Court Pink'],
+    ['Social Play Events', 'orange', 'img/court/social play-1.png', 'social-play'],
 ];
 ?>
 
@@ -1084,6 +1298,11 @@ $calendarLanes = [
             <div class="bookings-hero-actions">
                 <form class="booking-search" method="get">
                     <input type="hidden" name="view" value="<?php echo htmlspecialchars($view); ?>">
+                    <input type="hidden" name="court" value="<?php echo htmlspecialchars($courtFilter); ?>">
+                    <input type="hidden" name="program" value="<?php echo htmlspecialchars($programFilter); ?>">
+                    <input type="hidden" name="status" value="<?php echo htmlspecialchars($statusFilter); ?>">
+                    <input type="hidden" name="date" value="<?php echo htmlspecialchars($dateFilter); ?>">
+                    <input type="hidden" name="week_start" value="<?php echo htmlspecialchars($formWeekStartValue); ?>">
                     <?php echo admin_icon($icons, 'search'); ?>
                     <input type="search" name="q" value="<?php echo htmlspecialchars($query); ?>" placeholder="Search bookings">
                 </form>
@@ -1107,14 +1326,15 @@ $calendarLanes = [
 
         <form class="booking-filter-bar" method="get">
             <input type="hidden" name="view" value="<?php echo htmlspecialchars($view); ?>">
+            <input type="hidden" name="week_start" value="<?php echo htmlspecialchars($formWeekStartValue); ?>">
             <div class="booking-filter-search-row">
                 <label class="filter-search"><?php echo admin_icon($icons, 'search'); ?><input type="search" name="q" value="<?php echo htmlspecialchars($query); ?>" placeholder="Search by reference, user, or email"></label>
-                <div class="view-toggle"><a class="<?php echo $view === 'table' ? 'active' : ''; ?>" href="<?php echo pickled_admin_url('manage-bookings.php?view=table'); ?>">Table View</a><a class="<?php echo $view === 'calendar' ? 'active' : ''; ?>" href="<?php echo pickled_admin_url('manage-bookings.php?view=calendar'); ?>">Calendar View</a></div>
+                <div class="view-toggle"><a class="<?php echo $view === 'table' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($tableViewUrl, ENT_QUOTES, 'UTF-8'); ?>">Table View</a><a class="<?php echo $view === 'calendar' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($calendarViewUrl, ENT_QUOTES, 'UTF-8'); ?>">Calendar View</a></div>
             </div>
             <div class="booking-filter-controls-row">
                 <select name="court"><option value="all">All Courts</option><?php foreach ($courts as $court): ?><option value="<?php echo htmlspecialchars($court['name']); ?>" <?php echo $courtFilter === $court['name'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($court['name']); ?></option><?php endforeach; ?></select>
                 <select name="program"><option value="all">All Programs & Events</option><?php foreach ($programs as $program): ?><option value="<?php echo htmlspecialchars($program['name']); ?>" <?php echo $programFilter === $program['name'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($program['name']); ?></option><?php endforeach; ?></select>
-                <select name="status"><option value="all">All Statuses</option><?php foreach ($bookingStatusOptions as $status): ?><option value="<?php echo htmlspecialchars($status); ?>" <?php echo $statusFilter === $status ? 'selected' : ''; ?>><?php echo htmlspecialchars(booking_admin_label($status)); ?></option><?php endforeach; ?><option value="expired" <?php echo $statusFilter === 'expired' ? 'selected' : ''; ?>>Expired</option></select>
+                <select name="status"><option value="all">All Statuses</option><?php foreach ($statusFilterOptions as $status => $label): ?><option value="<?php echo htmlspecialchars($status); ?>" <?php echo $statusFilter === $status ? 'selected' : ''; ?>><?php echo htmlspecialchars($label); ?></option><?php endforeach; ?></select>
                 <input type="date" name="date" value="<?php echo htmlspecialchars($dateFilter); ?>">
                 <button type="submit">Apply</button>
             </div>
@@ -1161,10 +1381,23 @@ $calendarLanes = [
                 <footer class="table-pagination"><span>Showing <?php echo count($bookings); ?> of <?php echo number_format($totalBookings); ?> bookings</span><div><button disabled>‹</button><button class="active">1</button><button>2</button><button>3</button><button>›</button></div></footer>
             </section>
         <?php else: ?>
+            <nav class="booking-week-nav" aria-label="Calendar week navigation">
+                <a class="bookings-button ghost" href="<?php echo htmlspecialchars($previousWeekUrl, ENT_QUOTES, 'UTF-8'); ?>">Previous Week</a>
+                <a class="bookings-button ghost" href="<?php echo htmlspecialchars($currentWeekUrl, ENT_QUOTES, 'UTF-8'); ?>">Current Week</a>
+                <a class="bookings-button ghost" href="<?php echo htmlspecialchars($nextWeekUrl, ENT_QUOTES, 'UTF-8'); ?>">Next Week</a>
+                <strong><?php echo htmlspecialchars($selectedWeekLabel); ?></strong>
+            </nav>
             <section class="calendar-workspace">
                 <aside class="court-lane-cards">
-                    <?php foreach ($calendarLanes as [$courtName, $tone, $image]): ?>
-                        <article class="court-mini-card <?php echo $tone; ?>"><img src="<?php echo booking_asset($image); ?>" alt="<?php echo htmlspecialchars($courtName); ?>"><strong><?php echo htmlspecialchars($courtName); ?></strong><span>Capacity: 24 slots</span><div><i style="width: <?php echo $tone === 'orange' ? 60 : ($tone === 'pink' ? 45 : 75); ?>%"></i></div></article>
+                    <?php foreach ($calendarLanes as [$courtName, $tone, $image, $filterValue]): ?>
+                        <?php
+                            $laneParams = $currentQueryParams;
+                            $laneParams['view'] = 'calendar';
+                            $laneParams['court'] = $filterValue;
+                            $laneUrl = booking_query_url($laneParams);
+                            $laneActive = $courtFilter === $filterValue;
+                        ?>
+                        <a class="court-mini-card <?php echo $tone; ?> <?php echo $laneActive ? 'is-active' : ''; ?>" href="<?php echo htmlspecialchars($laneUrl, ENT_QUOTES, 'UTF-8'); ?>"><img src="<?php echo booking_asset($image); ?>" alt="<?php echo htmlspecialchars($courtName); ?>"><strong><?php echo htmlspecialchars($courtName); ?></strong><span>Filter calendar</span><small>View bookings</small></a>
                     <?php endforeach; ?>
                 </aside>
                 <div class="week-calendar">
@@ -1172,13 +1405,14 @@ $calendarLanes = [
                     <?php foreach (range(8, 21) as $hour): ?>
                         <div class="calendar-hour"><time><?php echo date('g:00 A', strtotime($hour . ':00')); ?></time><?php foreach ($weekDays as $day): ?><div class="calendar-cell">
                             <?php foreach ($allBookingItems as $item): ?>
-                                <?php if (($item['booking_date_sql'] ?? '') === $day['match_sql'] && str_starts_with((string) $item['booking_time'], date('h:00 A', strtotime($hour . ':00')))): ?>
+                                <?php if (($item['schedule_date'] ?? '') === $day['match_sql'] && str_starts_with((string) $item['schedule_time'], date('h:00 A', strtotime($hour . ':00')))): ?>
                                     <?php $itemText = strtolower(($item['name'] ?? '') . ' ' . ($item['category'] ?? '') . ' ' . ($item['court'] ?? '')); $tone = (str_contains($itemText, 'private') || str_contains($itemText, 'coach')) ? 'purple' : (str_contains($itemText, 'pink') ? 'pink' : (str_contains($itemText, 'social') ? 'orange' : 'green')); ?>
-                                    <a class="calendar-event <?php echo $tone; ?>" href="<?php echo pickled_admin_url('manage-bookings.php?view=calendar&id=' . (int) $item['booking_id']); ?>"><strong><?php echo htmlspecialchars($item['name']); ?></strong><span><?php echo htmlspecialchars($item['booking_time']); ?></span><small><?php echo htmlspecialchars($item['user_name'] ?? 'Guest'); ?></small></a>
+                                    <a class="calendar-event <?php echo $tone; ?>" href="<?php echo htmlspecialchars(booking_query_url(array_merge($currentQueryParams, ['id' => (int) $item['booking_id'], 'view' => 'calendar'])), ENT_QUOTES, 'UTF-8'); ?>"><strong><?php echo htmlspecialchars($item['name']); ?></strong><span><?php echo htmlspecialchars($item['schedule_time']); ?></span><small><?php echo htmlspecialchars($item['user_name'] ?? 'Guest'); ?></small><small><?php echo htmlspecialchars($item['court'] ?? 'Any Court'); ?> · <?php echo htmlspecialchars(booking_display_status_label($item)); ?></small></a>
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         </div><?php endforeach; ?></div>
                     <?php endforeach; ?>
+                    <?php if (!$allBookingItems): ?><p class="calendar-empty-state">No bookings for this week and filter set.</p><?php endif; ?>
                 </div>
             </section>
         <?php endif; ?>
@@ -1192,7 +1426,7 @@ $calendarLanes = [
             <div><span>Admin Booking</span><h2>Create Walk-in Booking</h2></div>
             <a href="<?php echo htmlspecialchars($closePanelUrl, ENT_QUOTES, 'UTF-8'); ?>" aria-label="Close">&times;</a>
         </header>
-        <form class="walkin-booking-form" method="post">
+        <form class="walkin-booking-form" method="post" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>">
             <input type="hidden" name="action" value="create_walkin_booking">
 
@@ -1221,6 +1455,7 @@ $calendarLanes = [
                     <label><span>Payment Method</span><select name="payment_method" required><option value="Cash">Cash</option><option value="GCash">GCash</option></select></label>
                     <label><span>Payment Status</span><select name="payment_status" required><option value="pending">Pending</option><option value="paid">Paid</option></select></label>
                 </div>
+                <label><span>GCash receipt optional</span><input type="file" name="payment_receipt" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf"></label>
             </section>
 
             <section>
@@ -1258,12 +1493,12 @@ $calendarLanes = [
             && strtotime((string) $firstItem['booking_date_raw'] . ' ' . (string) $firstItem['end_time']) <= time();
         $terminalLabel = $currentIsCompleted ? 'Completed' : ($currentIsRejected ? 'Rejected' : ($currentIsCancelled ? booking_admin_label($currentStatus) : ''));
     ?>
-    <div class="booking-drawer-backdrop"><a href="<?php echo pickled_admin_url('manage-bookings.php?view=' . $view); ?>" aria-label="Close"></a></div>
+    <div class="booking-drawer-backdrop"><a href="<?php echo htmlspecialchars($closePanelUrl, ENT_QUOTES, 'UTF-8'); ?>" aria-label="Close"></a></div>
     <aside class="booking-drawer booking-detail-modal" role="dialog" aria-modal="true" aria-label="Booking management">
-        <header><div><span>Review Booking</span><h2><?php echo htmlspecialchars($currentBooking['reference']); ?></h2></div><a href="<?php echo pickled_admin_url('manage-bookings.php?view=' . $view); ?>">×</a></header>
+        <header><div><span>Review Booking</span><h2><?php echo htmlspecialchars($currentBooking['reference']); ?></h2></div><a href="<?php echo htmlspecialchars($closePanelUrl, ENT_QUOTES, 'UTF-8'); ?>">×</a></header>
         <section><h3>Booking Information</h3><p><strong>Reference</strong><?php echo htmlspecialchars($currentBooking['reference']); ?></p><p><strong>Court</strong><?php echo htmlspecialchars($firstItem['court'] ?? 'Any Court'); ?></p><p><strong>Program / Service</strong><?php echo htmlspecialchars($firstItem['name'] ?? 'Booking'); ?></p><p><strong>Date</strong><?php echo htmlspecialchars($firstItem['booking_date'] ?? date('M j, Y', strtotime($currentBooking['created_at']))); ?></p><p><strong>Time</strong><?php echo htmlspecialchars($firstItem['booking_time'] ?? '-'); ?></p><p><strong>Number of Players</strong><?php echo number_format($playersTotal ?: 1); ?></p></section>
         <section><h3>Player Information</h3><p><strong>Player Name</strong><?php echo htmlspecialchars($currentBooking['user']['name'] ?? 'Guest'); ?></p><p><strong>Email</strong><?php echo htmlspecialchars($currentBooking['user']['email'] ?? '-'); ?></p></section>
-        <section><h3>Payment Information</h3><p><strong>Payment Method</strong><?php echo htmlspecialchars($currentBooking['payment_method'] ?? '-'); ?></p><p><strong>Payment Status</strong><em class="status-pill payment-<?php echo booking_payment_key($currentPaymentStatus); ?>"><?php echo htmlspecialchars(booking_payment_label($currentPaymentStatus)); ?></em></p><?php if ($latestPayment): ?><p><strong>Reference No.</strong><?php echo htmlspecialchars($latestPayment['reference_number'] ?? '-'); ?></p><p><strong>Amount</strong>&#8369;<?php echo number_format((float) ($latestPayment['amount'] ?? $currentBooking['total']), 2); ?></p><?php if (!empty($latestPayment['reviewed_at'])): ?><p><strong>Reviewed At</strong><?php echo htmlspecialchars((string) $latestPayment['reviewed_at']); ?></p><?php endif; ?><?php if (!empty($latestPayment['proof_image'])): ?><p><a href="<?php echo booking_public_url($latestPayment['proof_image']); ?>" target="_blank" rel="noopener">View proof of payment</a></p><?php if (booking_proof_is_image((string) $latestPayment['proof_image'])): ?><img src="<?php echo booking_public_url($latestPayment['proof_image']); ?>" alt="Proof of payment" style="max-width:100%;border-radius:8px;margin-top:10px;"><?php endif; ?><?php else: ?><p><strong>Proof of Payment</strong>No uploaded proof.</p><?php endif; ?><?php else: ?><p>No payment record yet.</p><?php endif; ?></section>
+        <section><h3>Payment Information</h3><p><strong>Payment Method</strong><?php echo htmlspecialchars($currentBooking['payment_method'] ?? '-'); ?></p><p><strong>Payment Status</strong><em class="status-pill payment-<?php echo booking_payment_key($currentPaymentStatus); ?>"><?php echo htmlspecialchars(booking_payment_label($currentPaymentStatus)); ?></em></p><?php if ($latestPayment): ?><?php $latestProofPath = booking_payment_proof_path($latestPayment); ?><p><strong>Reference No.</strong><?php echo htmlspecialchars($latestPayment['reference_number'] ?? '-'); ?></p><p><strong>Amount</strong>&#8369;<?php echo number_format((float) ($latestPayment['amount'] ?? $currentBooking['total']), 2); ?></p><?php if (!empty($latestPayment['reviewed_at'])): ?><p><strong>Reviewed At</strong><?php echo htmlspecialchars((string) $latestPayment['reviewed_at']); ?></p><?php endif; ?><?php if ($latestProofPath !== ''): ?><p><a href="<?php echo booking_public_url($latestProofPath); ?>" target="_blank" rel="noopener">View proof of payment</a></p><?php if (booking_proof_is_image($latestProofPath)): ?><img src="<?php echo booking_public_url($latestProofPath); ?>" alt="Proof of payment" style="max-width:100%;border-radius:8px;margin-top:10px;"><?php endif; ?><?php else: ?><p><strong>Proof of Payment</strong>No uploaded proof.</p><?php endif; ?><?php else: ?><p>No payment record yet.</p><?php endif; ?></section>
         <section><h3>Status Information</h3><p><strong>Booking Status</strong><em class="status-pill status-<?php echo booking_status_key((string) $currentBooking['status']); ?>"><?php echo htmlspecialchars(booking_display_status_label($currentBooking)); ?></em></p><p><strong>Total</strong>₱<?php echo number_format((float) $currentBooking['total'], 2); ?></p><?php if (!empty($currentBooking['cancellation_label']) && $currentStatus === 'cancelled'): ?><p><strong>Admin Note</strong><?php echo htmlspecialchars($currentBooking['cancellation_label']); ?></p><?php endif; ?></section>
         <?php if ($paymentRows): ?><section><h3>Receipt History</h3><?php foreach ($paymentRows as $payment): ?><p><strong><?php echo htmlspecialchars(booking_payment_label((string) $payment['status'])); ?></strong> <?php echo htmlspecialchars($payment['reference_number']); ?> - &#8369;<?php echo number_format((float) $payment['amount'], 2); ?><?php if (!empty($payment['reviewer_name'])): ?><br><small>Reviewed by <?php echo htmlspecialchars($payment['reviewer_name']); ?></small><?php endif; ?><?php if (!empty($payment['remarks'])): ?><br><small><?php echo htmlspecialchars($payment['remarks']); ?></small><?php endif; ?></p><?php endforeach; ?></section><?php endif; ?>
         <form class="drawer-actions" method="post">

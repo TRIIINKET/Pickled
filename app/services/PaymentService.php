@@ -212,7 +212,7 @@ final class PaymentService
         try {
             return pickled_upload_file(
                 $file,
-                'assets/uploads/payments',
+                'uploads/payments',
                 [
                     'jpg' => ['image/jpeg'],
                     'jpeg' => ['image/jpeg'],
@@ -257,7 +257,7 @@ final class PaymentService
 
     private function paymentHasReceipt(array $payment): bool
     {
-        $path = trim((string) ($payment['proof_image'] ?? ''));
+        $path = trim((string) ($payment['proof_of_payment'] ?? $payment['proof_image'] ?? ''));
         if ($path === '') {
             return false;
         }

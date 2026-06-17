@@ -5,6 +5,7 @@ $courtSlug = preg_replace('/[^a-z0-9-]/', '', strtolower((string) ($_GET['court'
 $pageTitle = $isSocialPlay ? 'Social Play' : ($courtSlug === 'pink' ? 'Court Pink' : 'Court Green');
 $activePage = $isSocialPlay ? 'events' : 'courts';
 $bodyClass = 'admin-dashboard-body';
+const PICKLED_OPERATING_HOURS = '8:00 AM – 10:00 PM';
 $ajaxJsonRequest = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
     && (
         str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json')
@@ -530,6 +531,19 @@ function court_h(mixed $value): string {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
+function court_role_label(string $slug): string {
+    return $slug === 'pink' ? 'Youth Court' : 'Main Court';
+}
+
+function court_type_label(string $type): string {
+    $type = trim($type);
+    return strcasecmp($type, 'Indoor') === 0 ? 'Indoor Court' : ($type !== '' ? $type : 'Indoor Court');
+}
+
+function court_capacity_label(int $capacity): string {
+    return 'Up to ' . number_format(max(1, $capacity)) . ' players';
+}
+
 function court_csrf_input(): string {
     return '<input type="hidden" name="csrf_token" value="' . court_h(pickled_csrf_token()) . '">';
 }
@@ -702,9 +716,10 @@ $fallbackBasePrice = $activeServices ? min(array_map(fn($service) => (float) $se
 $fallbackCapacity = $activeServices ? max(array_map(fn($service) => (int) $service['capacity'], $activeServices)) : 24;
 $basePrice = (float) ($court['base_price'] ?? 0) > 0 ? (float) $court['base_price'] : $fallbackBasePrice;
 $capacity = (int) ($court['capacity'] ?? 0) > 0 ? (int) $court['capacity'] : $fallbackCapacity;
-$subtitle = trim((string) ($court['description'] ?? '')) ?: ($courtSlug === 'pink' ? 'Youth-friendly indoor court' : 'Main standard indoor court');
-$operatingHours = trim((string) ($court['operating_hours'] ?? '')) ?: '8AM - 10PM';
-$courtType = trim((string) ($court['court_type'] ?? '')) ?: 'Indoor';
+$subtitle = trim((string) ($court['description'] ?? '')) ?: ($courtSlug === 'pink' ? 'Beginner-friendly indoor court for youth and newer players' : 'Main indoor court for casual and competitive play');
+$operatingHours = PICKLED_OPERATING_HOURS;
+$courtType = court_type_label((string) ($court['court_type'] ?? 'Indoor'));
+$courtRole = court_role_label($courtSlug);
 $courtStats = court_stats($pdo, (int) ($court['id'] ?? 0));
 $accent = $courtSlug === 'pink' ? 'pink' : 'green';
 
@@ -1113,16 +1128,17 @@ $dashboardNav = [
                         <label><span>Base price</span><input type="number" name="base_price" step="0.01" min="0" value="<?php echo court_h((string) $basePrice); ?>" data-live-field="price"></label>
                         <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $capacity; ?>" data-live-field="capacity"></label>
                         <label><span>Status</span><select name="status" data-live-field="status"><option value="active" <?php echo ($court['status'] ?? '') === 'active' ? 'selected' : ''; ?>>Active</option><option value="inactive" <?php echo ($court['status'] ?? '') === 'inactive' ? 'selected' : ''; ?>>Inactive</option><option value="maintenance" <?php echo ($court['status'] ?? '') === 'maintenance' ? 'selected' : ''; ?>>Maintenance</option></select></label>
-                        <label><span>Operating hours</span><input type="text" name="operating_hours" value="<?php echo court_h($operatingHours); ?>" data-live-field="hours"></label>
+                        <label><span>Operating hours</span><input type="text" name="operating_hours" value="<?php echo court_h(PICKLED_OPERATING_HOURS); ?>" data-live-field="hours"></label>
                         <label><span>Court type</span><input type="text" name="court_type" value="<?php echo court_h($courtType); ?>" data-live-field="type"></label>
                         <button class="bookings-button primary" type="submit" name="action" value="update_court_details">Save Changes</button>
                     </form>
                     <div class="court-info-grid">
                         <div class="court-info-title"><span><?php echo court_icon($icons, 'courts'); ?></span><div><strong data-preview-name><?php echo htmlspecialchars($pageTitle); ?></strong><small data-preview-description><?php echo htmlspecialchars($subtitle); ?></small></div></div>
                         <p><small>Base Price</small><strong><span data-preview-price>₱<?php echo number_format($basePrice, 2); ?></span> / session</strong></p>
-                        <p><small>Capacity</small><strong><span data-preview-capacity><?php echo number_format($capacity); ?></span> Players</strong></p>
+                        <p><small>Capacity</small><strong data-preview-capacity><?php echo court_h(court_capacity_label($capacity)); ?></strong></p>
                         <p><small>Status</small><strong class="dot-status" data-preview-status><?php echo court_h(ucfirst((string) ($court['status'] ?? 'inactive'))); ?></strong></p>
                         <p><small>Type</small><strong data-preview-type><?php echo court_h($courtType); ?></strong></p>
+                        <p><small>Court Role</small><strong><?php echo court_h($courtRole); ?></strong></p>
                         <p><small>Operating</small><strong data-preview-hours><?php echo court_h($operatingHours); ?></strong></p>
                     </div>
                     </article>
@@ -1312,15 +1328,16 @@ $dashboardNav = [
 
     const money = value => '₱' + Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const writeAll = (selector, value) => document.querySelectorAll(selector).forEach(node => { node.textContent = value; });
+    const capacityLabel = value => 'Up to ' + Math.max(1, Number(value || 1)).toLocaleString('en-PH') + ' players';
     const sync = () => {
         const data = new FormData(form);
         writeAll('[data-preview-name]', data.get('name') || 'Court');
         writeAll('[data-preview-description]', data.get('description') || 'Court description');
         writeAll('[data-preview-price]', money(data.get('base_price')));
-        writeAll('[data-preview-capacity]', Number(data.get('capacity') || 0).toLocaleString('en-PH'));
+        writeAll('[data-preview-capacity]', capacityLabel(data.get('capacity')));
         writeAll('[data-preview-status]', String(data.get('status') || 'active').replace(/^\w/, letter => letter.toUpperCase()));
-        writeAll('[data-preview-type]', data.get('court_type') || 'Indoor');
-        writeAll('[data-preview-hours]', data.get('operating_hours') || '8AM - 10PM');
+        writeAll('[data-preview-type]', data.get('court_type') || 'Indoor Court');
+        writeAll('[data-preview-hours]', <?= json_encode(PICKLED_OPERATING_HOURS) ?>);
     };
     form.addEventListener('input', sync);
     form.addEventListener('change', sync);

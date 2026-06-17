@@ -189,7 +189,7 @@ $rules = [
           <li><button type="button" data-court-option data-price="₱800.00" data-package="Training ₱800"><strong>Training ₱800</strong><span>Focused skills training for stronger gameplay</span></button></li>
         </ul>
         <a href="<?= htmlspecialchars($courtBookingHref) ?>" class="btn btn-court-book btn-md" data-court-book data-court="green">Book now</a>
-        <p class="home-court__badge">Main standard court</p>
+        <p class="home-court__badge">Indoor Court · Main Court · 8:00 AM – 10:00 PM</p>
         <a href="resident/courts.php" class="home-court__details">View full details</a>
       </div>
     </div>
@@ -217,7 +217,7 @@ $rules = [
           <li><button type="button" data-court-option data-price="₱500.00" data-package="Parent & Child Session ₱500"><strong>Parent &amp; Child Session ₱500</strong><span>A shared beginner-friendly experience for one parent and one child.</span></button></li>
         </ul>
         <a href="<?= htmlspecialchars($courtBookingHref) ?>" class="btn btn-court-book btn-md" data-court-book data-court="pink">Book now</a>
-        <p class="home-court__badge">Slightly smaller but a lot happier</p>
+        <p class="home-court__badge">Indoor Court · Youth Court · 8:00 AM – 10:00 PM</p>
         <a href="resident/courts.php" class="home-court__details">View full details</a>
       </div>
     </div>

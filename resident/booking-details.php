@@ -107,7 +107,7 @@ function payment_proof_absolute_path(string $path): string {
 }
 
 function payment_has_receipt(array $payment): bool {
-  $path = trim((string) ($payment['proof_image'] ?? ''));
+  $path = payment_proof_path($payment);
   if ($path === '') {
     $hasReceipt = false;
   } else {
@@ -125,6 +125,10 @@ function payment_has_receipt(array $payment): bool {
 
 function payment_proof_is_image(string $path): bool {
   return (bool) preg_match('/\.(jpe?g|png|webp)$/i', $path);
+}
+
+function payment_proof_path(array $payment): string {
+  return trim((string) ($payment['proof_of_payment'] ?? $payment['proof_image'] ?? ''));
 }
 
 function feedback_target_label(array $target): string {
@@ -268,7 +272,7 @@ include __DIR__ . '/../includes/header.php';
             </div>
             <div class="booking-detail-receipts">
               <?php foreach ($uploadedPayments as $payment): ?>
-                <?php $proofPath = (string) $payment['proof_image']; ?>
+                <?php $proofPath = payment_proof_path($payment); ?>
                 <article>
                   <?php if (payment_proof_is_image($proofPath)): ?>
                     <img src="<?= htmlspecialchars(payment_proof_url($proofPath)) ?>" alt="Payment receipt" />

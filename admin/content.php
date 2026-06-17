@@ -114,7 +114,7 @@ $gallery = ['img/court/court green-1.png', 'img/court/court pink-1.webp', 'img/c
                     <label class="wide">Address<input type="text" value="Makati, Metro Manila"></label>
                     <label>City<input type="text" value="Makati"></label>
                     <label>Province<input type="text" value="Metro Manila"></label>
-                    <label>Operating Hours<input type="text" value="Monday - Sunday, 10AM - 10PM"></label>
+                    <label>Operating Hours<input type="text" value="8:00 AM – 10:00 PM"></label>
                 </div>
             </article>
         </section>

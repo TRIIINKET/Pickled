@@ -11,6 +11,18 @@ $pageTitle  = 'Courts - Pickled';
 $activePage = 'courts.php';
 $basePath   = '../';
 $extraHead  = '<link rel="stylesheet" href="../assets/css/courts.css?v=20260615b"/>';
+const PICKLED_OPERATING_HOURS = '8:00 AM – 10:00 PM';
+
+function pickled_court_role_label(string $slug): string
+{
+  return $slug === 'pink' ? 'Youth Court' : 'Main Court';
+}
+
+function pickled_court_type_label(string $type): string
+{
+  $type = trim($type);
+  return strcasecmp($type, 'Indoor') === 0 ? 'Indoor Court' : ($type !== '' ? $type : 'Indoor Court');
+}
 
 function pickled_catalog_note(array $variant): string
 {
@@ -201,10 +213,11 @@ foreach ($catalogCourts as $catalogCourt) {
   }
   $assets['title'] = strtoupper((string) $catalogCourt['name']);
   $assets['tag'] = $assets['tag'] ?? 'BOOK NOW';
-  $assets['description'] = trim((string) ($catalogCourt['description'] ?? '')) ?: ($slug === 'pink' ? 'Youth-friendly indoor court' : 'Main standard indoor court');
+  $assets['description'] = trim((string) ($catalogCourt['description'] ?? '')) ?: ($slug === 'pink' ? 'Beginner-friendly indoor court for youth and newer players' : 'Main indoor court for casual and competitive play');
   $assets['capacity'] = (int) ($catalogCourt['capacity'] ?? 0);
-  $assets['operating_hours'] = trim((string) ($catalogCourt['operating_hours'] ?? '')) ?: '8AM - 10PM';
-  $assets['court_type'] = trim((string) ($catalogCourt['court_type'] ?? '')) ?: 'Indoor';
+  $assets['operating_hours'] = PICKLED_OPERATING_HOURS;
+  $assets['court_type'] = pickled_court_type_label((string) ($catalogCourt['court_type'] ?? 'Indoor'));
+  $assets['court_role'] = pickled_court_role_label($slug);
   $courtImages[$slug] = $assets;
 }
 
@@ -252,8 +265,9 @@ foreach ($courtImages as $key => $courtImage) {
     'thumbs' => $courtImage['thumbs'],
     'description' => $courtImage['description'] ?? '',
     'capacity' => $courtImage['capacity'] ?? 0,
-    'operatingHours' => $courtImage['operating_hours'] ?? '8AM - 10PM',
-    'courtType' => $courtImage['court_type'] ?? 'Indoor',
+    'operatingHours' => $courtImage['operating_hours'] ?? PICKLED_OPERATING_HOURS,
+    'courtType' => $courtImage['court_type'] ?? 'Indoor Court',
+    'courtRole' => $courtImage['court_role'] ?? pickled_court_role_label($key),
   ];
 }
 
@@ -335,9 +349,9 @@ foreach ($coachRows as $index => $coachRow) {
         <p class="court-price"><span id="selectedCourtPrice">₱<?= number_format((float) $defaultRate['price'], 2) ?></span> <small>/ session</small></p>
         <p class="court-description" id="selectedCourtDescription"><?= htmlspecialchars((string) ($defaultCourtAssets['description'] ?? '')) ?></p>
         <div class="court-meta-row" aria-label="Selected court details">
-          <span><strong id="selectedCourtCapacity"><?= (int) ($defaultCourtAssets['capacity'] ?? 0) ?: '—' ?></strong> capacity</span>
-          <span><strong id="selectedCourtType"><?= htmlspecialchars((string) ($defaultCourtAssets['court_type'] ?? 'Indoor')) ?></strong> court</span>
-          <span><strong id="selectedCourtHours"><?= htmlspecialchars((string) ($defaultCourtAssets['operating_hours'] ?? '8AM - 10PM')) ?></strong></span>
+          <span><strong id="selectedCourtType"><?= htmlspecialchars((string) ($defaultCourtAssets['court_type'] ?? 'Indoor Court')) ?></strong></span>
+          <span><strong id="selectedCourtRole"><?= htmlspecialchars((string) ($defaultCourtAssets['court_role'] ?? pickled_court_role_label($defaultCourtKey))) ?></strong></span>
+          <span><strong id="selectedCourtHours"><?= htmlspecialchars((string) ($defaultCourtAssets['operating_hours'] ?? PICKLED_OPERATING_HOURS)) ?></strong></span>
         </div>
 
         <div class="rate-list" aria-label="Court rates">
@@ -365,7 +379,7 @@ foreach ($coachRows as $index => $coachRow) {
         </div>
         <p class="urgency">Limited seats. Book ASAP.</p>
         <div class="court-actions">
-          <span>♡ MAIN COURT</span>
+          <span id="selectedCourtBottomLabel">♡ <?= htmlspecialchars((string) ($defaultCourtAssets['court_role'] ?? pickled_court_role_label($defaultCourtKey))) ?></span>
           <button class="court-share" type="button" data-share-title="Pickled Court Booking" data-share-text="Book a Pickled court session." data-share-url="courts.php#court-detail">Share</button>
         </div>
       </div>
@@ -517,7 +531,6 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
           <button type="button" data-time-format="24">24h</button>
         </div>
         <div class="time-slot-grid" id="timeSlotGrid">
-          <button class="time-slot" type="button" data-time="07:00 AM - 08:00 AM">07:00 AM - 08:00 AM</button>
           <button class="time-slot" type="button" data-time="08:00 AM - 09:00 AM">08:00 AM - 09:00 AM</button>
           <button class="time-slot" type="button" data-time="09:00 AM - 10:00 AM">09:00 AM - 10:00 AM</button>
           <button class="time-slot" type="button" data-time="10:00 AM - 11:00 AM">10:00 AM - 11:00 AM</button>
@@ -603,7 +616,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
               <span>Name: <b id="confirmedName">Guest</b></span>
               <span>Email: <b id="confirmedEmail">guest@example.com</b></span>
               <span>Date: <b id="confirmedDate">Selected date</b></span>
-              <span>Time: <b id="confirmedSchedule">07:00 AM - 09:00 AM</b></span>
+              <span>Time: <b id="confirmedSchedule">08:00 AM - 09:00 AM</b></span>
             </div>
           </article>
           <aside class="confirmation-side">
@@ -797,9 +810,6 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
         numericLimit(variant.capacity, state.capacity || 1)
       )
     });
-    if (variant.court_capacity !== undefined) {
-      document.getElementById('selectedCourtCapacity').textContent = numericLimit(variant.court_capacity, state.capacity);
-    }
   }
 
   async function loadAvailability(){
@@ -1035,9 +1045,10 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       document.getElementById('selectedCourtTitle').textContent = gallery ? gallery.title : state.court;
       if (gallery) {
         document.getElementById('selectedCourtDescription').textContent = gallery.description || '';
-        document.getElementById('selectedCourtCapacity').textContent = gallery.capacity || '—';
-        document.getElementById('selectedCourtType').textContent = gallery.courtType || 'Indoor';
-        document.getElementById('selectedCourtHours').textContent = gallery.operatingHours || '8AM - 10PM';
+        document.getElementById('selectedCourtType').textContent = gallery.courtType || 'Indoor Court';
+        document.getElementById('selectedCourtRole').textContent = gallery.courtRole || 'Main Court';
+        document.getElementById('selectedCourtHours').textContent = gallery.operatingHours || <?= json_encode(PICKLED_OPERATING_HOURS) ?>;
+        document.getElementById('selectedCourtBottomLabel').textContent = '♡ ' + (gallery.courtRole || 'Main Court');
       }
       renderCourtGallery(courtKey);
       renderRateOptions(courtKey);
