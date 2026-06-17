@@ -308,7 +308,7 @@ function booking_payment_status_value(PDO $pdo, string $requested): string {
     $requested = strtolower(trim($requested));
     $allowed = booking_payment_allowed_statuses($pdo);
     $mapped = match ($requested) {
-        'paid', 'verified', 'approve', 'approved' => in_array('approved', $allowed, true) ? 'approved' : 'verified',
+        'paid', 'verified', 'approve', 'approved' => in_array('verified', $allowed, true) ? 'verified' : (in_array('approved', $allowed, true) ? 'approved' : 'paid'),
         'rejected', 'reject' => 'rejected',
         default => 'pending',
     };
@@ -419,7 +419,7 @@ function booking_filter_parts(string $query, string $statusFilter, string $court
     $where = [];
     $params = [];
     if ($query !== '') {
-        $where[] = "(b.reference LIKE :q OR u.name LIKE :q OR u.email LIKE :q)";
+        $where[] = "(b.reference LIKE :q OR u.name LIKE :q OR u.email LIKE :q OR up.phone LIKE :q)";
         $params['q'] = '%' . $query . '%';
     }
     if ($statusFilter === 'expired') {
@@ -475,7 +475,7 @@ function booking_filtered_rows(?PDO $pdo, string $whereSql, array $params, ?int 
     $limitSql = $limit !== null ? 'LIMIT ' . max(1, $limit) : '';
     $proofColumn = booking_payment_proof_column($pdo);
     return booking_rows($pdo, "
-        SELECT b.*, u.name AS user_name, u.email AS user_email,
+        SELECT b.*, u.name AS user_name, u.email AS user_email, COALESCE(up.phone, '') AS user_phone,
                GROUP_CONCAT(DISTINCT bi.name ORDER BY bi.id SEPARATOR ', ') AS program_names,
                GROUP_CONCAT(DISTINCT bi.court ORDER BY bi.id SEPARATOR ', ') AS courts,
                SUM(bi.quantity) AS players,
@@ -491,6 +491,7 @@ function booking_filtered_rows(?PDO $pdo, string $whereSql, array $params, ?int 
                lp.reviewed_at AS latest_payment_reviewed_at
         FROM bookings b
         LEFT JOIN users u ON u.id = b.user_id
+        LEFT JOIN user_profiles up ON up.user_id = u.id
         LEFT JOIN booking_items bi ON bi.booking_id = b.id
         LEFT JOIN sessions s ON s.id = bi.session_id
         LEFT JOIN payments lp ON lp.id = (
@@ -532,11 +533,13 @@ function booking_calendar_items(?PDO $pdo, string $whereSql, array $params, stri
                b.notes,
                b.total,
                u.name AS user_name,
-               u.email AS user_email
+               u.email AS user_email,
+               COALESCE(up.phone, '') AS user_phone
         FROM booking_items bi
         JOIN bookings b ON b.id = bi.booking_id
         LEFT JOIN sessions s ON s.id = bi.session_id
         LEFT JOIN users u ON u.id = b.user_id
+        LEFT JOIN user_profiles up ON up.user_id = u.id
         $whereSql
         ORDER BY schedule_date ASC, schedule_start_time ASC, bi.id ASC
     ", $params);
@@ -614,6 +617,17 @@ function booking_column_exists(PDO $pdo, string $table, string $column): bool {
            AND COLUMN_NAME = :column_name'
     );
     $stmt->execute(['table_name' => $table, 'column_name' => $column]);
+    return (int) $stmt->fetchColumn() > 0;
+}
+
+function booking_table_exists(PDO $pdo, string $table): bool {
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*)
+         FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table_name'
+    );
+    $stmt->execute(['table_name' => $table]);
     return (int) $stmt->fetchColumn() > 0;
 }
 
@@ -720,6 +734,192 @@ function booking_available_coach(PDO $pdo, string $bookingDate, string $startTim
     return $coachId > 0 ? $coachId : null;
 }
 
+function booking_time_value(string $time): string {
+    return substr($time, 0, 5);
+}
+
+function booking_time_label(string $startTime, string $endTime): string {
+    return (new DateTimeImmutable('1970-01-01 ' . $startTime))->format('g:i A')
+        . ' - '
+        . (new DateTimeImmutable('1970-01-01 ' . $endTime))->format('g:i A');
+}
+
+function booking_duration_minutes(string $durationLabel): int {
+    $duration = strtolower(trim($durationLabel));
+    if (preg_match('/(\d+(?:\.\d+)?)\s*(hour|hr|hrs|hours)/', $duration, $match)) {
+        return max(30, (int) round(((float) $match[1]) * 60));
+    }
+    if (preg_match('/(\d+)\s*(minute|min|mins|minutes)/', $duration, $match)) {
+        return max(30, (int) $match[1]);
+    }
+    return 60;
+}
+
+function booking_walkin_requires_coach(array $variant): bool {
+    $stored = strtolower((string) ($variant['coach_required'] ?? ''));
+    if (in_array($stored, ['yes', 'required', '1', 'true'], true)) {
+        return true;
+    }
+    $label = strtolower((string) ($variant['category'] ?? '') . ' ' . (string) ($variant['name'] ?? ''));
+    foreach (['lesson', 'coaching', 'training', 'class', 'kids', 'youth', 'parent'] as $keyword) {
+        if (str_contains($label, $keyword)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function booking_walkin_is_per_player(array $variant): bool {
+    $pricingType = strtolower((string) ($variant['pricing_type'] ?? 'per_session'));
+    $label = strtolower((string) ($variant['category'] ?? '') . ' ' . (string) ($variant['name'] ?? ''));
+    if (str_contains($label, 'court rental') || str_contains($label, 'court rentals') || str_contains($label, 'reservation')) {
+        return false;
+    }
+    return in_array($pricingType, ['per_player', 'per_participant', 'per_person'], true);
+}
+
+function booking_walkin_total(array $variant, int $players): float {
+    $unitPrice = (float) ($variant['price'] ?? 0);
+    return round($unitPrice * (booking_walkin_is_per_player($variant) ? max(1, $players) : 1), 2);
+}
+
+function booking_walkin_court_conflict(PDO $pdo, int $courtId, string $courtName, string $bookingDate, string $startTime, string $endTime): bool {
+    $stmt = $pdo->prepare(
+        "SELECT 1
+         FROM booking_items bi
+         JOIN bookings b ON b.id = bi.booking_id
+         LEFT JOIN booking_variants v ON v.slug = bi.variant_slug
+         WHERE bi.booking_date = :booking_date
+           AND :start_time < bi.end_time
+           AND :end_time > bi.start_time
+           AND (v.court_id = :court_id OR bi.court = :court_name)
+           AND (b.status IN ('pending', 'confirmed', 'completed')
+                OR b.payment_status IN ('pending', 'approved', 'paid', 'verified'))
+           AND b.status <> 'cancelled'
+           AND b.payment_status NOT IN ('expired', 'refunded', 'rejected')
+         LIMIT 1"
+    );
+    $stmt->execute([
+        'booking_date' => $bookingDate,
+        'start_time' => $startTime,
+        'end_time' => $endTime,
+        'court_id' => $courtId,
+        'court_name' => $courtName,
+    ]);
+    return (bool) $stmt->fetchColumn();
+}
+
+function booking_walkin_coaches_for_slot(PDO $pdo, string $bookingDate, string $startTime, string $endTime): array {
+    $dayOfWeek = (int) (new DateTimeImmutable($bookingDate))->format('w');
+    $timeOffSql = '';
+    if (booking_table_exists($pdo, 'coach_time_off_requests')) {
+        $timeOffSql = "AND NOT EXISTS (
+               SELECT 1
+               FROM coach_time_off_requests tor
+               WHERE tor.coach_user_id = u.id
+                 AND tor.status = 'approved'
+                 AND :time_off_date BETWEEN tor.start_date AND tor.end_date
+           )";
+    }
+    $stmt = $pdo->prepare(
+        "SELECT u.id, u.name, COALESCE(cp.specialization, '') AS specialization
+         FROM users u
+         JOIN coach_availability ca ON ca.coach_user_id = u.id
+         LEFT JOIN coach_profiles cp ON cp.user_id = u.id
+         WHERE u.role = 'coach'
+           AND (cp.status IS NULL OR cp.status = 'active')
+           AND ca.status = 'available'
+           AND ca.day_of_week = :day_of_week
+           AND ca.start_time <= :start_time
+           AND ca.end_time >= :end_time
+           $timeOffSql
+           AND NOT EXISTS (
+               SELECT 1
+               FROM booking_items bi
+               JOIN bookings b ON b.id = bi.booking_id
+               WHERE bi.coach_user_id = u.id
+                 AND bi.booking_date = :booking_date
+                 AND :start_time_overlap < bi.end_time
+                 AND :end_time_overlap > bi.start_time
+                 AND (b.status IN ('pending', 'confirmed', 'completed')
+                      OR b.payment_status IN ('pending', 'approved', 'paid', 'verified'))
+                 AND b.status <> 'cancelled'
+                 AND b.payment_status NOT IN ('expired', 'refunded', 'rejected')
+           )
+           AND NOT EXISTS (
+               SELECT 1
+               FROM sessions s
+               WHERE s.coach_user_id = u.id
+                 AND s.session_date = :session_date
+                 AND s.status IN ('open', 'full')
+                 AND :session_start < s.end_time
+                 AND :session_end > s.start_time
+           )
+         ORDER BY u.name ASC"
+    );
+    $params = [
+        'day_of_week' => $dayOfWeek,
+        'start_time' => $startTime,
+        'end_time' => $endTime,
+        'booking_date' => $bookingDate,
+        'start_time_overlap' => $startTime,
+        'end_time_overlap' => $endTime,
+        'session_date' => $bookingDate,
+        'session_start' => $startTime,
+        'session_end' => $endTime,
+    ];
+    if ($timeOffSql !== '') {
+        $params['time_off_date'] = $bookingDate;
+    }
+    $stmt->execute($params);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+function booking_walkin_available_slots(PDO $pdo, array $variant, int $days = 21): array {
+    $timezone = new DateTimeZone('Asia/Manila');
+    $now = new DateTimeImmutable('now', $timezone);
+    $today = new DateTimeImmutable('today', $timezone);
+    $durationMinutes = booking_duration_minutes((string) ($variant['duration_label'] ?? '1 hour'));
+    $requiresCoach = booking_walkin_requires_coach($variant);
+    $slots = [];
+
+    for ($dayOffset = 0; $dayOffset < $days; $dayOffset++) {
+        $date = $today->modify('+' . $dayOffset . ' days');
+        $bookingDate = $date->format('Y-m-d');
+        $dateLabel = $date->format('D, M j, Y');
+        for ($start = $date->setTime(8, 0); $start < $date->setTime(22, 0); $start = $start->modify('+1 hour')) {
+            $end = $start->modify('+' . $durationMinutes . ' minutes');
+            if ($end > $date->setTime(22, 0) || $start <= $now) {
+                continue;
+            }
+            $startTime = $start->format('H:i:s');
+            $endTime = $end->format('H:i:s');
+            if (booking_walkin_court_conflict($pdo, (int) $variant['court_id'], (string) $variant['court_name'], $bookingDate, $startTime, $endTime)) {
+                continue;
+            }
+            $coaches = $requiresCoach ? booking_walkin_coaches_for_slot($pdo, $bookingDate, $startTime, $endTime) : [];
+            if ($requiresCoach && !$coaches) {
+                continue;
+            }
+            $slots[] = [
+                'date' => $bookingDate,
+                'date_label' => $dateLabel,
+                'start' => booking_time_value($startTime),
+                'end' => booking_time_value($endTime),
+                'label' => $dateLabel . ' · ' . booking_time_label($startTime, $endTime),
+                'time_label' => booking_time_label($startTime, $endTime),
+                'coaches' => array_map(static fn(array $coach): array => [
+                    'id' => (int) $coach['id'],
+                    'name' => (string) $coach['name'],
+                    'specialization' => (string) ($coach['specialization'] ?? ''),
+                ], $coaches),
+            ];
+        }
+    }
+
+    return $slots;
+}
+
 function booking_create_walkin(PDO $pdo, array $input, int $adminId, array $files = []): int {
     $name = trim((string) ($input['customer_name'] ?? ''));
     $email = trim((string) ($input['customer_email'] ?? ''));
@@ -729,6 +929,7 @@ function booking_create_walkin(PDO $pdo, array $input, int $adminId, array $file
     $bookingDate = trim((string) ($input['booking_date'] ?? ''));
     $startTime = trim((string) ($input['start_time'] ?? ''));
     $endTime = trim((string) ($input['end_time'] ?? ''));
+    $coachUserId = empty($input['coach_user_id']) ? null : (int) $input['coach_user_id'];
     $players = max(1, (int) ($input['players'] ?? 1));
     $paymentMethod = trim((string) ($input['payment_method'] ?? 'Cash'));
     $paymentChoice = strtolower(trim((string) ($input['payment_status'] ?? 'pending')));
@@ -746,6 +947,7 @@ function booking_create_walkin(PDO $pdo, array $input, int $adminId, array $file
     if (!in_array($paymentMethod, ['Cash', 'GCash'], true)) {
         throw new RuntimeException('Please choose a valid payment method.');
     }
+    $paymentMethodStored = strtolower($paymentMethod);
 
     $date = DateTimeImmutable::createFromFormat('Y-m-d', $bookingDate);
     if (!$date || $date->format('Y-m-d') !== $bookingDate) {
@@ -755,8 +957,18 @@ function booking_create_walkin(PDO $pdo, array $input, int $adminId, array $file
     if ($date < $todayLocal) {
         throw new RuntimeException('Booking date cannot be in the past.');
     }
-    if (!preg_match('/^\d{2}:\d{2}$/', $startTime) || !preg_match('/^\d{2}:\d{2}$/', $endTime) || $startTime >= $endTime) {
-        throw new RuntimeException('Please choose a valid time range.');
+    if (preg_match('/^\d{2}:\d{2}$/', $startTime)) {
+        $startTime .= ':00';
+    }
+    if (preg_match('/^\d{2}:\d{2}$/', $endTime)) {
+        $endTime .= ':00';
+    }
+    if (!preg_match('/^\d{2}:\d{2}:\d{2}$/', $startTime) || !preg_match('/^\d{2}:\d{2}:\d{2}$/', $endTime) || $startTime >= $endTime) {
+        throw new RuntimeException('Please select an available time slot.');
+    }
+    $slotStart = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $bookingDate . ' ' . $startTime, new DateTimeZone('Asia/Manila'));
+    if (!$slotStart || $slotStart <= new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'))) {
+        throw new RuntimeException('Please select a future time slot.');
     }
 
     $variantStmt = $pdo->prepare(
@@ -775,50 +987,40 @@ function booking_create_walkin(PDO $pdo, array $input, int $adminId, array $file
     if (strtolower((string) ($variant['court_status'] ?? '')) !== 'active') {
         throw new RuntimeException('Selected court is unavailable.');
     }
-    if ($players > (int) ($variant['capacity'] ?? 1)) {
-        throw new RuntimeException('Capacity is not enough for the selected number of players.');
+    $slotEnd = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $bookingDate . ' ' . $endTime, new DateTimeZone('Asia/Manila'));
+    $openTime = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $bookingDate . ' 08:00:00', new DateTimeZone('Asia/Manila'));
+    $closeTime = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $bookingDate . ' 22:00:00', new DateTimeZone('Asia/Manila'));
+    $expectedMinutes = booking_duration_minutes((string) ($variant['duration_label'] ?? '1 hour'));
+    $actualMinutes = ($slotStart && $slotEnd) ? (int) (($slotEnd->getTimestamp() - $slotStart->getTimestamp()) / 60) : 0;
+    if (!$slotEnd || !$openTime || !$closeTime || $slotStart < $openTime || $slotEnd > $closeTime || $actualMinutes !== $expectedMinutes) {
+        throw new RuntimeException('Please select an available time slot.');
+    }
+    $playerLimit = max(1, min((int) ($variant['participants_limit'] ?? 1), (int) ($variant['capacity'] ?? 1)));
+    if ($players > $playerLimit) {
+        throw new RuntimeException('Number of players exceeds the selected service limit.');
     }
 
-    $overlapStmt = $pdo->prepare(
-        "SELECT COALESCE(SUM(bi.quantity), 0) AS booked_players, COUNT(*) AS conflicts
-         FROM booking_items bi
-         JOIN bookings b ON b.id = bi.booking_id
-         LEFT JOIN booking_variants existing_variant ON existing_variant.slug = bi.variant_slug
-         WHERE b.status <> 'cancelled'
-           AND bi.booking_date = :booking_date
-           AND :start_time < bi.end_time
-           AND :end_time > bi.start_time
-           AND (existing_variant.court_id = :court_id OR bi.court = :court_name)"
-    );
-    $overlapStmt->execute([
-        'booking_date' => $bookingDate,
-        'start_time' => $startTime,
-        'end_time' => $endTime,
-        'court_id' => $courtId,
-        'court_name' => (string) $variant['court_name'],
-    ]);
-    $overlap = $overlapStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-    if ((int) ($overlap['conflicts'] ?? 0) > 0) {
-        throw new RuntimeException('This court is already booked for the selected time.');
-    }
-    if ((int) ($overlap['booked_players'] ?? 0) + $players > (int) $variant['capacity']) {
-        throw new RuntimeException('Capacity is not enough for the selected number of players.');
+    if (booking_walkin_court_conflict($pdo, $courtId, (string) $variant['court_name'], $bookingDate, $startTime, $endTime)) {
+        throw new RuntimeException('This time slot is already booked. Please select another schedule.');
     }
 
-    $coachRequired = strtolower((string) ($variant['coach_required'] ?? 'no'));
-    $coachUserId = null;
-    if (in_array($coachRequired, ['yes', 'required', '1', 'true'], true)) {
-        $coachUserId = booking_available_coach($pdo, $bookingDate, $startTime, $endTime);
-        if ($coachUserId === null) {
-            throw new RuntimeException('Coach is unavailable for this schedule.');
+    if (booking_walkin_requires_coach($variant)) {
+        if (!$coachUserId) {
+            throw new RuntimeException('No coach is available for this time slot.');
         }
+        $availableCoachIds = array_map(static fn(array $coach): int => (int) $coach['id'], booking_walkin_coaches_for_slot($pdo, $bookingDate, $startTime, $endTime));
+        if (!in_array($coachUserId, $availableCoachIds, true)) {
+            throw new RuntimeException('No coach is available for this time slot.');
+        }
+    } else {
+        $coachUserId = null;
     }
 
     $bookingStatus = booking_admin_status_value($pdo, $paymentChoice === 'paid' ? 'confirmed' : 'pending');
     $paymentStatus = booking_payment_status_value($pdo, $paymentChoice === 'paid' ? 'approved' : 'pending');
     $reference = booking_generate_reference($pdo);
     $userId = booking_find_or_create_walkin_user($pdo, $name, $email, $phone, $reference);
-    $subtotal = round((float) $variant['price'] * $players, 2);
+    $subtotal = booking_walkin_total($variant, $players);
 
     $bookingStmt = $pdo->prepare(
         'INSERT INTO bookings
@@ -832,7 +1034,7 @@ function booking_create_walkin(PDO $pdo, array $input, int $adminId, array $file
         'status' => $bookingStatus,
         'subtotal' => $subtotal,
         'total' => $subtotal,
-        'payment_method' => $paymentMethod,
+        'payment_method' => $paymentMethodStored,
         'payment_status' => $paymentStatus,
         'notes' => $notes !== '' ? 'Walk-in booking. ' . $notes : 'Walk-in booking.',
         'cancellation_label' => 'Walk-in admin booking',
@@ -874,7 +1076,7 @@ function booking_create_walkin(PDO $pdo, array $input, int $adminId, array $file
         'booking_id' => $bookingId,
         'proof_image' => $proofPath,
         'amount' => $subtotal,
-        'payment_method' => $paymentMethod,
+        'payment_method' => $paymentMethodStored,
         'reference_number' => 'WALKIN-' . $reference,
         'status' => $paymentStatus,
         'reviewed_by' => $paymentStatus === 'approved' ? $adminId : null,
@@ -1157,12 +1359,32 @@ $courts = booking_rows($pdo, 'SELECT id, name FROM courts ORDER BY id ASC');
 $activeCourts = booking_rows($pdo, "SELECT id, name FROM courts WHERE status = 'active' ORDER BY id ASC");
 $programs = array_map(static fn(string $name): array => ['name' => $name], booking_program_filter_options());
 $activeVariants = booking_rows($pdo, "
-    SELECT v.id, v.name, v.category, v.price, v.capacity, v.participants_limit, v.duration_label, v.coach_required, c.id AS court_id, c.name AS court_name
+    SELECT v.id, v.slug, v.name, v.category, v.price, v.pricing_type, v.capacity, v.participants_limit, v.duration_label, v.coach_required, c.id AS court_id, c.name AS court_name
     FROM booking_variants v
     JOIN courts c ON c.id = v.court_id
     WHERE v.active = 1 AND c.status = 'active'
     ORDER BY c.name ASC, v.name ASC
 ");
+$walkinServices = [];
+$walkinAvailability = [];
+foreach ($activeVariants as $variant) {
+    $variantId = (int) $variant['id'];
+    $playerLimit = max(1, min((int) ($variant['participants_limit'] ?? 1), (int) ($variant['capacity'] ?? 1)));
+    $walkinServices[$variantId] = [
+        'id' => $variantId,
+        'court_id' => (int) $variant['court_id'],
+        'name' => (string) $variant['name'],
+        'court_name' => (string) $variant['court_name'],
+        'category' => (string) ($variant['category'] ?? ''),
+        'price' => (float) $variant['price'],
+        'pricing_type' => (string) ($variant['pricing_type'] ?? 'per_session'),
+        'per_player' => booking_walkin_is_per_player($variant),
+        'duration_label' => (string) ($variant['duration_label'] ?? '1 hour'),
+        'player_limit' => $playerLimit,
+        'requires_coach' => booking_walkin_requires_coach($variant),
+    ];
+    $walkinAvailability[$variantId] = $pdo ? booking_walkin_available_slots($pdo, $variant) : [];
+}
 $bookingStatusOptions = $pdo ? booking_allowed_statuses($pdo) : ['pending', 'confirmed', 'completed', 'cancelled'];
 $statusFilterOptions = booking_status_filter_options($bookingStatusOptions);
 $showWalkinPanel = ($_GET['walkin'] ?? '') === '1';
@@ -1362,7 +1584,7 @@ $calendarLanes = [
                         ?>
                         <div class="booking-management-row">
                             <span class="booking-ref"><?php echo htmlspecialchars($booking['reference']); ?></span>
-                            <span><strong><?php echo htmlspecialchars($booking['user_name'] ?? 'Guest'); ?></strong><small><?php echo htmlspecialchars($booking['user_email'] ?? ''); ?></small></span>
+                            <span><strong><?php echo htmlspecialchars($booking['user_name'] ?? 'Guest'); ?></strong><small><?php echo htmlspecialchars($booking['user_email'] ?? ''); ?></small><small><?php echo htmlspecialchars($booking['user_phone'] ?: 'No phone number'); ?></small></span>
                             <span><?php echo htmlspecialchars($booking['program_names'] ?: 'Booking'); ?></span>
                             <span><?php echo htmlspecialchars($booking['courts'] ?: 'Any Court'); ?></span>
                             <span><?php echo htmlspecialchars($booking['booking_date'] ?: date('M j, Y', strtotime($booking['created_at']))); ?></span>
@@ -1407,7 +1629,7 @@ $calendarLanes = [
                             <?php foreach ($allBookingItems as $item): ?>
                                 <?php if (($item['schedule_date'] ?? '') === $day['match_sql'] && str_starts_with((string) $item['schedule_time'], date('h:00 A', strtotime($hour . ':00')))): ?>
                                     <?php $itemText = strtolower(($item['name'] ?? '') . ' ' . ($item['category'] ?? '') . ' ' . ($item['court'] ?? '')); $tone = (str_contains($itemText, 'private') || str_contains($itemText, 'coach')) ? 'purple' : (str_contains($itemText, 'pink') ? 'pink' : (str_contains($itemText, 'social') ? 'orange' : 'green')); ?>
-                                    <a class="calendar-event <?php echo $tone; ?>" href="<?php echo htmlspecialchars(booking_query_url(array_merge($currentQueryParams, ['id' => (int) $item['booking_id'], 'view' => 'calendar'])), ENT_QUOTES, 'UTF-8'); ?>"><strong><?php echo htmlspecialchars($item['name']); ?></strong><span><?php echo htmlspecialchars($item['schedule_time']); ?></span><small><?php echo htmlspecialchars($item['user_name'] ?? 'Guest'); ?></small><small><?php echo htmlspecialchars($item['court'] ?? 'Any Court'); ?> · <?php echo htmlspecialchars(booking_display_status_label($item)); ?></small></a>
+                                    <a class="calendar-event <?php echo $tone; ?>" href="<?php echo htmlspecialchars(booking_query_url(array_merge($currentQueryParams, ['id' => (int) $item['booking_id'], 'view' => 'calendar'])), ENT_QUOTES, 'UTF-8'); ?>"><strong><?php echo htmlspecialchars($item['name']); ?></strong><span><?php echo htmlspecialchars($item['schedule_time']); ?></span><small><?php echo htmlspecialchars($item['user_name'] ?? 'Guest'); ?><?php echo !empty($item['user_phone']) ? ' · ' . htmlspecialchars($item['user_phone']) : ''; ?></small><small><?php echo htmlspecialchars($item['court'] ?? 'Any Court'); ?> · <?php echo htmlspecialchars(booking_display_status_label($item)); ?></small></a>
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         </div><?php endforeach; ?></div>
@@ -1431,31 +1653,41 @@ $calendarLanes = [
             <input type="hidden" name="action" value="create_walkin_booking">
 
             <section>
-                <h3>Customer Information</h3>
+                <h3>Customer Details</h3>
                 <label><span>Customer Name</span><input type="text" name="customer_name" required maxlength="120" autocomplete="name"></label>
                 <label><span>Email optional</span><input type="email" name="customer_email" maxlength="160" autocomplete="email"></label>
                 <label><span>Phone optional</span><input type="tel" name="customer_phone" inputmode="numeric" pattern="[0-9]{7,15}" maxlength="15" autocomplete="tel"></label>
             </section>
 
             <section>
-                <h3>Booking Details</h3>
+                <h3>Booking Selection</h3>
                 <label><span>Court</span><select name="court_id" data-walkin-court required><option value="">Choose court</option><?php foreach ($activeCourts as $court): ?><option value="<?php echo (int) $court['id']; ?>"><?php echo htmlspecialchars($court['name']); ?></option><?php endforeach; ?></select></label>
-                <label><span>Service / Program</span><select name="variant_id" data-walkin-service required><option value="">Choose service</option><?php foreach ($activeVariants as $variant): ?><option value="<?php echo (int) $variant['id']; ?>" data-court-id="<?php echo (int) $variant['court_id']; ?>" data-price="<?php echo htmlspecialchars((string) $variant['price'], ENT_QUOTES, 'UTF-8'); ?>" data-capacity="<?php echo (int) $variant['capacity']; ?>"><?php echo htmlspecialchars($variant['court_name'] . ' - ' . $variant['name'] . ' (₱' . number_format((float) $variant['price'], 2) . ')'); ?></option><?php endforeach; ?></select></label>
+                <label><span>Service / Program</span><select name="variant_id" data-walkin-service required><option value="">Choose service</option><?php foreach ($activeVariants as $variant): ?><option value="<?php echo (int) $variant['id']; ?>" data-court-id="<?php echo (int) $variant['court_id']; ?>"><?php echo htmlspecialchars($variant['name'] . ' - ₱' . number_format((float) $variant['price'], 2)); ?></option><?php endforeach; ?></select></label>
                 <div class="walkin-form-grid">
-                    <label><span>Date</span><input type="date" name="booking_date" min="<?php echo htmlspecialchars($todaySql); ?>" required></label>
-                    <label><span>Start Time</span><input type="time" name="start_time" required></label>
-                    <label><span>End Time</span><input type="time" name="end_time" required></label>
-                    <label><span>Number of Players</span><input type="number" name="players" min="1" max="999" value="1" required></label>
+                    <label><span>Number of Players</span><input type="number" name="players" min="1" max="1" value="1" required data-walkin-players></label>
+                    <label><span>Available Date</span><select name="booking_date" data-walkin-date required><option value="">Choose service first</option></select></label>
                 </div>
+                <label><span>Available Time Slot</span><select data-walkin-slot required><option value="">Choose date first</option></select></label>
+                <input type="hidden" name="start_time" data-walkin-start>
+                <input type="hidden" name="end_time" data-walkin-end>
+                <label data-walkin-coach-wrap hidden><span>Coach</span><select name="coach_user_id" data-walkin-coach><option value="">Choose time slot first</option></select></label>
+                <p class="walkin-slot-message" data-walkin-slot-message>No service selected.</p>
+            </section>
+
+            <section class="walkin-price-summary">
+                <h3>Price Summary</h3>
+                <p><span>Service price</span><strong data-walkin-price>₱0.00</strong></p>
+                <p><span>Quantity / Players</span><strong data-walkin-quantity>1 player</strong></p>
+                <p><span>Total amount</span><strong data-walkin-total>₱0.00</strong></p>
             </section>
 
             <section>
                 <h3>Payment</h3>
                 <div class="walkin-form-grid">
-                    <label><span>Payment Method</span><select name="payment_method" required><option value="Cash">Cash</option><option value="GCash">GCash</option></select></label>
+                    <label><span>Method</span><select name="payment_method" required data-walkin-payment-method><option value="Cash">Cash</option><option value="GCash">GCash</option></select></label>
                     <label><span>Payment Status</span><select name="payment_status" required><option value="pending">Pending</option><option value="paid">Paid</option></select></label>
                 </div>
-                <label><span>GCash receipt optional</span><input type="file" name="payment_receipt" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf"></label>
+                <label data-walkin-receipt-wrap hidden><span>Optional GCash receipt</span><input type="file" name="payment_receipt" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf"></label>
             </section>
 
             <section>
@@ -1465,7 +1697,7 @@ $calendarLanes = [
 
             <footer class="walkin-form-actions">
                 <a class="bookings-button ghost" href="<?php echo htmlspecialchars($closePanelUrl, ENT_QUOTES, 'UTF-8'); ?>">Cancel</a>
-                <button class="bookings-button primary" type="submit">Create Booking</button>
+                <button class="bookings-button primary" type="submit">Create Walk-in Booking</button>
             </footer>
         </form>
     </aside>
@@ -1497,7 +1729,7 @@ $calendarLanes = [
     <aside class="booking-drawer booking-detail-modal" role="dialog" aria-modal="true" aria-label="Booking management">
         <header><div><span>Review Booking</span><h2><?php echo htmlspecialchars($currentBooking['reference']); ?></h2></div><a href="<?php echo htmlspecialchars($closePanelUrl, ENT_QUOTES, 'UTF-8'); ?>">×</a></header>
         <section><h3>Booking Information</h3><p><strong>Reference</strong><?php echo htmlspecialchars($currentBooking['reference']); ?></p><p><strong>Court</strong><?php echo htmlspecialchars($firstItem['court'] ?? 'Any Court'); ?></p><p><strong>Program / Service</strong><?php echo htmlspecialchars($firstItem['name'] ?? 'Booking'); ?></p><p><strong>Date</strong><?php echo htmlspecialchars($firstItem['booking_date'] ?? date('M j, Y', strtotime($currentBooking['created_at']))); ?></p><p><strong>Time</strong><?php echo htmlspecialchars($firstItem['booking_time'] ?? '-'); ?></p><p><strong>Number of Players</strong><?php echo number_format($playersTotal ?: 1); ?></p></section>
-        <section><h3>Player Information</h3><p><strong>Player Name</strong><?php echo htmlspecialchars($currentBooking['user']['name'] ?? 'Guest'); ?></p><p><strong>Email</strong><?php echo htmlspecialchars($currentBooking['user']['email'] ?? '-'); ?></p></section>
+        <section><h3>Player Information</h3><p><strong>Player Name</strong><?php echo htmlspecialchars($currentBooking['user']['name'] ?? 'Guest'); ?></p><p><strong>Email</strong><?php echo htmlspecialchars($currentBooking['user']['email'] ?? '-'); ?></p><p><strong>Phone Number</strong><?php echo htmlspecialchars(($currentBooking['user']['phone'] ?? '') !== '' ? $currentBooking['user']['phone'] : '-'); ?></p></section>
         <section><h3>Payment Information</h3><p><strong>Payment Method</strong><?php echo htmlspecialchars($currentBooking['payment_method'] ?? '-'); ?></p><p><strong>Payment Status</strong><em class="status-pill payment-<?php echo booking_payment_key($currentPaymentStatus); ?>"><?php echo htmlspecialchars(booking_payment_label($currentPaymentStatus)); ?></em></p><?php if ($latestPayment): ?><?php $latestProofPath = booking_payment_proof_path($latestPayment); ?><p><strong>Reference No.</strong><?php echo htmlspecialchars($latestPayment['reference_number'] ?? '-'); ?></p><p><strong>Amount</strong>&#8369;<?php echo number_format((float) ($latestPayment['amount'] ?? $currentBooking['total']), 2); ?></p><?php if (!empty($latestPayment['reviewed_at'])): ?><p><strong>Reviewed At</strong><?php echo htmlspecialchars((string) $latestPayment['reviewed_at']); ?></p><?php endif; ?><?php if ($latestProofPath !== ''): ?><p><a href="<?php echo booking_public_url($latestProofPath); ?>" target="_blank" rel="noopener">View proof of payment</a></p><?php if (booking_proof_is_image($latestProofPath)): ?><img src="<?php echo booking_public_url($latestProofPath); ?>" alt="Proof of payment" style="max-width:100%;border-radius:8px;margin-top:10px;"><?php endif; ?><?php else: ?><p><strong>Proof of Payment</strong>No uploaded proof.</p><?php endif; ?><?php else: ?><p>No payment record yet.</p><?php endif; ?></section>
         <section><h3>Status Information</h3><p><strong>Booking Status</strong><em class="status-pill status-<?php echo booking_status_key((string) $currentBooking['status']); ?>"><?php echo htmlspecialchars(booking_display_status_label($currentBooking)); ?></em></p><p><strong>Total</strong>₱<?php echo number_format((float) $currentBooking['total'], 2); ?></p><?php if (!empty($currentBooking['cancellation_label']) && $currentStatus === 'cancelled'): ?><p><strong>Admin Note</strong><?php echo htmlspecialchars($currentBooking['cancellation_label']); ?></p><?php endif; ?></section>
         <?php if ($paymentRows): ?><section><h3>Receipt History</h3><?php foreach ($paymentRows as $payment): ?><p><strong><?php echo htmlspecialchars(booking_payment_label((string) $payment['status'])); ?></strong> <?php echo htmlspecialchars($payment['reference_number']); ?> - &#8369;<?php echo number_format((float) $payment['amount'], 2); ?><?php if (!empty($payment['reviewer_name'])): ?><br><small>Reviewed by <?php echo htmlspecialchars($payment['reviewer_name']); ?></small><?php endif; ?><?php if (!empty($payment['remarks'])): ?><br><small><?php echo htmlspecialchars($payment['remarks']); ?></small><?php endif; ?></p><?php endforeach; ?></section><?php endif; ?>
@@ -1542,11 +1774,129 @@ document.querySelectorAll('.drawer-actions').forEach(form => {
 });
 
 document.querySelectorAll('.walkin-booking-form').forEach(form => {
+    const services = <?php echo json_encode($walkinServices, JSON_UNESCAPED_SLASHES); ?>;
+    const availability = <?php echo json_encode($walkinAvailability, JSON_UNESCAPED_SLASHES); ?>;
     const court = form.querySelector('[data-walkin-court]');
     const service = form.querySelector('[data-walkin-service]');
-    const players = form.querySelector('input[name="players"]');
+    const players = form.querySelector('[data-walkin-players]');
+    const dateSelect = form.querySelector('[data-walkin-date]');
+    const slotSelect = form.querySelector('[data-walkin-slot]');
+    const startInput = form.querySelector('[data-walkin-start]');
+    const endInput = form.querySelector('[data-walkin-end]');
+    const coachWrap = form.querySelector('[data-walkin-coach-wrap]');
+    const coachSelect = form.querySelector('[data-walkin-coach]');
+    const slotMessage = form.querySelector('[data-walkin-slot-message]');
+    const priceText = form.querySelector('[data-walkin-price]');
+    const quantityText = form.querySelector('[data-walkin-quantity]');
+    const totalText = form.querySelector('[data-walkin-total]');
+    const paymentMethod = form.querySelector('[data-walkin-payment-method]');
+    const receiptWrap = form.querySelector('[data-walkin-receipt-wrap]');
     if (!court || !service) return;
 
+    const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
+    const selectedService = () => services[service.value] || null;
+    const serviceSlots = () => availability[service.value] || [];
+    const clearOptions = (select, label) => {
+        if (!select) return;
+        select.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = label;
+        select.appendChild(option);
+    };
+    const updatePaymentReceipt = () => {
+        if (!paymentMethod || !receiptWrap) return;
+        receiptWrap.hidden = paymentMethod.value !== 'GCash';
+        if (receiptWrap.hidden) {
+            const input = receiptWrap.querySelector('input[type="file"]');
+            if (input) input.value = '';
+        }
+    };
+    const updatePrice = () => {
+        const current = selectedService();
+        const playerCount = Math.max(1, Number.parseInt(players?.value || '1', 10));
+        const price = current ? Number(current.price || 0) : 0;
+        const total = current && current.per_player ? price * playerCount : price;
+        if (priceText) priceText.textContent = peso.format(price);
+        if (quantityText) {
+            quantityText.textContent = current && current.per_player
+                ? `${playerCount} ${playerCount === 1 ? 'player' : 'players'}`
+                : '1 session';
+        }
+        if (totalText) totalText.textContent = peso.format(total);
+    };
+    const updateCoachOptions = (slot) => {
+        if (!coachWrap || !coachSelect) return;
+        const current = selectedService();
+        const requiresCoach = !!(current && current.requires_coach);
+        coachWrap.hidden = !requiresCoach;
+        coachSelect.required = requiresCoach;
+        clearOptions(coachSelect, requiresCoach ? 'Choose coach' : 'Coach not required');
+        if (!requiresCoach) {
+            coachSelect.value = '';
+            return;
+        }
+        const coaches = slot ? slot.coaches || [] : [];
+        coaches.forEach(coach => {
+            const option = document.createElement('option');
+            option.value = String(coach.id);
+            option.textContent = coach.specialization ? `${coach.name} - ${coach.specialization}` : coach.name;
+            coachSelect.appendChild(option);
+        });
+        if (coaches.length === 1) {
+            coachSelect.value = String(coaches[0].id);
+        }
+        if (slotMessage && slot && coaches.length === 0) {
+            slotMessage.textContent = 'No coach is available for this time slot.';
+        }
+    };
+    const updateSlots = () => {
+        clearOptions(slotSelect, dateSelect?.value ? 'Choose time slot' : 'Choose date first');
+        if (startInput) startInput.value = '';
+        if (endInput) endInput.value = '';
+        updateCoachOptions(null);
+        const selectedDate = dateSelect?.value || '';
+        if (!selectedDate) return;
+        const slots = serviceSlots().filter(slot => slot.date === selectedDate);
+        slots.forEach((slot, index) => {
+            const option = document.createElement('option');
+            option.value = String(index);
+            option.dataset.start = slot.start;
+            option.dataset.end = slot.end;
+            option.textContent = slot.time_label;
+            slotSelect.appendChild(option);
+        });
+        if (slotMessage) {
+            slotMessage.textContent = slots.length ? `${slots.length} available slot${slots.length === 1 ? '' : 's'} for this date.` : 'No available slots for this date.';
+        }
+    };
+    const updateDates = () => {
+        clearOptions(dateSelect, service.value ? 'Choose date' : 'Choose service first');
+        clearOptions(slotSelect, 'Choose date first');
+        if (startInput) startInput.value = '';
+        if (endInput) endInput.value = '';
+        updateCoachOptions(null);
+        const slots = serviceSlots();
+        const dates = new Map();
+        slots.forEach(slot => {
+            if (!dates.has(slot.date)) dates.set(slot.date, slot.date_label);
+        });
+        dates.forEach((label, value) => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = label;
+            dateSelect.appendChild(option);
+        });
+        if (slotMessage) {
+            if (!service.value) {
+                slotMessage.textContent = 'No service selected.';
+            } else if (!slots.length && selectedService()?.requires_coach) {
+                slotMessage.textContent = 'No coach is available for upcoming time slots.';
+            } else {
+                slotMessage.textContent = slots.length ? 'Choose an available date and time slot.' : 'No available slots for this service.';
+            }
+        }
+    };
     const syncServices = () => {
         const courtId = court.value;
         [...service.options].forEach(option => {
@@ -1554,21 +1904,47 @@ document.querySelectorAll('.walkin-booking-form').forEach(form => {
                 option.hidden = false;
                 return;
             }
-            option.hidden = courtId !== '' && option.dataset.courtId !== courtId;
+            option.hidden = courtId === '' || option.dataset.courtId !== courtId;
         });
+        service.disabled = courtId === '';
         if (service.selectedOptions[0] && service.selectedOptions[0].hidden) {
             service.value = '';
         }
+        updateService();
+    };
+    const updateService = () => {
+        const current = selectedService();
+        if (players) {
+            const maxPlayers = current ? Number(current.player_limit || 1) : 1;
+            players.max = String(maxPlayers);
+            if (Number.parseInt(players.value || '1', 10) > maxPlayers) {
+                players.value = String(maxPlayers);
+            }
+        }
+        updatePrice();
+        updateDates();
     };
 
-    service.addEventListener('change', () => {
-        const option = service.selectedOptions[0];
-        if (option && option.dataset.capacity && players) {
-            players.max = option.dataset.capacity;
+    service.addEventListener('change', updateService);
+    players?.addEventListener('input', updatePrice);
+    dateSelect?.addEventListener('change', updateSlots);
+    slotSelect?.addEventListener('change', () => {
+        const slots = serviceSlots().filter(slot => slot.date === (dateSelect?.value || ''));
+        const slot = slots[Number.parseInt(slotSelect.value || '-1', 10)] || null;
+        if (startInput) startInput.value = slot ? slot.start : '';
+        if (endInput) endInput.value = slot ? slot.end : '';
+        updateCoachOptions(slot);
+    });
+    paymentMethod?.addEventListener('change', updatePaymentReceipt);
+    form.addEventListener('submit', event => {
+        if (!startInput?.value || !endInput?.value || (selectedService()?.requires_coach && !coachSelect?.value)) {
+            event.preventDefault();
+            if (slotMessage) slotMessage.textContent = selectedService()?.requires_coach ? 'Please select an available slot and coach.' : 'Please select an available time slot.';
         }
     });
     court.addEventListener('change', syncServices);
     syncServices();
+    updatePaymentReceipt();
 });
 </script>
 <script src="<?php echo pickled_admin_asset_url('js/admin.js'); ?>"></script>

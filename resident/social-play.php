@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/security.php';
+require_once __DIR__ . '/../database/Database.php';
 pickled_init_csrf();
 $pageTitle  = 'Social Play - Pickled';
 $activePage = 'social-play.php';
@@ -13,8 +14,22 @@ $cartErrorMessages = [
   'duplicate' => 'That session is already in your cart.',
   'limit' => 'Cart limit reached. Please complete checkout before adding more reservations.',
   'login' => 'Please log in before booking a session.',
+  'phone' => 'Please enter a valid 11-digit mobile number.',
 ];
 $cartError = $cartErrorMessages[(string) ($_GET['cart_error'] ?? '')] ?? '';
+$currentUser = $_SESSION['user'] ?? [];
+$currentUserName = trim((string) ($currentUser['name'] ?? ''));
+$currentUserEmail = trim((string) ($currentUser['email'] ?? ''));
+$currentUserPhone = '';
+if (!empty($currentUser['id'])) {
+  try {
+    $phoneStmt = Database::connection()->prepare('SELECT phone FROM user_profiles WHERE user_id = :user_id LIMIT 1');
+    $phoneStmt->execute(['user_id' => (int) $currentUser['id']]);
+    $currentUserPhone = trim((string) ($phoneStmt->fetchColumn() ?: ''));
+  } catch (Throwable $e) {
+    error_log('Unable to load social booking phone autofill: ' . $e->getMessage());
+  }
+}
 
 $galleryImages = [
   '../assets/img/court/social play-1.png',
@@ -125,6 +140,7 @@ $faqs = [
             <input type="hidden" name="date" value="" />
             <input type="hidden" name="time" value="" />
             <input type="hidden" name="quantity" value="1" />
+            <input type="hidden" name="customer_phone" value="<?= htmlspecialchars($currentUserPhone) ?>" />
             <button class="social-cart-button" type="submit">Add to cart</button>
           </form>
         </div>
@@ -246,14 +262,15 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       <form class="social-form" id="socialDetailsForm">
         <h2>Your Information</h2>
         <div class="social-alert">This will add your selected social play session to cart. Payment happens during checkout.</div>
-        <label>Name *<input type="text" required placeholder="Enter your name" id="socialName" /></label>
-        <label>Email *<input type="email" required placeholder="Enter your email" id="socialEmail" /></label>
+        <label>Name *<input type="text" required placeholder="Enter your name" id="socialName" name="customer_name" value="<?= htmlspecialchars($currentUserName) ?>" autocomplete="name" /></label>
+        <label>Email *<input type="email" required placeholder="Enter your email" id="socialEmail" name="customer_email" value="<?= htmlspecialchars($currentUserEmail) ?>" autocomplete="email" <?= $currentUserEmail !== '' ? 'readonly' : '' ?> /></label>
+        <label>Phone Number *<input type="tel" required placeholder="09123456789" id="socialPhone" name="customer_phone" value="<?= htmlspecialchars($currentUserPhone) ?>" inputmode="numeric" maxlength="11" pattern="09[0-9]{9}" autocomplete="tel" data-social-phone /></label>
         <fieldset>
           <legend>What is your experience level in pickleball? *</legend>
-          <label><input type="radio" name="social_level" required /> New or had trial class experience</label>
-          <label><input type="radio" name="social_level" /> DUPR 2.0-2.5</label>
-          <label><input type="radio" name="social_level" /> DUPR 2.5-3.0</label>
-          <label><input type="radio" name="social_level" /> DUPR 3-3.5</label>
+          <label><input type="radio" name="social_level" value="New or had trial class experience" required /> New or had trial class experience</label>
+          <label><input type="radio" name="social_level" value="DUPR 2.0-2.5" /> DUPR 2.0-2.5</label>
+          <label><input type="radio" name="social_level" value="DUPR 2.5-3.0" /> DUPR 2.5-3.0</label>
+          <label><input type="radio" name="social_level" value="DUPR 3-3.5" /> DUPR 3-3.5</label>
         </fieldset>
         <button type="submit" class="social-continue-form">Add to cart</button>
       </form>
@@ -357,7 +374,8 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     feeRate: 0,
     paymentMethod: 'GCash',
     name: '',
-    email: ''
+    email: '',
+    phone: ''
   };
   const money = value => '₱' + Number(value).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -566,6 +584,12 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
 
   document.querySelector('.social-modal__close').addEventListener('click', closeModal);
   modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+
+  const socialPhoneInput = document.querySelector('[data-social-phone]');
+  socialPhoneInput?.addEventListener('input', () => {
+    socialPhoneInput.value = socialPhoneInput.value.replace(/\D/g, '').slice(0, 11);
+    socialPhoneInput.setCustomValidity(/^09\d{9}$/.test(socialPhoneInput.value) ? '' : 'Please enter a valid 11-digit mobile number.');
+  });
   function closeModal(){
     modal.classList.remove('is-open');
     modal.setAttribute('aria-hidden', 'true');
@@ -643,8 +667,19 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
 
   document.querySelector('.social-form').addEventListener('submit', event => {
     event.preventDefault();
+    const detailsForm = event.currentTarget;
+    const phone = detailsForm.querySelector('[data-social-phone]');
+    if (phone) {
+      phone.value = phone.value.replace(/\D/g, '').slice(0, 11);
+      phone.setCustomValidity(/^09\d{9}$/.test(phone.value) ? '' : 'Please enter a valid 11-digit mobile number.');
+    }
+    if (!detailsForm.reportValidity()) {
+      return;
+    }
+    const selectedLevel = detailsForm.querySelector('input[name="social_level"]:checked');
     state.name = document.getElementById('socialName').value.trim();
     state.email = document.getElementById('socialEmail').value.trim();
+    state.phone = phone ? phone.value.trim() : '';
     updateSummary();
     const form = document.createElement('form');
     const fields = {
@@ -654,7 +689,11 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       session_id: state.sessionId || '',
       date: state.date,
       time: state.time,
-      quantity: String(state.qty)
+      quantity: String(state.qty),
+      customer_name: state.name,
+      customer_email: state.email,
+      customer_phone: state.phone,
+      experience_level: selectedLevel ? selectedLevel.value : ''
     };
     form.method = 'post';
     form.action = 'cart.php';

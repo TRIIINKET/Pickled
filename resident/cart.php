@@ -28,6 +28,25 @@ $selectedPayment = (string) ($_POST['payment_method'] ?? CheckoutController::def
 $isSelectedPaymentValid = CheckoutController::isValidMethod($selectedPayment);
 $isCheckout = isset($_GET['checkout']) || ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'checkout');
 
+function cart_save_booking_phone(int $userId, string $phone): void {
+  if ($userId <= 0 || !preg_match('/^09\d{9}$/', $phone)) {
+    throw new RuntimeException('Please enter a valid 11-digit mobile number.');
+  }
+
+  $stmt = Database::connection()->prepare(
+    'INSERT INTO user_profiles (user_id, phone, city, province, avatar)
+     VALUES (:user_id, :phone, :city, :province, :avatar)
+     ON DUPLICATE KEY UPDATE phone = VALUES(phone)'
+  );
+  $stmt->execute([
+    'user_id' => $userId,
+    'phone' => $phone,
+    'city' => '',
+    'province' => '',
+    'avatar' => 'avatars/default.png',
+  ]);
+}
+
 if (isset($_GET['added'])) {
   $message = 'Booking added to cart. Complete checkout before the timer ends.';
 }
@@ -119,6 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'add_booking') {
       $variantId = trim((string) ($_POST['variant_id'] ?? ''));
       $quantity = max(1, (int) ($_POST['quantity'] ?? 1));
+      $customerPhone = preg_replace('/\D+/', '', (string) ($_POST['customer_phone'] ?? '')) ?? '';
       $date = trim((string) ($_POST['booking_date'] ?? $_POST['date'] ?? (new DateTimeImmutable('+3 days'))->format('F j, Y')));
       $startTime = trim((string) ($_POST['start_time'] ?? ''));
       $endTime = trim((string) ($_POST['end_time'] ?? ''));
@@ -128,6 +148,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
       $coachUserId = empty($_POST['coach_user_id']) ? null : (int) $_POST['coach_user_id'];
       $sessionId = empty($_POST['session_id']) ? null : (int) $_POST['session_id'];
+      if (!preg_match('/^09\d{9}$/', $customerPhone)) {
+        $back = $_SERVER['HTTP_REFERER'] ?? 'courts.php#court-detail';
+        $separator = str_contains($back, '?') ? '&' : '?';
+        header('Location: ' . $back . $separator . 'cart_error=phone');
+        exit;
+      }
+      cart_save_booking_phone((int) $_SESSION['user']['id'], $customerPhone);
       error_log('Cart add POST handler. user_id=' . (int) ($_SESSION['user']['id'] ?? 0) . '; variant_id=' . $variantId . '; session_id=' . (string) ($sessionId ?? '') . '; booking_date=' . $date . '; start_time=' . $startTime . '; end_time=' . $endTime . '; time=' . $time . '; quantity=' . $quantity . '; coach_user_id=' . (string) ($coachUserId ?? ''));
       $result = pickled_add_to_cart($variantId, $quantity, $date, $time, $coachUserId, $sessionId);
       if ($result['ok']) {

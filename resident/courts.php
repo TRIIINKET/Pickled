@@ -282,9 +282,23 @@ $cartErrorMessages = [
   'limit' => 'Cart limit reached. Please complete checkout before adding more reservations.',
   'expired_schedule' => 'This schedule is no longer available. Please select a future time slot.',
   'login' => 'Please log in before booking.',
+  'phone' => 'Please enter a valid 11-digit mobile number.',
 ];
 $cartError = $cartErrorMessages[(string) ($_GET['cart_error'] ?? '')] ?? '';
 $serverNow = pickled_schedule_now();
+$currentUser = $_SESSION['user'] ?? [];
+$currentUserName = trim((string) ($currentUser['name'] ?? ''));
+$currentUserEmail = trim((string) ($currentUser['email'] ?? ''));
+$currentUserPhone = '';
+if (!empty($currentUser['id'])) {
+  try {
+    $phoneStmt = Database::connection()->prepare('SELECT phone FROM user_profiles WHERE user_id = :user_id LIMIT 1');
+    $phoneStmt->execute(['user_id' => (int) $currentUser['id']]);
+    $currentUserPhone = trim((string) ($phoneStmt->fetchColumn() ?: ''));
+  } catch (Throwable $e) {
+    error_log('Unable to load booking phone autofill: ' . $e->getMessage());
+  }
+}
 
 $coaches = [];
 foreach ($coachRows as $index => $coachRow) {
@@ -374,6 +388,7 @@ foreach ($coachRows as $index => $coachRow) {
             <input type="hidden" name="time" value="" />
             <input type="hidden" name="quantity" value="1" />
             <input type="hidden" name="coach_user_id" value="" />
+            <input type="hidden" name="customer_phone" value="<?= htmlspecialchars($currentUserPhone) ?>" />
             <button class="court-cart-button" type="submit">Add to cart</button>
           </form>
         </div>
@@ -570,14 +585,15 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       <form class="booking-form booking-details-form">
         <h2>Your details</h2>
         <div class="booking-alert">This will add your selected schedule to cart. Payment happens during checkout.</div>
-        <label>Name *<input type="text" placeholder="Enter your name" required /></label>
-        <label>Email *<input type="email" placeholder="Enter your email" required /></label>
+        <label>Name *<input type="text" name="customer_name" placeholder="Enter your name" value="<?= htmlspecialchars($currentUserName) ?>" required autocomplete="name" /></label>
+        <label>Email *<input type="email" name="customer_email" placeholder="Enter your email" value="<?= htmlspecialchars($currentUserEmail) ?>" required autocomplete="email" <?= $currentUserEmail !== '' ? 'readonly' : '' ?> /></label>
+        <label>Phone Number *<input type="tel" name="customer_phone" placeholder="09123456789" value="<?= htmlspecialchars($currentUserPhone) ?>" inputmode="numeric" maxlength="11" pattern="09[0-9]{9}" required autocomplete="tel" data-booking-phone /></label>
         <fieldset>
           <legend>What is your or your group's experience level in pickleball? *</legend>
-          <label><input type="radio" name="level" required /> New or had trial class experience</label>
-          <label><input type="radio" name="level" /> DUPR 2.0-2.5</label>
-          <label><input type="radio" name="level" /> DUPR 2.5-3.0</label>
-          <label><input type="radio" name="level" /> DUPR 3-3.5</label>
+          <label><input type="radio" name="level" value="New or had trial class experience" required /> New or had trial class experience</label>
+          <label><input type="radio" name="level" value="DUPR 2.0-2.5" /> DUPR 2.0-2.5</label>
+          <label><input type="radio" name="level" value="DUPR 2.5-3.0" /> DUPR 2.5-3.0</label>
+          <label><input type="radio" name="level" value="DUPR 3-3.5" /> DUPR 3-3.5</label>
         </fieldset>
         <button type="submit">Add to cart</button>
       </form>
@@ -1123,13 +1139,19 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
   function submitBookingToCart() {
     const form = document.createElement('form');
     const selectedTimes = state.selectedTimes.length ? state.selectedTimes.join(', ') : state.time;
+    const detailsForm = modal.querySelector('.booking-details-form');
+    const selectedLevel = detailsForm?.querySelector('input[name="level"]:checked');
     const fields = {
       action: 'add_booking',
       csrf_token: csrfToken,
       variant_id: state.variant,
       date: state.date,
       time: selectedTimes,
-      quantity: String(state.qty)
+      quantity: String(state.qty),
+      customer_name: state.name || '',
+      customer_email: state.email || '',
+      customer_phone: state.phone || '',
+      experience_level: selectedLevel ? selectedLevel.value : ''
     };
     if (needsCoach() && state.coachId) {
       fields.coach_user_id = String(state.coachId);
@@ -1149,6 +1171,12 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
   document.querySelectorAll('[data-share-url]').forEach(button => button.addEventListener('click', () => sharePage(button)));
   document.querySelector('.booking-close').addEventListener('click', closeModal);
   modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+
+  const bookingPhoneInput = modal.querySelector('[data-booking-phone]');
+  bookingPhoneInput?.addEventListener('input', () => {
+    bookingPhoneInput.value = bookingPhoneInput.value.replace(/\D/g, '').slice(0, 11);
+    bookingPhoneInput.setCustomValidity(/^09\d{9}$/.test(bookingPhoneInput.value) ? '' : 'Please enter a valid 11-digit mobile number.');
+  });
 
   personInput.addEventListener('input', event => {
     state.qty = Number(event.target.value);
@@ -1234,8 +1262,17 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
   document.querySelector('.booking-details-form').addEventListener('submit', event => {
     event.preventDefault();
     const form = event.currentTarget;
-    state.name = form.querySelector('input[type="text"]').value.trim();
-    state.email = form.querySelector('input[type="email"]').value.trim();
+    const phone = form.querySelector('[data-booking-phone]');
+    if (phone) {
+      phone.value = phone.value.replace(/\D/g, '').slice(0, 11);
+      phone.setCustomValidity(/^09\d{9}$/.test(phone.value) ? '' : 'Please enter a valid 11-digit mobile number.');
+    }
+    if (!form.reportValidity()) {
+      return;
+    }
+    state.name = form.querySelector('input[name="customer_name"]').value.trim();
+    state.email = form.querySelector('input[name="customer_email"]').value.trim();
+    state.phone = phone ? phone.value.trim() : '';
     updateTotals();
     submitBookingToCart();
   });

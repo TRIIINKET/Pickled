@@ -2674,6 +2674,42 @@ body.admin-dashboard-body {
     resize: vertical;
 }
 
+.walkin-slot-message {
+    margin: 0;
+    border-radius: 8px;
+    background: #f3f6ef;
+    color: #31562c;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 10px 12px;
+}
+
+.walkin-price-summary {
+    border: 1px solid rgba(38, 101, 80, .16);
+    border-radius: 8px;
+    background: #f8fbf4;
+    padding: 14px;
+}
+
+.walkin-price-summary p {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0;
+    color: #536257;
+}
+
+.walkin-price-summary p + p {
+    border-top: 1px solid rgba(38, 101, 80, .12);
+    padding-top: 10px;
+}
+
+.walkin-price-summary strong {
+    color: #163f2d;
+    font-size: 15px;
+}
+
 .walkin-form-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

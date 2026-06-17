@@ -94,6 +94,11 @@ class AdminService {
         if ($booking) {
             $booking['items'] = $this->bookingRepo->getBookingItems($bookingId);
             $booking['user'] = $this->userRepo->findById($booking['user_id']);
+            if ($booking['user']) {
+                $stmt = Database::connection()->prepare('SELECT phone FROM user_profiles WHERE user_id = :user_id LIMIT 1');
+                $stmt->execute(['user_id' => (int) $booking['user_id']]);
+                $booking['user']['phone'] = (string) ($stmt->fetchColumn() ?: '');
+            }
             $booking['payments'] = $this->paymentService->paymentsForBooking($bookingId);
             $booking['latest_payment'] = $this->paymentService->latestForBooking($bookingId);
         }
