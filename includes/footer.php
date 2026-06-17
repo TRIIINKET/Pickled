@@ -38,10 +38,59 @@ require_once __DIR__ . '/paths.php';
         <a href="#privacyModal" class="footer-legal__link" id="privacyPolicyBtn" data-modal-target="privacyModal">Privacy policy</a>
         <a href="#termsModal" class="footer-legal__link" id="termsPolicyBtn" data-modal-target="termsModal">Terms of service</a>
         <a href="#cancellationModal" class="footer-legal__link" id="cancellationPolicyBtn" data-modal-target="cancellationModal">Cancellation policy</a>
+        <button type="button" class="footer-legal__link footer-cookie-link" data-cookie-preferences>Cookie Preferences</button>
       </div>
     </div>
   </div>
 </footer>
+
+<div class="cookie-consent" data-cookie-consent hidden>
+  <div class="cookie-consent__copy">
+    <strong>Cookie Preferences</strong>
+    <p>We use cookies to improve your browsing experience, remember preferences, and help us understand how our website is used.</p>
+  </div>
+  <div class="cookie-consent__actions">
+    <button type="button" class="cookie-consent__button cookie-consent__button--primary" data-cookie-accept>Accept All Cookies</button>
+    <button type="button" class="cookie-consent__button cookie-consent__button--ghost" data-cookie-manage>Manage Preferences</button>
+    <button type="button" class="cookie-consent__button cookie-consent__button--text" data-cookie-decline>Decline</button>
+  </div>
+</div>
+
+<div class="cookie-modal" data-cookie-modal hidden aria-hidden="true">
+  <div class="cookie-modal__overlay" data-cookie-close></div>
+  <section class="cookie-modal__panel" role="dialog" aria-modal="true" aria-labelledby="cookieModalTitle">
+    <button type="button" class="cookie-modal__close" data-cookie-close aria-label="Close cookie preferences">&times;</button>
+    <h2 id="cookieModalTitle">Cookie Preferences</h2>
+    <p>Choose which cookies PICKLED can use on this browser. Essential cookies are always enabled because the site needs them for core features.</p>
+    <div class="cookie-modal__options">
+      <div class="cookie-option">
+        <div>
+          <strong>Essential Cookies</strong>
+          <span>Always enabled</span>
+        </div>
+        <span class="cookie-option__badge">Required</span>
+      </div>
+      <label class="cookie-option">
+        <div>
+          <strong>Preference Cookies</strong>
+          <span>Remember choices like display and booking preferences.</span>
+        </div>
+        <input type="checkbox" data-cookie-toggle="preferences" />
+      </label>
+      <label class="cookie-option">
+        <div>
+          <strong>Analytics Cookies</strong>
+          <span>Help us understand how visitors use the website.</span>
+        </div>
+        <input type="checkbox" data-cookie-toggle="analytics" />
+      </label>
+    </div>
+    <div class="cookie-modal__actions">
+      <button type="button" class="cookie-consent__button cookie-consent__button--ghost" data-cookie-save>Save Preferences</button>
+      <button type="button" class="cookie-consent__button cookie-consent__button--primary" data-cookie-accept-modal>Accept All</button>
+    </div>
+  </section>
+</div>
 
 <div id="privacyModal" class="privacy-modal" style="display: none;">
   <div class="privacy-modal__overlay" id="privacyOverlay"></div>
@@ -241,3 +290,4 @@ require_once __DIR__ . '/paths.php';
 </div>
 
 <script src="<?= htmlspecialchars(pickled_asset_url('js/privacy-modal.js')) ?>"></script>
+<script src="<?= htmlspecialchars(pickled_asset_url('js/cookie-consent.js?v=20260617a')) ?>"></script>

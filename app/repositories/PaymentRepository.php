@@ -27,6 +27,30 @@ final class PaymentRepository
         return (int) Database::connection()->lastInsertId();
     }
 
+    public function updateUpload(int $id, array $data): bool
+    {
+        $stmt = Database::connection()->prepare(
+            'UPDATE payments
+             SET proof_image = :proof_image,
+                 amount = :amount,
+                 payment_method = :payment_method,
+                 reference_number = :reference_number,
+                 status = :status,
+                 remarks = :remarks
+             WHERE id = :id'
+        );
+
+        return $stmt->execute([
+            'id' => $id,
+            'proof_image' => $data['proof_image'],
+            'amount' => (float) $data['amount'],
+            'payment_method' => CheckoutController::GCASH_LABEL,
+            'reference_number' => $data['reference_number'],
+            'status' => $data['status'] ?? 'pending',
+            'remarks' => $data['remarks'] ?? null,
+        ]);
+    }
+
     public function findById(int $id, bool $forUpdate = false): ?array
     {
         $sql = 'SELECT * FROM payments WHERE id = :id LIMIT 1';

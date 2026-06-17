@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../repositories/CatalogRepository.php';
 require_once __DIR__ . '/../repositories/CartRepository.php';
 require_once __DIR__ . '/SchedulingService.php';
+require_once __DIR__ . '/../../includes/schedule-time.php';
 
 final class AvailabilityService
 {
@@ -28,13 +29,14 @@ final class AvailabilityService
         foreach ($this->schedules->sessionsForVariantMonth((int) $variant['id'], $year, $month) as $session) {
             $label = $session['display_date'];
             $time = $session['session_time'];
+            $expired = !pickled_schedule_starts_in_future((string) $session['session_date'], (string) $session['start_time']);
             $remaining = max(0, (int) $session['capacity'] - (int) $session['booked_count']);
             $availableCoaches = $this->schedules->availableCoachesForSlot($label, $time);
             $dates[$label]['slots'][$time] = [
                 'session_id' => (int) $session['id'],
-                'remaining' => $remaining,
-                'full' => $remaining <= 0 || (string) $session['status'] !== 'open',
-                'status' => $session['status'],
+                'remaining' => $expired ? 0 : $remaining,
+                'full' => $expired || $remaining <= 0 || (string) $session['status'] !== 'open',
+                'status' => $expired ? 'expired' : $session['status'],
                 'coach_id' => $session['coach_user_id'] ? (int) $session['coach_user_id'] : null,
                 'coach_name' => $session['coach_name'] ?? null,
                 'available_coaches' => array_map(static fn(array $coach): array => [
@@ -73,9 +75,9 @@ final class AvailabilityService
 
     private function generatedCourtAvailability(array $variant, int $year, int $month): array
     {
-        $firstDay = new DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+        $firstDay = new DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month), pickled_schedule_timezone());
         $lastDay = $firstDay->modify('last day of this month');
-        $today = new DateTimeImmutable('today');
+        $today = new DateTimeImmutable('today', pickled_schedule_timezone());
         $slots = $this->standardCourtSlots();
         $requiresCoach = $this->requiresCoach($variant);
         $dates = [];
@@ -89,6 +91,7 @@ final class AvailabilityService
             $label = $date->format('l, F j, Y');
             foreach ($slots as [$start, $end]) {
                 $timeLabel = $this->displayTimeRange($start, $end);
+                $expired = !pickled_schedule_starts_in_future($dateSql, $start);
                 $availableCoaches = $requiresCoach
                     ? $this->schedules->availableCoachesForSlot($label, $timeLabel)
                     : [];
@@ -99,12 +102,12 @@ final class AvailabilityService
                 $booked = $this->carts->bookedQuantityForStandardSlot((string) $variant['slug'], $dateSql, $start, $end);
                 $held = $this->carts->activeHeldQuantityForStandardSlot((int) $variant['id'], $dateSql, $start, $end);
                 $remaining = max(0, (int) $variant['capacity'] - $booked - $held);
-                $full = $conflict || $remaining <= 0 || ($requiresCoach && !$availableCoaches);
+                $full = $expired || $conflict || $remaining <= 0 || ($requiresCoach && !$availableCoaches);
                 $dates[$label]['slots'][$timeLabel] = [
                     'session_id' => null,
                     'remaining' => $full ? 0 : $remaining,
                     'full' => $full,
-                    'status' => $full ? 'full' : 'open',
+                    'status' => $expired ? 'expired' : ($full ? 'full' : 'open'),
                     'coach_id' => $availableCoaches[0]['id'] ?? null,
                     'coach_name' => $availableCoaches[0]['name'] ?? null,
                     'available_coaches' => array_map(static fn(array $coach): array => [

@@ -5,34 +5,38 @@ function pickled_upload_file(array $file, string $targetDir, array $allowedTypes
 {
     if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         $errorCode = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
-        error_log('Upload failed before move. PHP upload error code: ' . $errorCode);
+        error_log('Upload failed before validation. PHP upload error code: ' . $errorCode . '; upload_max_filesize=' . ini_get('upload_max_filesize') . '; post_max_size=' . ini_get('post_max_size'));
+        if (in_array($errorCode, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+            throw new RuntimeException('Uploaded file is too large.');
+        }
         throw new RuntimeException('Please choose a valid file to upload.');
     }
 
     $tmpName = (string) ($file['tmp_name'] ?? '');
     $originalName = (string) ($file['name'] ?? '');
     $size = (int) ($file['size'] ?? 0);
+    $clientType = (string) ($file['type'] ?? '');
 
     $hasUpload = PHP_SAPI === 'cli' ? is_file($tmpName) : is_uploaded_file($tmpName);
     if ($tmpName === '' || !$hasUpload) {
-        error_log('Upload failed because temporary file is missing or is not an uploaded file.');
+        error_log('Upload failed because temporary file is missing or is not an uploaded file. tmp=' . $tmpName . '; original=' . $originalName . '; size=' . $size . '; client_mime=' . $clientType);
         throw new RuntimeException('Please choose a valid file to upload.');
     }
 
     if ($size <= 0 || $size > $maxSize) {
-        error_log('Upload failed because file size is invalid: ' . $size . ' bytes.');
+        error_log('Upload failed because file size is invalid: ' . $size . ' bytes; max=' . $maxSize . '; original=' . $originalName);
         throw new RuntimeException('Uploaded file is too large.');
     }
 
     $extension = strtolower((string) pathinfo($originalName, PATHINFO_EXTENSION));
     if ($extension === '' || !isset($allowedTypes[$extension])) {
-        error_log('Upload failed because extension is not allowed: ' . $extension);
+        error_log('Upload failed because extension is not allowed: ' . $extension . '; original=' . $originalName);
         throw new RuntimeException('Uploaded file type is not allowed.');
     }
 
     $mime = (new finfo(FILEINFO_MIME_TYPE))->file($tmpName) ?: '';
     if (!in_array($mime, (array) $allowedTypes[$extension], true)) {
-        error_log('Upload failed because MIME type is not allowed. Extension: ' . $extension . '; MIME: ' . $mime);
+        error_log('Upload failed because MIME type is not allowed. Extension=' . $extension . '; detected_mime=' . $mime . '; client_mime=' . $clientType . '; original=' . $originalName);
         throw new RuntimeException('Uploaded file type is not allowed.');
     }
 
@@ -55,7 +59,17 @@ function pickled_upload_file(array $file, string $targetDir, array $allowedTypes
     }
 
     if (!is_writable($absoluteDir)) {
-        error_log('Upload failed because folder is not writable: ' . $absoluteDir);
+        @chmod($absoluteDir, 0775);
+    }
+
+    if (!is_writable($absoluteDir)) {
+        @chmod($absoluteDir, 0777);
+    }
+
+    if (!is_writable($absoluteDir)) {
+        $owner = function_exists('posix_getpwuid') ? (posix_getpwuid((int) @fileowner($absoluteDir))['name'] ?? 'unknown') : 'unknown';
+        $perms = substr(sprintf('%o', (int) @fileperms($absoluteDir)), -4);
+        error_log('Upload failed because folder is not writable: ' . $absoluteDir . '; owner=' . $owner . '; perms=' . $perms . '; php_user=' . get_current_user());
         throw new RuntimeException('Upload folder is not writable.');
     }
 
@@ -64,10 +78,13 @@ function pickled_upload_file(array $file, string $targetDir, array $allowedTypes
     $destination = $absoluteDir . DIRECTORY_SEPARATOR . $filename;
 
     $stored = PHP_SAPI === 'cli' ? copy($tmpName, $destination) : move_uploaded_file($tmpName, $destination);
+    error_log('Upload move result: ' . ($stored ? 'success' : 'failed') . '; dir=' . $absoluteDir . '; filename=' . $filename . '; size=' . $size . '; detected_mime=' . $mime . '; destination=' . $destination);
     if (!$stored) {
         error_log('Upload failed while moving file to: ' . $destination);
         throw new RuntimeException('Uploaded file could not be saved.');
     }
+
+    @chmod($destination, 0644);
 
     return $relativeDir . '/' . $filename;
 }

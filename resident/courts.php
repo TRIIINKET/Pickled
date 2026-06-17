@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/security.php';
+require_once __DIR__ . '/../includes/schedule-time.php';
 require_once __DIR__ . '/../app/services/CatalogService.php';
 require_once __DIR__ . '/../app/services/SchedulingService.php';
 pickled_init_csrf();
@@ -258,6 +259,19 @@ foreach ($courtImages as $key => $courtImage) {
 
 include __DIR__ . '/../includes/header.php';
 
+$cartErrorMessages = [
+  'invalid' => 'Please choose a valid available date and time.',
+  'capacity' => 'This schedule is already full. Please choose another time.',
+  'conflict' => 'That court is already booked for the selected date and time.',
+  'coach_unavailable' => 'No coach is available for the selected date and time.',
+  'duplicate' => 'That booking is already in your cart.',
+  'limit' => 'Cart limit reached. Please complete checkout before adding more reservations.',
+  'expired_schedule' => 'This schedule is no longer available. Please select a future time slot.',
+  'login' => 'Please log in before booking.',
+];
+$cartError = $cartErrorMessages[(string) ($_GET['cart_error'] ?? '')] ?? '';
+$serverNow = pickled_schedule_now();
+
 $coaches = [];
 foreach ($coachRows as $index => $coachRow) {
   $availability = $schedulingService->availabilityForCoach((int) $coachRow['id'], true);
@@ -277,6 +291,9 @@ foreach ($coachRows as $index => $coachRow) {
 ?>
 
 <main class="courts-page">
+  <?php if ($cartError): ?>
+    <div class="court-wrap"><div class="booking-alert"><?= htmlspecialchars($cartError) ?></div></div>
+  <?php endif; ?>
   <section class="court-hero" id="court-top">
     <div class="court-wrap">
       <h1>COURT</h1>
@@ -671,7 +688,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
   const coachSchedule = document.getElementById('coachSchedule');
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  let visibleMonth = new Date(<?= (int) date('Y') ?>, <?= (int) date('n') - 1 ?>, 1);
+  let visibleMonth = new Date(<?= (int) $serverNow->format('Y') ?>, <?= (int) $serverNow->format('n') - 1 ?>, 1);
 
   function absoluteUrl(path){
     return new URL(path, window.location.href).href;

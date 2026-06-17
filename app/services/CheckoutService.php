@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/BookingRepository.php';
+require_once __DIR__ . '/../repositories/PaymentRepository.php';
 require_once __DIR__ . '/CartService.php';
 require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/AdminLogService.php';
@@ -13,6 +14,7 @@ final class CheckoutService
 {
     public function __construct(
         private readonly BookingRepository $bookings = new BookingRepository(),
+        private readonly PaymentRepository $payments = new PaymentRepository(),
         private readonly CartService $cart = new CartService(),
         private readonly NotificationService $notifications = new NotificationService(),
         private readonly AdminLogService $adminLogs = new AdminLogService()
@@ -21,6 +23,9 @@ final class CheckoutService
     public function createBooking(int $userId, array $items, string $customerName, string $paymentMethod, string $notes): array
     {
         $cartState = $this->cart->restoreForUser($userId);
+        if ((int) ($cartState['removed_expired'] ?? 0) > 0) {
+            throw new RuntimeException('One or more items in your cart are no longer available and were removed.');
+        }
         $items = $cartState['items'];
         if (!$items) {
             throw new RuntimeException('Your cart is empty. Add a booking before checkout.');
@@ -45,7 +50,36 @@ final class CheckoutService
             'created_at' => date('Y-m-d H:i:s'),
         ];
 
-        $stored = $this->bookings->create($userId, $booking);
+        $pdo = Database::connection();
+        $startedTransaction = !$pdo->inTransaction();
+        if ($startedTransaction) {
+            $pdo->beginTransaction();
+        }
+
+        try {
+            $stored = $this->bookings->create($userId, $booking);
+            $paymentId = $this->payments->create([
+                'booking_id' => (int) $stored['id'],
+                'proof_image' => '',
+                'amount' => (float) $stored['total'],
+                'payment_method' => CheckoutController::GCASH_LABEL,
+                'reference_number' => (string) $stored['reference'],
+                'status' => 'pending',
+                'remarks' => null,
+            ]);
+            error_log('Checkout pending payment inserted. reference=' . (string) $stored['reference'] . '; booking_id=' . (int) $stored['id'] . '; payment_id=' . $paymentId);
+
+            if ($startedTransaction) {
+                $pdo->commit();
+            }
+        } catch (Throwable $e) {
+            if ($startedTransaction && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log('Checkout transaction rolled back. reference=' . (string) $booking['reference'] . '; reason=' . $e->getMessage());
+            throw $e;
+        }
+
         $this->adminLogs->recordBookingCreated($stored);
         $this->notifications->notifyBookingCreated($stored);
         $this->sendBookingConfirmationEmail($userId, $stored);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 final class Database
 {
     private static ?PDO $pdo = null;
+    private static bool $connectionLogged = false;
 
     public static function enabled(): bool
     {
@@ -32,6 +33,21 @@ final class Database
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]
         );
+
+        if (!self::$connectionLogged) {
+            self::$connectionLogged = true;
+            try {
+                $database = (string) self::$pdo->query('SELECT DATABASE()')->fetchColumn();
+                error_log(
+                    'PICKLED DB connection active. config=' . __DIR__ . '/../includes/database.php'
+                    . '; dsn=' . (string) $config['dsn']
+                    . '; username=' . (string) $config['username']
+                    . '; selected_database=' . $database
+                );
+            } catch (Throwable $e) {
+                error_log('PICKLED DB connection diagnostic failed: ' . $e->getMessage());
+            }
+        }
 
         return self::$pdo;
     }

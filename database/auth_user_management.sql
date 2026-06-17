@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS password_reset (
 
 INSERT INTO users (name, email, password_hash, role)
 VALUES
-  ('Admin Demo', 'admin@example.com', '$2y$12$ibR8MUreHNnonxJI.OPxNeSj6FXqyrcSDCHJs94MFMUxDXD5JgXZO', 'admin'),
+  ('Admin Demo', 'pickled.shopph@gmail.com', '$2y$12$fEHcjIeDNUe/k9zgcxG4MuQ.yKbnuW5EQnNYRzJeuBtnQ4sx.25nO', 'admin'),
   ('Coach Demo', 'coach@example.com', '$2y$12$ibR8MUreHNnonxJI.OPxNeSj6FXqyrcSDCHJs94MFMUxDXD5JgXZO', 'coach'),
   ('Player Demo', 'player@example.com', '$2y$12$ibR8MUreHNnonxJI.OPxNeSj6FXqyrcSDCHJs94MFMUxDXD5JgXZO', 'player')
 ON DUPLICATE KEY UPDATE

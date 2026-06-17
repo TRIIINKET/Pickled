@@ -7,6 +7,15 @@ $basePath   = '../';
 $extraHead  = '<link rel="stylesheet" href="../assets/css/social-play.css?v=20260615a"/>';
 include __DIR__ . '/../includes/header.php';
 
+$cartErrorMessages = [
+  'invalid' => 'Please choose a valid available social play session.',
+  'capacity' => 'This session is already full. Please choose another schedule.',
+  'duplicate' => 'That session is already in your cart.',
+  'limit' => 'Cart limit reached. Please complete checkout before adding more reservations.',
+  'login' => 'Please log in before booking a session.',
+];
+$cartError = $cartErrorMessages[(string) ($_GET['cart_error'] ?? '')] ?? '';
+
 $galleryImages = [
   '../assets/img/court/social play-1.png',
   '../assets/img/court/social play-2.png',
@@ -26,6 +35,9 @@ $faqs = [
 ?>
 
 <main class="social-page">
+  <?php if ($cartError): ?>
+    <div class="social-wrap"><div class="social-alert"><?= htmlspecialchars($cartError) ?></div></div>
+  <?php endif; ?>
   <section class="social-hero">
     <img src="../assets/img/court/social play-1.png" alt="Social Play" />
     <div class="social-hero__overlay">
@@ -109,6 +121,7 @@ $faqs = [
             <input type="hidden" name="action" value="add_booking" />
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
             <input type="hidden" name="variant_id" value="green-open-match-play" />
+            <input type="hidden" name="session_id" value="" />
             <input type="hidden" name="date" value="" />
             <input type="hidden" name="time" value="" />
             <input type="hidden" name="quantity" value="1" />
@@ -339,6 +352,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     date: '',
     time: '',
     qty: 1,
+    sessionId: '',
     price: 350,
     feeRate: 0,
     paymentMethod: 'GCash',
@@ -458,12 +472,19 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       const booked = !slot || slot.full;
       button.hidden = !show;
       button.disabled = !show || booked;
+      button.dataset.sessionId = slot && slot.session_id ? String(slot.session_id) : '';
       if (!show || booked) button.classList.remove('is-selected');
       if (show && !booked) usable.push(button);
     });
     if (!modal.querySelector('.social-time.is-selected:not([hidden]):not(:disabled)') && usable.length) {
       usable[0].classList.add('is-selected');
       state.time = usable[0].dataset.time;
+      state.sessionId = usable[0].dataset.sessionId || '';
+    }
+    const selected = modal.querySelector('.social-time.is-selected:not([hidden]):not(:disabled)');
+    if (selected) {
+      state.time = selected.dataset.time;
+      state.sessionId = selected.dataset.sessionId || '';
     }
   }
 
@@ -532,6 +553,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
   if (socialCartForm) {
     socialCartForm.addEventListener('submit', () => {
       socialCartForm.elements.variant_id.value = state.variant;
+      socialCartForm.elements.session_id.value = state.sessionId || '';
       socialCartForm.elements.date.value = state.date;
       socialCartForm.elements.time.value = state.time;
       socialCartForm.elements.quantity.value = state.qty;
@@ -564,6 +586,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       state.duration = button.dataset.duration;
       state.mode = button.dataset.mode;
       state.note = button.dataset.note;
+      state.sessionId = '';
       updateBookingCopy();
       openSocialModal();
     });
@@ -593,6 +616,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     calendarGrid.querySelectorAll('[data-date]').forEach(item => item.classList.remove('is-selected'));
     button.classList.add('is-selected');
     state.date = button.dataset.date;
+    updateTimes();
     updateSummary();
   });
 
@@ -602,6 +626,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     modal.querySelectorAll('.social-time').forEach(item => item.classList.remove('is-selected'));
     button.classList.add('is-selected');
     state.time = button.dataset.time;
+    state.sessionId = button.dataset.sessionId || '';
     updateSummary();
   });
 
@@ -626,6 +651,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       action: 'add_booking',
       csrf_token: csrfToken,
       variant_id: state.variant,
+      session_id: state.sessionId || '',
       date: state.date,
       time: state.time,
       quantity: String(state.qty)

@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../database/Database.php';
 require_once __DIR__ . '/CatalogRepository.php';
 require_once __DIR__ . '/CartRepository.php';
 require_once __DIR__ . '/SchedulingRepository.php';
+require_once __DIR__ . '/../../includes/schedule-time.php';
 
 final class BookingRepository
 {
@@ -51,6 +52,7 @@ final class BookingRepository
         }
 
         try {
+            error_log('Checkout booking transaction started. reference=' . (string) ($booking['reference'] ?? '') . '; user_id=' . $userId . '; item_count=' . count($items));
             $stmt = $pdo->prepare(
                 'INSERT INTO bookings
                     (user_id, reference, status, subtotal, payment_fee, total, payment_method, payment_status, notes, cancellation_label)
@@ -70,6 +72,7 @@ final class BookingRepository
                 'cancellation_label' => (string) ($booking['cancellation_policy']['label'] ?? $booking['cancellation_label'] ?? 'Standard cancellation policy'),
             ]);
             $bookingId = (int) $pdo->lastInsertId();
+            error_log('Checkout booking inserted. reference=' . (string) $booking['reference'] . '; booking_id=' . $bookingId);
 
             $itemStmt = $pdo->prepare(
                 'INSERT INTO booking_items
@@ -93,6 +96,10 @@ final class BookingRepository
                     if ($sessionId <= 0) {
                         throw new RuntimeException('One of the selected sessions is no longer available.');
                     }
+                    $session = $this->schedules->sessionById($sessionId, true);
+                    if (!$session || !pickled_schedule_starts_in_future((string) $session['session_date'], (string) $session['start_time'])) {
+                        throw new RuntimeException('This schedule is no longer available. Please select a future time slot.');
+                    }
 
                     if ($this->statusConsumesCapacity($bookingStatus) && !$this->catalog->incrementBookedCount($sessionId, $quantity)) {
                         throw new RuntimeException('This service has reached its maximum capacity for the selected schedule.');
@@ -115,6 +122,7 @@ final class BookingRepository
                     'unit_price' => (float) ($item['unit_price'] ?? $item['price'] ?? 0),
                     'image' => $item['image'] ?? null,
                 ]);
+                error_log('Checkout booking item inserted. reference=' . (string) $booking['reference'] . '; booking_id=' . $bookingId . '; booking_item_id=' . (int) $pdo->lastInsertId() . '; variant_slug=' . $variantSlug);
             }
 
             $stored = $this->findById($bookingId) ?? [];
@@ -124,12 +132,14 @@ final class BookingRepository
             if ($startedTransaction) {
                 $pdo->commit();
             }
+            error_log('Checkout booking transaction committed. reference=' . (string) $booking['reference'] . '; booking_id=' . $bookingId);
 
             return $result;
         } catch (Throwable $e) {
             if ($startedTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
+            error_log('Checkout booking transaction rolled back. reference=' . (string) ($booking['reference'] ?? '') . '; reason=' . $e->getMessage());
             throw $e;
         }
     }
@@ -472,6 +482,10 @@ final class BookingRepository
 
     private function assertStandardCourtBookingAvailable(int $userId, array $variant, string $bookingDate, string $startTime, string $endTime, int $quantity, ?int $coachUserId): void
     {
+        if (!pickled_schedule_starts_in_future($bookingDate, $startTime)) {
+            throw new RuntimeException('This schedule is no longer available. Please select a future time slot.');
+        }
+
         if ($this->courtBookingConflict((int) $variant['court_id'], $bookingDate, $startTime, $endTime)) {
             throw new RuntimeException('That court is already booked for the selected date and time. Please choose another schedule.');
         }

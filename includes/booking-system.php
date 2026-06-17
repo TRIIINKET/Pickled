@@ -58,6 +58,9 @@ function pickled_restore_cart_for_user(): void {
     $_SESSION['cart'] = $saved['items'];
     $_SESSION['cart_started_at'] = $saved['started_at'];
     $_SESSION['cart_expires_at'] = $saved['expires_at'];
+    if ((int) ($saved['removed_expired'] ?? 0) > 0) {
+        $_SESSION['cart_removed_expired'] = true;
+    }
 }
 
 function pickled_persist_cart_for_user(): void {
@@ -147,8 +150,9 @@ function pickled_cart_item_id(array $item, string $date, string $time): string {
     return substr(sha1($item['variant_id'] . '|' . $date . '|' . $time), 0, 14);
 }
 
-function pickled_add_to_cart(string $variantId, int $quantity, string $date, string $time, ?int $coachUserId = null): array {
+function pickled_add_to_cart(string $variantId, int $quantity, string $date, string $time, ?int $coachUserId = null, ?int $sessionId = null): array {
     $_SESSION['cart'] = $_SESSION['cart'] ?? [];
+    error_log('Cart POST received. user_id=' . (int) ($_SESSION['user']['id'] ?? 0) . '; variant_id=' . $variantId . '; session_id=' . (string) ($sessionId ?? '') . '; booking_date=' . $date . '; time=' . $time . '; quantity=' . $quantity . '; coach_user_id=' . (string) ($coachUserId ?? ''));
     if ($variantId === '' || $date === '' || $time === '') {
         return ['ok' => false, 'code' => 'invalid'];
     }
@@ -172,7 +176,8 @@ function pickled_add_to_cart(string $variantId, int $quantity, string $date, str
             $_SESSION['cart_started_at'] ?? null,
             $_SESSION['cart_expires_at'] ?? null,
             (float) $item['member_price'],
-            $coachUserId
+            $coachUserId,
+            $sessionId
         );
     } catch (RuntimeException) {
         $result = ['ok' => false, 'code' => 'invalid'];

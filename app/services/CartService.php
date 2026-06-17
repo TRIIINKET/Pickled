@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../repositories/CartRepository.php';
 require_once __DIR__ . '/../repositories/CatalogRepository.php';
 require_once __DIR__ . '/SchedulingService.php';
+require_once __DIR__ . '/../../includes/schedule-time.php';
 
 final class CartService
 {
@@ -15,24 +16,32 @@ final class CartService
     public function restoreForUser(int $userId): array
     {
         if ($userId <= 0) {
-            return ['items' => [], 'started_at' => null, 'expires_at' => null];
+            return ['items' => [], 'started_at' => null, 'expires_at' => null, 'removed_expired' => 0];
         }
 
         $this->carts->deleteExpired();
         $cart = $this->carts->findForUser($userId);
         if (!$cart) {
-            return ['items' => [], 'started_at' => null, 'expires_at' => null];
+            return ['items' => [], 'started_at' => null, 'expires_at' => null, 'removed_expired' => 0];
+        }
+
+        $rows = $this->carts->itemsForCart((int) $cart['id']);
+        $removedCount = $this->removeExpiredRows((int) $cart['id'], $rows);
+        if ($removedCount > 0) {
+            $rows = $this->carts->itemsForCart((int) $cart['id']);
         }
 
         return [
-            'items' => $this->hydrateItems($this->carts->itemsForCart((int) $cart['id'])),
+            'items' => $this->hydrateItems($rows),
             'started_at' => $this->timestampFromDateTime($cart['started_at'] ?? null),
             'expires_at' => $this->timestampFromDateTime($cart['expires_at'] ?? null),
+            'removed_expired' => $removedCount,
         ];
     }
 
-    public function addVariantForUser(int $userId, string $variantSlug, int $quantity, string $date, string $time, ?int $startedAt, ?int $expiresAt, ?float $unitPrice = null, ?int $requestedCoachUserId = null): array
+    public function addVariantForUser(int $userId, string $variantSlug, int $quantity, string $date, string $time, ?int $startedAt, ?int $expiresAt, ?float $unitPrice = null, ?int $requestedCoachUserId = null, ?int $sessionId = null): array
     {
+        error_log('Cart add requested. user_id=' . $userId . '; variant_id=' . $variantSlug . '; session_id=' . (string) ($sessionId ?? '') . '; booking_date=' . $date . '; time=' . $time . '; quantity=' . $quantity . '; coach_user_id=' . (string) ($requestedCoachUserId ?? ''));
         if ($userId <= 0) {
             return ['ok' => false, 'code' => 'login'];
         }
@@ -45,12 +54,18 @@ final class CartService
 
         $quantity = max(1, min($quantity, (int) $variant['participants_limit']));
         try {
-            [$sessionDate, $startTime, $endTime] = $this->normalizeSlot($date, $time);
-        } catch (RuntimeException) {
+            [$sessionDate, $startTime, $endTime, $slotCount] = $this->normalizeSlot($date, $time);
+        } catch (RuntimeException $e) {
+            error_log('Cart add rejected during schedule normalization. reason=' . $e->getMessage() . '; variant_id=' . $variantSlug . '; date=' . $date . '; time=' . $time);
             return ['ok' => false, 'code' => 'invalid'];
+        }
+        if (!pickled_schedule_starts_in_future($sessionDate, $startTime)) {
+            error_log('Cart add rejected because schedule is expired. variant_id=' . $variantSlug . '; booking_date=' . $sessionDate . '; start_time=' . $startTime);
+            return ['ok' => false, 'code' => 'expired_schedule'];
         }
 
         $cartId = $this->carts->saveTimerForUser($userId, $startedAt, $expiresAt);
+        error_log('Cart add using cart_id=' . $cartId . '; user_id=' . $userId);
 
         if ($this->usesStandardCourtFlow($variant)) {
             if ($this->carts->duplicateStandardItemInCart($cartId, (int) $variant['id'], $sessionDate, $startTime, $endTime)) {
@@ -74,11 +89,25 @@ final class CartService
                 }
             }
 
-            $this->carts->addStandardItem($cartId, (int) $variant['id'], $coachUserId, $sessionDate, $startTime, $endTime, $quantity, $unitPrice ?? (float) $variant['price']);
+            $storedUnitPrice = ($unitPrice ?? (float) $variant['price']) * max(1, $slotCount);
+            $this->carts->addStandardItem($cartId, (int) $variant['id'], $coachUserId, $sessionDate, $startTime, $endTime, $quantity, $storedUnitPrice);
+            error_log('Cart standard booking added. cart_id=' . $cartId . '; variant_id=' . (int) $variant['id'] . '; booking_date=' . $sessionDate . '; start_time=' . $startTime . '; end_time=' . $endTime . '; unit_price=' . $storedUnitPrice);
             return ['ok' => true, 'code' => 'added'];
         }
 
-        $session = $this->catalog->findOrCreateSession((int) $variant['id'], $date, $time, (int) $variant['capacity']);
+        if ($sessionId === null || $sessionId <= 0) {
+            error_log('Cart social/session booking rejected because session_id is missing. variant_id=' . $variantSlug . '; date=' . $date . '; time=' . $time);
+            return ['ok' => false, 'code' => 'invalid'];
+        }
+        $session = $this->catalog->sessionById($sessionId);
+        if (!$session || (int) ($session['variant_id'] ?? 0) !== (int) $variant['id']) {
+            error_log('Cart social/session booking rejected because session_id is invalid. variant_id=' . $variantSlug . '; session_id=' . $sessionId);
+            return ['ok' => false, 'code' => 'invalid'];
+        }
+        if (!pickled_schedule_starts_in_future((string) $session['session_date'], (string) $session['start_time'])) {
+            error_log('Cart social/session booking rejected because session is expired. variant_id=' . $variantSlug . '; session_id=' . $sessionId);
+            return ['ok' => false, 'code' => 'expired_schedule'];
+        }
         foreach ($this->carts->itemsForCart($cartId) as $item) {
             if ((int) ($item['session_id'] ?? 0) === (int) $session['id']) {
                 return ['ok' => false, 'code' => 'duplicate'];
@@ -89,6 +118,7 @@ final class CartService
         }
 
         $this->carts->addItem($cartId, (int) $session['id'], $quantity, $unitPrice ?? (float) $variant['price']);
+        error_log('Cart session booking added. cart_id=' . $cartId . '; session_id=' . (int) $session['id'] . '; variant_id=' . (int) $variant['id']);
 
         return ['ok' => true, 'code' => 'added'];
     }
@@ -226,12 +256,33 @@ final class CartService
             throw new RuntimeException('Date is invalid.');
         }
 
-        $parts = preg_split('/\s*-\s*/', trim($time));
-        if (!$parts || count($parts) !== 2) {
+        $ranges = array_values(array_filter(array_map('trim', explode(',', $time)), static fn(string $range): bool => $range !== ''));
+        if (!$ranges) {
             throw new RuntimeException('Time range is invalid.');
         }
 
-        return [$sessionDate, $this->normalizeTime($parts[0]), $this->normalizeTime($parts[1])];
+        $normalizedRanges = [];
+        foreach ($ranges as $range) {
+            $parts = preg_split('/\s*-\s*/', trim($range));
+            if (!$parts || count($parts) !== 2) {
+                throw new RuntimeException('Time range is invalid.');
+            }
+            $start = $this->normalizeTime($parts[0]);
+            $end = $this->normalizeTime($parts[1]);
+            if ($start >= $end) {
+                throw new RuntimeException('Time range is invalid.');
+            }
+            $normalizedRanges[] = [$start, $end];
+        }
+
+        usort($normalizedRanges, static fn(array $a, array $b): int => strcmp($a[0], $b[0]));
+        for ($i = 1, $count = count($normalizedRanges); $i < $count; $i++) {
+            if ($normalizedRanges[$i][0] !== $normalizedRanges[$i - 1][1]) {
+                throw new RuntimeException('Selected time ranges must be consecutive.');
+            }
+        }
+
+        return [$sessionDate, $normalizedRanges[0][0], $normalizedRanges[count($normalizedRanges) - 1][1], count($normalizedRanges)];
     }
 
     private function normalizeTime(string $value): string
@@ -277,6 +328,31 @@ final class CartService
             ];
         }
         return $items;
+    }
+
+    private function removeExpiredRows(int $cartId, array $rows): int
+    {
+        $removed = 0;
+        foreach ($rows as $row) {
+            $date = (string) ($row['session_date_raw'] ?? '');
+            $start = (string) ($row['start_time'] ?? '');
+            if ($date === '' || $start === '') {
+                continue;
+            }
+
+            try {
+                if (pickled_schedule_starts_in_future($date, $start)) {
+                    continue;
+                }
+            } catch (Throwable $e) {
+                error_log('Cart item removed because schedule datetime could not be validated. cart_id=' . $cartId . '; cart_item_id=' . (int) ($row['cart_item_id'] ?? 0) . '; error=' . $e->getMessage());
+            }
+
+            $this->carts->removeItem((int) $row['cart_item_id'], $cartId);
+            $removed++;
+        }
+
+        return $removed;
     }
 
     private function timestampFromDateTime(?string $value): ?int

@@ -6,4 +6,4 @@ ALTER TABLE users
 UPDATE users
 SET is_verified = 1
 WHERE role IN ('admin', 'coach')
-   OR email IN ('admin@example.com', 'coach@example.com', 'player@example.com');
+   OR email IN ('pickled.shopph@gmail.com', 'livingstones.codi@gmail.com', 'player@example.com');

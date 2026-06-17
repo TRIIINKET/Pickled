@@ -63,6 +63,15 @@ if (isset($_GET['invalid'])) {
   $message = 'That cart action could not be completed. Please choose a valid schedule.';
   $messageType = 'warning';
 }
+if (isset($_GET['expired_schedule'])) {
+  $message = 'This schedule is no longer available. Please select a future time slot.';
+  $messageType = 'warning';
+}
+if (!empty($_SESSION['cart_removed_expired'])) {
+  $message = 'One or more items in your cart are no longer available and were removed.';
+  $messageType = 'warning';
+  unset($_SESSION['cart_removed_expired']);
+}
 if (isset($_GET['updated'])) {
   $message = 'Cart item updated.';
 }
@@ -110,11 +119,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'add_booking') {
       $variantId = trim((string) ($_POST['variant_id'] ?? ''));
       $quantity = max(1, (int) ($_POST['quantity'] ?? 1));
-      $date = trim((string) ($_POST['date'] ?? (new DateTimeImmutable('+3 days'))->format('F j, Y')));
-      $time = trim((string) ($_POST['time'] ?? 'Selected schedule'));
+      $date = trim((string) ($_POST['booking_date'] ?? $_POST['date'] ?? (new DateTimeImmutable('+3 days'))->format('F j, Y')));
+      $startTime = trim((string) ($_POST['start_time'] ?? ''));
+      $endTime = trim((string) ($_POST['end_time'] ?? ''));
+      $time = trim((string) ($_POST['time'] ?? ''));
+      if ($time === '' && $startTime !== '' && $endTime !== '') {
+        $time = $startTime . ' - ' . $endTime;
+      }
       $coachUserId = empty($_POST['coach_user_id']) ? null : (int) $_POST['coach_user_id'];
-      $result = pickled_add_to_cart($variantId, $quantity, $date, $time, $coachUserId);
-      header('Location: cart.php?' . ($result['ok'] ? 'added=1' : $result['code'] . '=1'));
+      $sessionId = empty($_POST['session_id']) ? null : (int) $_POST['session_id'];
+      error_log('Cart add POST handler. user_id=' . (int) ($_SESSION['user']['id'] ?? 0) . '; variant_id=' . $variantId . '; session_id=' . (string) ($sessionId ?? '') . '; booking_date=' . $date . '; start_time=' . $startTime . '; end_time=' . $endTime . '; time=' . $time . '; quantity=' . $quantity . '; coach_user_id=' . (string) ($coachUserId ?? ''));
+      $result = pickled_add_to_cart($variantId, $quantity, $date, $time, $coachUserId, $sessionId);
+      if ($result['ok']) {
+        header('Location: cart.php?added=1');
+      } else {
+        $back = $_SERVER['HTTP_REFERER'] ?? 'courts.php#court-detail';
+        $separator = str_contains($back, '?') ? '&' : '?';
+        header('Location: ' . $back . $separator . 'cart_error=' . rawurlencode((string) $result['code']));
+      }
       exit;
     }
 

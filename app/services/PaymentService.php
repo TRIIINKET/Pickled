@@ -35,11 +35,17 @@ final class PaymentService
         }
 
         $latest = $this->payments->latestForBooking($bookingId);
-        if (($latest['status'] ?? null) === 'pending') {
+        $latestHasProof = $latest ? $this->paymentHasReceipt($latest) : false;
+        if (($latest['status'] ?? null) === 'pending' && $latestHasProof) {
             throw new RuntimeException('A payment receipt is already waiting for admin review.');
         }
         if (($latest['status'] ?? null) === 'approved') {
             throw new RuntimeException('This booking already has an approved payment.');
+        }
+
+        if ($this->missingReceiptFile($file)) {
+            error_log('Payment receipt upload rejected because no file was selected. booking_id=' . $bookingId . '; user_id=' . $userId);
+            throw new RuntimeException('Please choose a receipt file before submitting.');
         }
 
         $referenceNumber = trim($referenceNumber);
@@ -48,15 +54,34 @@ final class PaymentService
         }
 
         $proofPath = $this->storeProofImage($bookingId, $file);
-        $paymentId = $this->payments->create([
-            'booking_id' => $bookingId,
-            'proof_image' => $proofPath,
-            'amount' => (float) $booking['total'],
-            'payment_method' => CheckoutController::GCASH_LABEL,
-            'reference_number' => $referenceNumber,
-            'status' => 'pending',
-            'remarks' => null,
-        ]);
+        try {
+            if (($latest['status'] ?? null) === 'pending' && !$latestHasProof) {
+                $paymentId = (int) $latest['id'];
+                $this->payments->updateUpload($paymentId, [
+                    'proof_image' => $proofPath,
+                    'amount' => (float) $booking['total'],
+                    'payment_method' => CheckoutController::GCASH_LABEL,
+                    'reference_number' => $referenceNumber,
+                    'status' => 'pending',
+                    'remarks' => null,
+                ]);
+                error_log('Payment receipt updated pending placeholder. booking_id=' . $bookingId . '; payment_id=' . $paymentId . '; proof_path=' . $proofPath);
+            } else {
+                $paymentId = $this->payments->create([
+                    'booking_id' => $bookingId,
+                    'proof_image' => $proofPath,
+                    'amount' => (float) $booking['total'],
+                    'payment_method' => CheckoutController::GCASH_LABEL,
+                    'reference_number' => $referenceNumber,
+                    'status' => 'pending',
+                    'remarks' => null,
+                ]);
+                error_log('Payment receipt inserted. booking_id=' . $bookingId . '; payment_id=' . $paymentId . '; proof_path=' . $proofPath);
+            }
+        } catch (Throwable $e) {
+            error_log('Payment receipt database save failed. booking_id=' . $bookingId . '; proof_path=' . $proofPath . '; error=' . $e->getMessage());
+            throw new RuntimeException('Receipt was uploaded, but payment review could not be saved. Please contact support.');
+        }
 
         $this->bookings->updateStatus($bookingId, 'pending');
         $this->bookings->updatePaymentStatus($bookingId, 'pending');
@@ -187,7 +212,7 @@ final class PaymentService
         try {
             return pickled_upload_file(
                 $file,
-                'uploads/payments',
+                'assets/uploads/payments',
                 [
                     'jpg' => ['image/jpeg'],
                     'jpeg' => ['image/jpeg'],
@@ -209,7 +234,39 @@ final class PaymentService
             if (str_contains($e->getMessage(), 'type')) {
                 throw new RuntimeException('Receipt must be a JPG, JPEG, PNG, WEBP, or PDF file.');
             }
+            if (str_contains($e->getMessage(), 'choose a valid file')) {
+                throw new RuntimeException('Please choose a receipt file before submitting.');
+            }
             throw new RuntimeException($e->getMessage());
         }
+    }
+
+    private function missingReceiptFile(array $file): bool
+    {
+        $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($error === UPLOAD_ERR_NO_FILE) {
+            return true;
+        }
+
+        if ($error !== UPLOAD_ERR_OK) {
+            return false;
+        }
+
+        return trim((string) ($file['tmp_name'] ?? '')) === '' || (int) ($file['size'] ?? 0) <= 0;
+    }
+
+    private function paymentHasReceipt(array $payment): bool
+    {
+        $path = trim((string) ($payment['proof_image'] ?? ''));
+        if ($path === '') {
+            return false;
+        }
+
+        $relative = ltrim(str_replace('\\', '/', $path), '/');
+        if ($relative === '' || str_contains($relative, '..')) {
+            return false;
+        }
+
+        return is_file(dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative));
     }
 }

@@ -164,7 +164,7 @@ CREATE TABLE IF NOT EXISTS admin_logs (
 
 INSERT INTO users (name, email, password_hash, role)
 VALUES
-  ('Admin', 'admin@example.com', '$2y$12$bHChgoYH/V5MNw5Mtr7/eu2q9geiVID5k1fQ9bqM39XmKf/EqCZja', 'admin'),
+  ('Admin', 'pickled.shopph@gmail.com', '$2y$12$fEHcjIeDNUe/k9zgcxG4MuQ.yKbnuW5EQnNYRzJeuBtnQ4sx.25nO', 'admin'),
   ('Player', 'player@example.com', '$2y$12$KNh/CplDSuT71nQMLS7/iOKrsTDtlWIYdMM2XzKcZmojpCznjiUg.', 'player'),
   ('Coach', 'coach@example.com', '$2y$12$OtmXd8ca7eatk3JguuO4HuuyBabiXEVcJPZ8/xZ95AfxZPI7wwvZS', 'coach')
 ON DUPLICATE KEY UPDATE email = VALUES(email);

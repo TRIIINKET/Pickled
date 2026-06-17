@@ -216,17 +216,21 @@ DELIMITER ;
 -- Canonical login users. Passwords are stored as bcrypt hashes only.
 INSERT INTO users (name, email, password_hash, role)
 VALUES
-  ('Admin Demo', 'admin@example.com', '$2y$12$ibR8MUreHNnonxJI.OPxNeSj6FXqyrcSDCHJs94MFMUxDXD5JgXZO', 'admin'),
+  ('Admin Demo', 'pickled.shopph@gmail.com', '$2y$12$fEHcjIeDNUe/k9zgcxG4MuQ.yKbnuW5EQnNYRzJeuBtnQ4sx.25nO', 'admin'),
   ('Player Demo', 'player@example.com', '$2y$12$ibR8MUreHNnonxJI.OPxNeSj6FXqyrcSDCHJs94MFMUxDXD5JgXZO', 'player'),
   ('Coach Anton', 'anton.coach@pickled.ph', '$2y$12$UUAm5M1ti1REXd03LwxYb.AMTUqcg6q2eBHdSakk.kcSwrI7Kb3Qq', 'coach'),
   ('Coach David', 'david.coach@pickled.ph', '$2y$12$XmTC0GuiTh0jORWuM3y68ORyw7r8vf86bzRKOJAmpOXlVyQSljmHu', 'coach'),
   ('Coach Kenji', 'kenji.coach@pickled.ph', '$2y$12$6nTX/XMV6ULy5t9kJQl3k.YDgqZO.KTVsEMtsocT9u/rcDxXYG.Gi', 'coach'),
-  ('Coach Martina', 'martina.coach@pickled.ph', '$2y$12$cxAnlVf57pG4.VWj39Ee3uMAbHWJjJkqzM7Izk0dzK6OkbVO.ZMvC', 'coach'),
+  ('Coach Martina', 'livingstones.codi@gmail.com', '$2y$12$jd6pVDRLCgS4NgSTTfaeXeSleZ6o2KCh3P3xjx5fY8pBgz06BDiVO', 'coach'),
   ('Coach Sophia', 'sophia.coach@pickled.ph', '$2y$12$RWN6pWCkLmjnQ/95/DQDseKHiMSTOgurpgg1zsk6A2h9bLZzN6.ku', 'coach')
 ON DUPLICATE KEY UPDATE
   name = VALUES(name),
   password_hash = VALUES(password_hash),
   role = VALUES(role);
+
+UPDATE users
+SET is_verified = 1
+WHERE email IN ('pickled.shopph@gmail.com', 'livingstones.codi@gmail.com');
 
 -- Remove the legacy single demo coach account from older seeds.
 DELETE FROM users
@@ -278,7 +282,7 @@ JOIN (
          'Expert in modern offensive strategies and third shot drop mastery.',
          'active',
          'kenji.jpg'
-  UNION ALL SELECT 'martina.coach@pickled.ph',
+  UNION ALL SELECT 'livingstones.codi@gmail.com',
          'Technical Fundamentals & Youth Development',
          'Patient and detail-oriented coach who helps beginners build strong fundamentals with safe movement and confident technique.',
          'Certified IPTPA Level 1 Coach focused on biomechanics and injury prevention.',
@@ -635,7 +639,7 @@ WHERE u.email IN (
   'anton.coach@pickled.ph',
   'david.coach@pickled.ph',
   'kenji.coach@pickled.ph',
-  'martina.coach@pickled.ph',
+  'livingstones.codi@gmail.com',
   'sophia.coach@pickled.ph'
 );
 
@@ -654,7 +658,7 @@ WHERE u.role = 'coach'
     'anton.coach@pickled.ph',
     'david.coach@pickled.ph',
     'kenji.coach@pickled.ph',
-    'martina.coach@pickled.ph',
+    'livingstones.codi@gmail.com',
     'sophia.coach@pickled.ph'
   );
 
@@ -714,7 +718,7 @@ CREATE TABLE IF NOT EXISTS private_packages (
 UPDATE private_packages pp
 JOIN coach_profiles old_cp ON old_cp.id = pp.coach_profile_id
 JOIN users old_u ON old_u.id = old_cp.user_id AND old_u.email = 'coach@example.com'
-JOIN users martina_u ON martina_u.email = 'martina.coach@pickled.ph'
+JOIN users martina_u ON martina_u.email = 'livingstones.codi@gmail.com'
 JOIN coach_profiles martina_cp ON martina_cp.user_id = martina_u.id
 SET pp.coach_profile_id = martina_cp.id;
 
@@ -731,7 +735,7 @@ SET pp.title = 'Private Coaching',
     pp.duration = '1 hour',
     pp.status = 'active'
 WHERE pp.title = 'Private Coaching'
-  AND u.email = 'martina.coach@pickled.ph';
+  AND u.email = 'livingstones.codi@gmail.com';
 
 INSERT INTO private_packages (title, description, price, duration, coach_profile_id, status)
 SELECT 'Private Coaching',
@@ -742,7 +746,7 @@ SELECT 'Private Coaching',
        'active'
 FROM coach_profiles cp
 JOIN users u ON u.id = cp.user_id
-WHERE u.email = 'martina.coach@pickled.ph'
+WHERE u.email = 'livingstones.codi@gmail.com'
   AND NOT EXISTS (
     SELECT 1
     FROM private_packages pp

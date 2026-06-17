@@ -43,7 +43,7 @@ final class CartRepository
 
     public function findForUser(int $userId): ?array
     {
-        $stmt = Database::connection()->prepare('SELECT * FROM carts WHERE user_id = :user_id LIMIT 1');
+        $stmt = Database::connection()->prepare('SELECT * FROM carts WHERE user_id = :user_id ORDER BY updated_at DESC, id DESC LIMIT 1');
         $stmt->execute(['user_id' => $userId]);
         $cart = $stmt->fetch();
         return $cart ?: null;
@@ -106,17 +106,34 @@ final class CartRepository
     public function saveTimerForUser(int $userId, ?int $startedAt, ?int $expiresAt): int
     {
         $pdo = Database::connection();
-        $stmt = $pdo->prepare(
-            'INSERT INTO carts (user_id, started_at, expires_at)
-             VALUES (:user_id, :started_at, :expires_at)
-             ON DUPLICATE KEY UPDATE started_at = VALUES(started_at), expires_at = VALUES(expires_at), updated_at = CURRENT_TIMESTAMP'
-        );
-        $stmt->execute([
+        $params = [
             'user_id' => $userId,
             'started_at' => $this->dateTimeFromTimestamp($startedAt),
             'expires_at' => $this->dateTimeFromTimestamp($expiresAt),
-        ]);
-        return (int) ($this->findForUser($userId)['id'] ?? 0);
+        ];
+        $cart = $this->findForUser($userId);
+        if ($cart) {
+            $stmt = $pdo->prepare(
+                'UPDATE carts
+                 SET started_at = :started_at,
+                     expires_at = :expires_at,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :cart_id'
+            );
+            $stmt->execute([
+                'cart_id' => (int) $cart['id'],
+                'started_at' => $params['started_at'],
+                'expires_at' => $params['expires_at'],
+            ]);
+            return (int) $cart['id'];
+        }
+
+        $stmt = $pdo->prepare(
+            'INSERT INTO carts (user_id, started_at, expires_at)
+             VALUES (:user_id, :started_at, :expires_at)'
+        );
+        $stmt->execute($params);
+        return (int) $pdo->lastInsertId();
     }
 
     public function addItem(int $cartId, ?int $sessionId, int $quantity, float $unitPrice): bool
@@ -178,10 +195,14 @@ final class CartRepository
 
     public function clearForUser(int $userId): void
     {
-        $cart = $this->findForUser($userId);
-        if ($cart) {
-            Database::connection()->prepare('DELETE FROM carts WHERE id = :id')->execute(['id' => $cart['id']]);
-        }
+        $pdo = Database::connection();
+        $pdo->prepare(
+            'DELETE ci
+             FROM cart_items ci
+             JOIN carts c ON c.id = ci.cart_id
+             WHERE c.user_id = :user_id'
+        )->execute(['user_id' => $userId]);
+        $pdo->prepare('DELETE FROM carts WHERE user_id = :user_id')->execute(['user_id' => $userId]);
     }
 
     public function activeHeldQuantityForSession(int $sessionId, ?int $excludeCartItemId = null): int

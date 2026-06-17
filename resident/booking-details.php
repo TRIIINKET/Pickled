@@ -30,15 +30,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $messageType = 'error';
   } elseif (($_POST['action'] ?? '') === 'upload_payment') {
     try {
+      $receiptFile = $_FILES['receipt'] ?? $_FILES['proof_image'] ?? [];
       $paymentService->uploadReceipt(
         $userId,
         (int) ($_POST['booking_id'] ?? 0),
-        $_FILES['proof_image'] ?? [],
+        $receiptFile,
         (string) ($_POST['reference_number'] ?? '')
       );
       $message = 'Payment receipt uploaded. Please wait for admin review.';
     } catch (RuntimeException $e) {
       $message = $e->getMessage();
+      $messageType = 'warning';
+    } catch (Throwable $e) {
+      error_log('Unexpected payment receipt upload failure on booking details. booking_id=' . (int) ($_POST['booking_id'] ?? 0) . '; user_id=' . $userId . '; error=' . $e->getMessage());
+      $message = 'Receipt upload failed. Please try again.';
       $messageType = 'warning';
     }
   } elseif (($_POST['action'] ?? '') === 'submit_feedback') {
@@ -92,6 +97,32 @@ function payment_proof_url(string $path): string {
   return '../' . ltrim($path, '/');
 }
 
+function payment_proof_absolute_path(string $path): string {
+  $relative = ltrim(str_replace('\\', '/', trim($path)), '/');
+  if ($relative === '' || str_contains($relative, '..')) {
+    return '';
+  }
+
+  return dirname(__DIR__) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+}
+
+function payment_has_receipt(array $payment): bool {
+  $path = trim((string) ($payment['proof_image'] ?? ''));
+  if ($path === '') {
+    $hasReceipt = false;
+  } else {
+    $absolutePath = payment_proof_absolute_path($path);
+    $hasReceipt = $absolutePath !== '' && is_file($absolutePath);
+  }
+
+  error_log('booking_id=' . (int) ($payment['booking_id'] ?? 0));
+  error_log('payment_id=' . (int) ($payment['id'] ?? 0));
+  error_log('proof=' . ($path !== '' ? $path : 'NULL'));
+  error_log('hasReceipt=' . ($hasReceipt ? 'yes' : 'no'));
+
+  return $hasReceipt;
+}
+
 function payment_proof_is_image(string $path): bool {
   return (bool) preg_match('/\.(jpe?g|png|webp)$/i', $path);
 }
@@ -128,7 +159,11 @@ include __DIR__ . '/../includes/header.php';
     <?php else: ?>
       <?php $statusKey = booking_detail_status_key((string) $booking['status']); ?>
       <?php $feedbackEligible = $feedbackService->canLeaveFeedback((int) $booking['id'], $userId); ?>
-      <?php $canUpload = !$latestPayment || (($latestPayment['status'] ?? '') === 'rejected'); ?>
+      <?php $latestPaymentStatus = strtolower((string) ($latestPayment['status'] ?? '')); ?>
+      <?php $uploadedPayments = array_values(array_filter($payments, 'payment_has_receipt')); ?>
+      <?php $uploadedPaymentIds = array_map(static fn(array $payment): int => (int) $payment['id'], $uploadedPayments); ?>
+      <?php $latestHasProof = $latestPayment && in_array((int) $latestPayment['id'], $uploadedPaymentIds, true); ?>
+      <?php $canUpload = !$latestPayment || ($latestPaymentStatus === 'rejected') || ($latestPaymentStatus === 'pending' && !$latestHasProof); ?>
       <?php $showReceiptUpload = $canUpload && ($booking['payment_status'] ?? '') !== 'paid' && ($booking['status'] ?? '') !== 'cancelled'; ?>
       <?php $showFeedbackSection = $statusKey === 'completed' && ($feedback || $feedbackEligible); ?>
 
@@ -203,6 +238,7 @@ include __DIR__ . '/../includes/header.php';
               <h2>Upload Receipt</h2>
             </div>
             <?php if ($showReceiptUpload): ?>
+              <div class="cart-message booking-detail-inline-message">Receipt not uploaded yet.</div>
               <form class="booking-detail-upload-form" method="post" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
                 <input type="hidden" name="action" value="upload_payment" />
@@ -213,25 +249,25 @@ include __DIR__ . '/../includes/header.php';
                 </label>
                 <label>
                   Receipt Image or PDF
-                  <input type="file" name="proof_image" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf" required />
+                  <input type="file" name="receipt" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf" required />
                 </label>
                 <button class="checkout-btn" type="submit">Submit Receipt</button>
               </form>
-            <?php elseif (($latestPayment['status'] ?? '') === 'pending'): ?>
-              <div class="cart-message cart-message--warning booking-detail-inline-message">Your uploaded receipt is waiting for admin review.</div>
+            <?php elseif ($latestPaymentStatus === 'pending' && $latestHasProof): ?>
+              <div class="cart-message cart-message--warning booking-detail-inline-message">Receipt uploaded. Waiting for admin verification.</div>
             <?php else: ?>
               <div class="cart-message booking-detail-inline-message">No receipt upload is needed for this booking.</div>
             <?php endif; ?>
           </article>
         </section>
 
-        <?php if ($payments): ?>
+        <?php if ($uploadedPayments): ?>
           <section class="booking-detail-section">
             <div class="booking-detail-section__heading">
               <h2>Receipt History</h2>
             </div>
             <div class="booking-detail-receipts">
-              <?php foreach ($payments as $payment): ?>
+              <?php foreach ($uploadedPayments as $payment): ?>
                 <?php $proofPath = (string) $payment['proof_image']; ?>
                 <article>
                   <?php if (payment_proof_is_image($proofPath)): ?>
