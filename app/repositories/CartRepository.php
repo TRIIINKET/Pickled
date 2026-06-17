@@ -241,9 +241,9 @@ final class CartRepository
              JOIN bookings b ON b.id = bi.booking_id
              WHERE bi.variant_slug = :variant_slug
                AND bi.booking_date = :booking_date
-               AND (b.status IN ('pending', 'approved', 'confirmed', 'paid', 'completed')
+               AND (b.status IN ('pending', 'confirmed', 'completed')
                     OR b.payment_status IN ('pending', 'approved', 'paid'))
-               AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+	               AND b.status <> 'cancelled'
                AND b.payment_status NOT IN ('expired', 'refunded', 'rejected')
                AND :start_time < bi.end_time
                AND :end_time > bi.start_time"
@@ -288,9 +288,9 @@ final class CartRepository
                        JOIN booking_variants v ON v.slug = bi.variant_slug
                        WHERE v.court_id = :court_id
                          AND bi.booking_date = :session_date
-                         AND (b.status IN ('pending', 'approved', 'confirmed', 'paid', 'completed')
+                         AND (b.status IN ('pending', 'confirmed', 'completed')
                               OR b.payment_status IN ('pending', 'approved', 'paid'))
-                         AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+	                         AND b.status <> 'cancelled'
                          AND b.payment_status NOT IN ('expired', 'refunded', 'rejected')
                          AND :start_time < bi.end_time
                          AND :end_time > bi.start_time";
@@ -335,9 +335,9 @@ final class CartRepository
                        JOIN bookings b ON b.id = bi.booking_id
                        WHERE bi.coach_user_id = :coach_user_id
                          AND bi.booking_date = :booking_date
-                         AND (b.status IN ('pending', 'approved', 'confirmed', 'paid', 'completed')
+                         AND (b.status IN ('pending', 'confirmed', 'completed')
                               OR b.payment_status IN ('pending', 'approved', 'paid'))
-                         AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+	                         AND b.status <> 'cancelled'
                          AND b.payment_status NOT IN ('expired', 'refunded', 'rejected')
                          AND :start_time < bi.end_time
                          AND :end_time > bi.start_time

@@ -559,7 +559,7 @@ function court_stats(?PDO $pdo, int $courtId): array {
             WHERE v.court_id = :court_id
               AND b.created_at >= :start_date
               AND b.created_at < :end_date
-              AND b.status NOT IN ('cancelled', 'rejected')
+	              AND b.status <> 'cancelled'
         ");
         $stmt->execute(['court_id' => $courtId, 'start_date' => $monthStart, 'end_date' => $nextMonth]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -584,7 +584,7 @@ function court_stats(?PDO $pdo, int $courtId): array {
             JOIN sessions s ON s.id = bi.session_id
             JOIN booking_variants v ON v.id = s.variant_id
             WHERE v.court_id = :court_id
-              AND b.status NOT IN ('cancelled', 'rejected')
+	              AND b.status <> 'cancelled'
             GROUP BY bi.name
             ORDER BY slots DESC, bi.name ASC
             LIMIT 1

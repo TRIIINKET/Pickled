@@ -165,6 +165,28 @@ include __DIR__ . '/../includes/header.php';
               <input type="hidden" name="action" value="upload_payment" />
               <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>" />
               <h2>Upload Payment Receipt</h2>
+              <div class="gcash-instructions">
+                <h3>GCash Payment Details</h3>
+                <div class="gcash-detail">
+                  <span>GCash Number</span>
+                  <strong id="bookingGcashNumber">0917 123 4567</strong>
+                  <button type="button" data-copy-target="bookingGcashNumber">Copy</button>
+                </div>
+                <div class="gcash-detail">
+                  <span>Account Name</span>
+                  <strong>PICKLED SPORTS CENTER</strong>
+                </div>
+                <div class="gcash-detail">
+                  <span>Payment Note</span>
+                  <strong>Use reference <?= htmlspecialchars((string) $booking['reference']) ?>.</strong>
+                </div>
+                <ol>
+                  <li>Send payment through GCash.</li>
+                  <li>Use your booking reference as the payment note.</li>
+                  <li>Upload your receipt or screenshot.</li>
+                  <li>Wait for admin verification.</li>
+                </ol>
+              </div>
               <label>
                 Reference Number
                 <input type="text" name="reference_number" required />
@@ -277,5 +299,23 @@ include __DIR__ . '/../includes/header.php';
     <?php endif; ?>
   </div>
 </main>
+<script>
+(function(){
+  document.querySelectorAll("[data-copy-target]").forEach(function(button){
+    button.addEventListener("click", function(){
+      var target = document.getElementById(button.getAttribute("data-copy-target") || "");
+      var value = target ? target.textContent.trim() : "";
+      if (!value || !navigator.clipboard) return;
+      navigator.clipboard.writeText(value).then(function(){
+        button.textContent = "Copied";
+        window.setTimeout(function(){ button.textContent = "Copy"; }, 1600);
+      }).catch(function(){
+        button.textContent = "Copy failed";
+        window.setTimeout(function(){ button.textContent = "Copy"; }, 1600);
+      });
+    });
+  });
+})();
+</script>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>

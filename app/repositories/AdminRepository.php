@@ -62,7 +62,7 @@ class AdminRepository {
             $stats['total_bookings'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
             
             // Revenue
-            $stmt = $this->connection->query("SELECT SUM(total) as total FROM bookings WHERE LOWER(payment_status) IN ('completed', 'paid')");
+            $stmt = $this->connection->query("SELECT SUM(b.total) as total FROM bookings b LEFT JOIN payments p ON p.id = (SELECT p2.id FROM payments p2 WHERE p2.booking_id = b.id ORDER BY p2.created_at DESC, p2.id DESC LIMIT 1) WHERE p.status = 'approved' OR LOWER(b.payment_status) IN ('completed', 'paid')");
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
             $stats['total_revenue'] = $result['total'] ?? 0;
             
@@ -109,10 +109,11 @@ class AdminRepository {
             };
             
             $stmt = $this->connection->prepare("
-                SELECT DATE_FORMAT(created_at, ?) as period, SUM(total) as revenue, COUNT(*) as bookings
-                FROM bookings
-                WHERE LOWER(payment_status) IN ('completed', 'paid')
-                GROUP BY DATE_FORMAT(created_at, ?)
+                SELECT DATE_FORMAT(b.created_at, ?) as period, SUM(b.total) as revenue, COUNT(*) as bookings
+                FROM bookings b
+                LEFT JOIN payments p ON p.id = (SELECT p2.id FROM payments p2 WHERE p2.booking_id = b.id ORDER BY p2.created_at DESC, p2.id DESC LIMIT 1)
+                WHERE p.status = 'approved' OR LOWER(b.payment_status) IN ('completed', 'paid')
+                GROUP BY DATE_FORMAT(b.created_at, ?)
                 ORDER BY period DESC
                 LIMIT 30
             ");

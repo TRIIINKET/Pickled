@@ -31,6 +31,13 @@
 .payment-option span{font-weight:900;color:#204f3b}
 .payment-option small{font-weight:800;color:#5d745f}
 .payment-option:has(input:checked),.payment-option.is-selected{border-color:#204f3b;background:#e8ffe1;box-shadow:0 0 0 3px rgba(36,95,73,.08)}
+.gcash-instructions{display:grid;gap:12px;margin:16px 0;padding:16px;border:1px solid rgba(36,95,73,.16);border-radius:8px;background:#f8f4ea}
+.gcash-instructions h3{margin:0;color:#204f3b;font-size:18px;text-transform:uppercase}
+.gcash-detail{display:grid;grid-template-columns:minmax(110px,.75fr) minmax(0,1fr) auto;gap:10px;align-items:center}
+.gcash-detail span{color:#5d745f;font-size:12px;font-weight:900;text-transform:uppercase}
+.gcash-detail strong{color:#204f3b;font-weight:950;overflow-wrap:anywhere}
+.gcash-detail button{min-height:34px;padding:7px 11px;border-radius:7px;background:#204f3b;color:#fff;font-weight:900}
+.gcash-instructions ol{margin:2px 0 0 18px;color:#35634f;font-weight:800;line-height:1.5}
 .checkout-summary{display:grid;gap:8px;margin:16px 0;padding:14px;border-radius:8px;background:#f8f4ea;font-weight:900}
 .checkout-summary span{display:flex;justify-content:space-between;gap:12px}
 .policy{font-weight:700;line-height:1.55;margin:18px 0;color:#35634f}
@@ -83,5 +90,5 @@
 .waitlist-card h3{text-transform:uppercase;margin-bottom:8px}
 .waitlist-card p{font-weight:800;line-height:1.45}
 @media(max-width:980px){.cart-layout{grid-template-columns:1fr}.cart-panel{position:static}.cart-item{grid-template-columns:130px 1fr}.cart-price{grid-column:1/-1;text-align:left}.checkout-card,.review-card{max-width:none}}
-@media(max-width:620px){.cart-page{padding:calc(var(--nav-h) + 32px) 14px 96px}.cart-top{display:grid;margin-bottom:24px}.cart-top h1{font-size:clamp(38px,16vw,64px);line-height:.95}.cart-top-links{display:grid}.cart-top a{width:100%;text-align:center;padding:14px 18px}.cart-item{grid-template-columns:1fr;padding:14px;gap:14px}.cart-item img{width:100%;height:auto;aspect-ratio:1.45/1}.cart-item h2{font-size:20px}.cart-price{font-size:24px}.cart-total{display:grid;padding:22px}.payment-methods{grid-template-columns:1fr}.checkout-summary span{align-items:flex-start}.terms{align-items:flex-start}.checkout-btn{position:sticky;bottom:12px;z-index:5;min-height:52px;box-shadow:0 14px 34px rgba(32,79,59,.18)}.booking-item{display:grid;grid-template-columns:82px minmax(0,1fr)}.booking-item img{width:82px;height:70px}.booking-card{padding:16px}.booking-filters{display:grid;grid-template-columns:1fr 1fr}.booking-filters button{min-height:44px;padding:10px 12px}}
+@media(max-width:620px){.cart-page{padding:calc(var(--nav-h) + 32px) 14px 96px}.cart-top{display:grid;margin-bottom:24px}.cart-top h1{font-size:clamp(38px,16vw,64px);line-height:.95}.cart-top-links{display:grid}.cart-top a{width:100%;text-align:center;padding:14px 18px}.cart-item{grid-template-columns:1fr;padding:14px;gap:14px}.cart-item img{width:100%;height:auto;aspect-ratio:1.45/1}.cart-item h2{font-size:20px}.cart-price{font-size:24px}.cart-total{display:grid;padding:22px}.payment-methods{grid-template-columns:1fr}.gcash-detail{grid-template-columns:1fr}.gcash-detail button{width:100%}.checkout-summary span{align-items:flex-start}.terms{align-items:flex-start}.checkout-btn{position:sticky;bottom:12px;z-index:5;min-height:52px;box-shadow:0 14px 34px rgba(32,79,59,.18)}.booking-item{display:grid;grid-template-columns:82px minmax(0,1fr)}.booking-item img{width:82px;height:70px}.booking-card{padding:16px}.booking-filters{display:grid;grid-template-columns:1fr 1fr}.booking-filters button{min-height:44px;padding:10px 12px}}
 @media(max-width:380px){.booking-filters{grid-template-columns:1fr}.cart-tags span{font-size:10px}}

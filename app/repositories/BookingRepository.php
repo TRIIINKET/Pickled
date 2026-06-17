@@ -8,7 +8,7 @@ require_once __DIR__ . '/SchedulingRepository.php';
 
 final class BookingRepository
 {
-    private const BOOKING_STATUSES = ['pending', 'confirmed', 'completed', 'cancelled', 'rejected', 'expired', 'refunded', 'approved', 'paid'];
+    private const BOOKING_STATUSES = ['pending', 'confirmed', 'completed', 'cancelled'];
 
     public function __construct(
         private readonly CatalogRepository $catalog = new CatalogRepository(),
@@ -357,8 +357,8 @@ final class BookingRepository
                        bi.court,
                        bi.category,
                        bi.duration_label,
-                       COALESCE(bi.booking_date, s.session_date) AS booking_date_raw,
-                       DATE_FORMAT(COALESCE(bi.booking_date, s.session_date), '%W, %M %e, %Y') AS booking_date,
+                       bi.booking_date AS booking_date_raw,
+                       DATE_FORMAT(bi.booking_date, '%W, %M %e, %Y') AS booking_date,
                        bi.start_time,
                        bi.end_time,
                        CONCAT(TIME_FORMAT(bi.start_time, '%h:%i %p'), ' - ', TIME_FORMAT(bi.end_time, '%h:%i %p')) AS booking_time,
@@ -374,22 +374,21 @@ final class BookingRepository
                        u.email AS user_email
                 FROM booking_items bi
                 JOIN bookings b ON b.id = bi.booking_id
-                LEFT JOIN sessions s ON s.id = bi.session_id
                 LEFT JOIN users u ON u.id = b.user_id
-                WHERE COALESCE(bi.coach_user_id, s.coach_user_id) = :coach_user_id
-                  AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')";
+                WHERE bi.coach_user_id = :coach_user_id
+	                  AND b.status <> 'cancelled'";
         $params = ['coach_user_id' => $coachUserId];
 
         if ($startDate) {
-            $sql .= ' AND COALESCE(bi.booking_date, s.session_date) >= :start_date';
+            $sql .= ' AND bi.booking_date >= :start_date';
             $params['start_date'] = $startDate;
         }
         if ($endDate) {
-            $sql .= ' AND COALESCE(bi.booking_date, s.session_date) <= :end_date';
+            $sql .= ' AND bi.booking_date <= :end_date';
             $params['end_date'] = $endDate;
         }
 
-        $sql .= ' ORDER BY COALESCE(bi.booking_date, s.session_date) ASC, bi.start_time ASC';
+        $sql .= ' ORDER BY bi.booking_date ASC, bi.start_time ASC';
         $stmt = Database::connection()->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll() ?: [];
@@ -452,19 +451,13 @@ final class BookingRepository
             return 'cancelled';
         }
         if (str_contains($status, 'reject')) {
-            return 'rejected';
-        }
-        if (str_contains($status, 'expire')) {
-            return 'expired';
-        }
-        if (str_contains($status, 'refund')) {
-            return 'refunded';
+            return 'cancelled';
         }
         if (str_contains($status, 'complete')) {
             return 'completed';
         }
         if (str_contains($status, 'approve')) {
-            return 'approved';
+            return 'confirmed';
         }
         if (str_contains($status, 'confirm') || str_contains($status, 'paid')) {
             return 'confirmed';
@@ -474,7 +467,7 @@ final class BookingRepository
 
     private function statusConsumesCapacity(string $status): bool
     {
-        return in_array($this->normalizeBookingStatus($status), ['pending', 'approved', 'confirmed', 'paid', 'completed'], true);
+        return in_array($this->normalizeBookingStatus($status), ['pending', 'confirmed', 'completed'], true);
     }
 
     private function assertStandardCourtBookingAvailable(int $userId, array $variant, string $bookingDate, string $startTime, string $endTime, int $quantity, ?int $coachUserId): void
@@ -505,9 +498,9 @@ final class BookingRepository
              JOIN booking_variants v ON v.slug = bi.variant_slug
              WHERE v.court_id = :court_id
                AND bi.booking_date = :booking_date
-               AND (b.status IN ('pending', 'approved', 'confirmed', 'paid', 'completed')
+               AND (b.status IN ('pending', 'confirmed', 'completed')
                     OR b.payment_status IN ('pending', 'approved', 'paid'))
-               AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+	               AND b.status <> 'cancelled'
                AND b.payment_status NOT IN ('expired', 'refunded', 'rejected')
                AND :start_time < bi.end_time
                AND :end_time > bi.start_time
@@ -530,9 +523,9 @@ final class BookingRepository
              JOIN bookings b ON b.id = bi.booking_id
              WHERE bi.variant_slug = :variant_slug
                AND bi.booking_date = :booking_date
-               AND (b.status IN ('pending', 'approved', 'confirmed', 'paid', 'completed')
+               AND (b.status IN ('pending', 'confirmed', 'completed')
                     OR b.payment_status IN ('pending', 'approved', 'paid'))
-               AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+	               AND b.status <> 'cancelled'
                AND b.payment_status NOT IN ('expired', 'refunded', 'rejected')
                AND :start_time < bi.end_time
                AND :end_time > bi.start_time"
@@ -574,9 +567,9 @@ final class BookingRepository
              JOIN bookings b ON b.id = bi.booking_id
              WHERE bi.coach_user_id = :coach_user_id
                AND bi.booking_date = :booking_date
-               AND (b.status IN ('pending', 'approved', 'confirmed', 'paid', 'completed')
+               AND (b.status IN ('pending', 'confirmed', 'completed')
                     OR b.payment_status IN ('pending', 'approved', 'paid'))
-               AND b.status NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+	               AND b.status <> 'cancelled'
                AND b.payment_status NOT IN ('expired', 'refunded', 'rejected')
                AND :start_time < bi.end_time
                AND :end_time > bi.start_time

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
 require_once __DIR__ . '/../includes/booking-system.php';
+require_once __DIR__ . '/../includes/upload-helper.php';
 require_once __DIR__ . '/../database/Database.php';
 require_once __DIR__ . '/../includes/EmailVerification.php';
 
@@ -16,7 +17,6 @@ $csrfToken = pickled_csrf_token();
 $user = $_SESSION['user'] ?? [];
 $userId = (int) ($user['id'] ?? 0);
 $defaultAvatar = 'avatars/default.png';
-$uploadDir = __DIR__ . '/../assets/uploads/avatars';
 $profile = [
   'phone' => '',
   'city' => '',
@@ -47,7 +47,7 @@ function pickled_profile_avatar_url(string $avatar, string $defaultAvatar): stri
     return pickled_asset_url('img/nav-logo-lpink.png');
   }
 
-  if (str_starts_with($avatar, 'assets/')) {
+  if (str_starts_with($avatar, 'assets/') || str_starts_with($avatar, 'uploads/')) {
     return pickled_frontend_url($avatar);
   }
 
@@ -58,48 +58,23 @@ function pickled_profile_valid_location(array $provinceCities, string $province,
   return isset($provinceCities[$province]) && in_array($city, $provinceCities[$province], true);
 }
 
-function pickled_profile_store_avatar(array $file, int $userId, string $uploadDir): ?string {
+function pickled_profile_store_avatar(array $file, int $userId): ?string {
   if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
     return null;
   }
 
-  if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
-    throw new RuntimeException('Profile photo upload failed. Please choose another image.');
-  }
-
-  if ((int) ($file['size'] ?? 0) > 2 * 1024 * 1024) {
-    throw new RuntimeException('Profile photo must be 2MB or smaller.');
-  }
-
-  $tmpName = (string) ($file['tmp_name'] ?? '');
-  $info = @getimagesize($tmpName);
-  $mime = is_array($info) ? (string) ($info['mime'] ?? '') : '';
-  $extensions = [
-    'image/jpeg' => 'jpg',
-    'image/png' => 'png',
-    'image/webp' => 'webp',
-  ];
-
-  if (!isset($extensions[$mime])) {
-    throw new RuntimeException('Profile photo must be JPG, JPEG, PNG, or WEBP.');
-  }
-
-  if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
-    throw new RuntimeException('Unable to prepare profile photo storage.');
-  }
-
-  if (!is_writable($uploadDir)) {
-    throw new RuntimeException('Profile photo storage is not writable.');
-  }
-
-  $fileName = 'avatar_' . $userId . '_' . date('YmdHis') . '_' . bin2hex(random_bytes(4)) . '.' . $extensions[$mime];
-  $target = rtrim($uploadDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $fileName;
-
-  if (!move_uploaded_file($tmpName, $target)) {
-    throw new RuntimeException('Unable to save the profile photo right now.');
-  }
-
-  return 'assets/uploads/avatars/' . $fileName;
+  return pickled_upload_file(
+    $file,
+    'uploads/avatars',
+    [
+      'jpg' => ['image/jpeg'],
+      'jpeg' => ['image/jpeg'],
+      'png' => ['image/png'],
+      'webp' => ['image/webp'],
+    ],
+    5 * 1024 * 1024,
+    'avatar_' . $userId
+  );
 }
 
 if ($userId > 0) {
@@ -184,12 +159,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     try {
-      $newAvatar = pickled_profile_store_avatar($_FILES['avatar'] ?? [], $userId, $uploadDir);
+      $newAvatar = pickled_profile_store_avatar($_FILES['avatar'] ?? [], $userId);
       if ($newAvatar !== null) {
         $profile['avatar'] = $newAvatar;
       }
     } catch (Throwable $e) {
-      $fieldErrors['avatar'] = $e->getMessage();
+      error_log('Profile avatar upload failed: ' . $e->getMessage());
+      $fieldErrors['avatar'] = 'Profile photo upload failed. Please try again.';
     }
 
     if ($fieldErrors) {
@@ -378,7 +354,7 @@ include __DIR__ . '/../includes/header.php';
       <label class="player-profile-photo-input">
         <span>Profile Picture</span>
         <input id="avatarInput" type="file" name="avatar" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
-        <small>JPG, JPEG, PNG, or WEBP. Max 2MB.</small>
+        <small>JPG, JPEG, PNG, or WEBP. Max 5MB.</small>
         <?php if (isset($fieldErrors['avatar'])): ?><em><?= htmlspecialchars($fieldErrors['avatar']) ?></em><?php endif; ?>
       </label>
     </div>

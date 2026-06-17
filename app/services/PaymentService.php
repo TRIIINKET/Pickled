@@ -8,18 +8,12 @@ require_once __DIR__ . '/BookingExpiryService.php';
 require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/AdminLogService.php';
 require_once __DIR__ . '/EmailService.php';
+require_once __DIR__ . '/../../includes/upload-helper.php';
 require_once __DIR__ . '/../../database/Database.php';
 
 final class PaymentService
 {
-    private const ALLOWED_MIME_TYPES = [
-        'image/jpeg' => 'jpg',
-        'image/png' => 'png',
-        'image/webp' => 'webp',
-        'application/pdf' => 'pdf',
-    ];
-
-    private const MAX_UPLOAD_BYTES = 5242880;
+    private const MAX_UPLOAD_BYTES = 10485760;
 
     public function __construct(
         private readonly PaymentRepository $payments = new PaymentRepository(),
@@ -141,21 +135,9 @@ final class PaymentService
                 return false;
             }
 
-            if ($status === 'approved') {
-                if (!$this->bookings->updateStatus($bookingId, 'confirmed')) {
-                    if ($startedTransaction && $pdo->inTransaction()) {
-                        $pdo->rollBack();
-                    }
-                    return false;
-                }
-                $this->bookings->updatePaymentStatus($bookingId, 'paid');
-            } else {
-                $this->bookings->updateStatus($bookingId, 'pending');
-                $this->bookings->updatePaymentStatus($bookingId, 'rejected');
-            }
-
             $updatedBooking = $this->bookings->findById($bookingId) ?? $booking;
             $updatedPayment = $this->payments->findById($paymentId) ?? $payment;
+            $updatedBooking['payment_status'] = $status;
             if ($status === 'approved') {
                 $this->adminLogs->recordPaymentApproved($updatedBooking, $updatedPayment, $adminId);
                 $this->adminLogs->recordBookingConfirmed($updatedBooking, $adminId);
@@ -202,40 +184,32 @@ final class PaymentService
 
     private function storeProofImage(int $bookingId, array $file): string
     {
-        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            throw new RuntimeException('Please upload a valid payment receipt.');
+        try {
+            return pickled_upload_file(
+                $file,
+                'uploads/payments',
+                [
+                    'jpg' => ['image/jpeg'],
+                    'jpeg' => ['image/jpeg'],
+                    'png' => ['image/png'],
+                    'webp' => ['image/webp'],
+                    'pdf' => ['application/pdf', 'application/x-pdf'],
+                ],
+                self::MAX_UPLOAD_BYTES,
+                'payment_' . $bookingId
+            );
+        } catch (RuntimeException $e) {
+            error_log('Payment receipt upload failed: ' . $e->getMessage());
+            if (str_contains($e->getMessage(), 'folder')) {
+                throw new RuntimeException('Receipt upload is temporarily unavailable. Please try again later.');
+            }
+            if (str_contains($e->getMessage(), 'too large')) {
+                throw new RuntimeException('Receipt file must be 10MB or smaller.');
+            }
+            if (str_contains($e->getMessage(), 'type')) {
+                throw new RuntimeException('Receipt must be a JPG, JPEG, PNG, WEBP, or PDF file.');
+            }
+            throw new RuntimeException($e->getMessage());
         }
-
-        $tmpName = (string) ($file['tmp_name'] ?? '');
-        $size = (int) ($file['size'] ?? 0);
-        if ($tmpName === '' || $size <= 0 || $size > self::MAX_UPLOAD_BYTES) {
-            throw new RuntimeException('Receipt image must be 5MB or smaller.');
-        }
-
-        $mime = (new finfo(FILEINFO_MIME_TYPE))->file($tmpName) ?: '';
-        if (!isset(self::ALLOWED_MIME_TYPES[$mime])) {
-            throw new RuntimeException('Receipt must be a JPG, JPEG, PNG, WEBP, or PDF file.');
-        }
-
-        $uploadDir = __DIR__ . '/../../assets/uploads/payments';
-        if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
-            throw new RuntimeException('Payment upload folder could not be created.');
-        }
-
-        if (!is_writable($uploadDir)) {
-            throw new RuntimeException('Payment upload folder is not writable.');
-        }
-
-        $filename = 'payment_' . $bookingId . '_' . date('YmdHis') . '_' . bin2hex(random_bytes(4)) . '.' . self::ALLOWED_MIME_TYPES[$mime];
-        $destination = $uploadDir . '/' . $filename;
-        $stored = PHP_SAPI === 'cli'
-            ? copy($tmpName, $destination)
-            : move_uploaded_file($tmpName, $destination);
-
-        if (!$stored) {
-            throw new RuntimeException('Payment receipt upload failed.');
-        }
-
-        return 'assets/uploads/payments/' . $filename;
     }
 }

@@ -2617,6 +2617,74 @@ body.admin-dashboard-body {
     width: 100%;
 }
 
+.walkin-booking-drawer {
+    width: min(620px, 100%);
+}
+
+.walkin-booking-form {
+    display: grid;
+    gap: 14px;
+}
+
+.walkin-booking-form section {
+    display: grid;
+    gap: 12px;
+}
+
+.walkin-booking-form label {
+    display: grid;
+    gap: 7px;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.walkin-booking-form label span {
+    color: #4b5563;
+    font-size: 12px;
+}
+
+.walkin-booking-form input,
+.walkin-booking-form select,
+.walkin-booking-form textarea {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid rgba(17,24,39,.14);
+    border-radius: 10px;
+    background: #fff;
+    color: #111827;
+    font: inherit;
+    font-weight: 700;
+    padding: 0 12px;
+}
+
+.walkin-booking-form textarea {
+    min-height: 84px;
+    padding-top: 12px;
+    resize: vertical;
+}
+
+.walkin-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.walkin-form-actions {
+    position: sticky;
+    bottom: -24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 0 0;
+    border-top: 1px solid rgba(17,24,39,.08);
+    background: linear-gradient(180deg, rgba(255,255,255,.86), #fff 38%);
+}
+
+.walkin-form-actions .bookings-button {
+    min-width: 136px;
+}
+
 @media (max-width: 1180px) {
     .booking-summary-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2638,8 +2706,13 @@ body.admin-dashboard-body {
     .booking-summary-grid,
     .booking-filter-search-row,
     .booking-filter-controls-row,
+    .walkin-form-grid,
     .availability-grid {
         grid-template-columns: 1fr;
+    }
+
+    .walkin-form-actions {
+        display: grid;
     }
 }
 

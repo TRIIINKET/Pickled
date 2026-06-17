@@ -54,6 +54,16 @@ final class AdminLogService
         );
     }
 
+    public function recordBookingRejected(array $booking, int $adminId, string $remarks = ''): int
+    {
+        $description = 'Booking ' . $this->reference($booking) . ' was rejected.';
+        if (trim($remarks) !== '') {
+            $description .= ' Reason: ' . trim($remarks);
+        }
+
+        return $this->record($adminId, 'booking_rejected', 'booking', $this->entityId($booking), $description);
+    }
+
     public function recordBookingExpired(array $booking): int
     {
         return $this->record(
