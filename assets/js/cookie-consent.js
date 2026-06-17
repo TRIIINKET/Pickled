@@ -1,7 +1,9 @@
 (function () {
   'use strict';
 
-  const storageKey = 'pickledCookieConsent';
+  const consentKey = 'cookieConsent';
+  const timestampKey = 'cookieConsentTimestamp';
+  const preferencesKey = 'cookiePreferences';
   const maxAgeDays = 183;
   const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
 
@@ -18,32 +20,49 @@
 
   function readConsent() {
     try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) return null;
-      const value = JSON.parse(raw);
-      if (!value || !value.savedAt || now() - Number(value.savedAt) > maxAgeMs) {
-        window.localStorage.removeItem(storageKey);
+      const status = window.localStorage.getItem(consentKey);
+      const savedAt = Number(window.localStorage.getItem(timestampKey));
+      if (!status || !savedAt) return null;
+      if (now() - savedAt > maxAgeMs) {
+        window.localStorage.removeItem(consentKey);
+        window.localStorage.removeItem(timestampKey);
+        window.localStorage.removeItem(preferencesKey);
         return null;
       }
-      return value;
+
+      const preferences = JSON.parse(window.localStorage.getItem(preferencesKey) || '{}');
+      return {
+        status,
+        essential: true,
+        preferences: Boolean(preferences.preferences),
+        analytics: Boolean(preferences.analytics),
+        savedAt
+      };
     } catch (error) {
       return null;
     }
   }
 
   function writeConsent(consent) {
+    const savedAt = now();
     const payload = {
       status: consent.status,
       essential: true,
       preferences: Boolean(consent.preferences),
       analytics: Boolean(consent.analytics),
-      savedAt: now()
+      savedAt
     };
 
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify(payload));
+      window.localStorage.setItem(consentKey, payload.status);
+      window.localStorage.setItem(timestampKey, String(savedAt));
+      window.localStorage.setItem(preferencesKey, JSON.stringify({
+        essential: true,
+        preferences: payload.preferences,
+        analytics: payload.analytics
+      }));
     } catch (error) {
-      document.cookie = storageKey + '=' + encodeURIComponent(JSON.stringify(payload)) + '; Max-Age=' + (maxAgeDays * 24 * 60 * 60) + '; Path=/; SameSite=Lax';
+      return null;
     }
 
     return payload;
@@ -56,10 +75,12 @@
 
   function hideBanner() {
     banner.hidden = true;
+    banner.removeAttribute('data-cookie-visible');
   }
 
   function showBanner() {
     banner.hidden = false;
+    banner.setAttribute('data-cookie-visible', 'true');
   }
 
   function openModal() {
@@ -103,7 +124,6 @@
   modal.querySelector('[data-cookie-save]')?.addEventListener('click', savePreferences);
   modal.querySelector('[data-cookie-accept-modal]')?.addEventListener('click', acceptAll);
   modal.querySelectorAll('[data-cookie-close]').forEach((button) => button.addEventListener('click', closeModal));
-  document.querySelectorAll('[data-cookie-preferences]').forEach((button) => button.addEventListener('click', openModal));
 
   document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape' && !modal.hidden) closeModal();
@@ -112,6 +132,6 @@
   if (readConsent()) {
     hideBanner();
   } else {
-    showBanner();
+    window.requestAnimationFrame(showBanner);
   }
 })();

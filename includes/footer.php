@@ -38,7 +38,6 @@ require_once __DIR__ . '/paths.php';
         <a href="#privacyModal" class="footer-legal__link" id="privacyPolicyBtn" data-modal-target="privacyModal">Privacy policy</a>
         <a href="#termsModal" class="footer-legal__link" id="termsPolicyBtn" data-modal-target="termsModal">Terms of service</a>
         <a href="#cancellationModal" class="footer-legal__link" id="cancellationPolicyBtn" data-modal-target="cancellationModal">Cancellation policy</a>
-        <button type="button" class="footer-legal__link footer-cookie-link" data-cookie-preferences>Cookie Preferences</button>
       </div>
     </div>
   </div>
@@ -290,4 +289,4 @@ require_once __DIR__ . '/paths.php';
 </div>
 
 <script src="<?= htmlspecialchars(pickled_asset_url('js/privacy-modal.js')) ?>"></script>
-<script src="<?= htmlspecialchars(pickled_asset_url('js/cookie-consent.js?v=20260617a')) ?>"></script>
+<script src="<?= htmlspecialchars(pickled_asset_url('js/cookie-consent.js?v=20260617c')) ?>"></script>
