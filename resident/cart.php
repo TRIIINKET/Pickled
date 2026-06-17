@@ -29,9 +29,10 @@ $isSelectedPaymentValid = CheckoutController::isValidMethod($selectedPayment);
 $isCheckout = isset($_GET['checkout']) || ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'checkout');
 
 function cart_save_booking_phone(int $userId, string $phone): void {
-  if ($userId <= 0 || !preg_match('/^09\d{9}$/', $phone)) {
-    throw new RuntimeException('Please enter a valid 11-digit mobile number.');
+  if ($userId <= 0) {
+    throw new RuntimeException('Please enter a valid Philippine mobile number.');
   }
+  $phone = validatePhonePH(str_replace(' ', '', $phone));
 
   $stmt = Database::connection()->prepare(
     'INSERT INTO user_profiles (user_id, phone, city, province, avatar)
@@ -121,7 +122,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'update_quantity') {
       $cartId = (int) ($_POST['cart_id'] ?? 0);
-      $quantity = max(1, (int) ($_POST['quantity'] ?? 1));
+      try {
+        $quantity = validatePositiveInt($_POST['quantity'] ?? 1, pickled_cart_limit());
+      } catch (RuntimeException) {
+        header('Location: cart.php?invalid=1');
+        exit;
+      }
       $result = pickled_update_cart_quantity($cartId, $quantity);
       header('Location: cart.php?' . ($result['ok'] ? 'updated=1' : $result['code'] . '=1'));
       exit;
@@ -137,8 +143,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'add_booking') {
       $variantId = trim((string) ($_POST['variant_id'] ?? ''));
-      $quantity = max(1, (int) ($_POST['quantity'] ?? 1));
-      $customerPhone = preg_replace('/\D+/', '', (string) ($_POST['customer_phone'] ?? '')) ?? '';
+      try {
+        $quantity = validatePositiveInt($_POST['quantity'] ?? 1, pickled_cart_limit());
+      } catch (RuntimeException) {
+        $back = $_SERVER['HTTP_REFERER'] ?? 'courts.php#court-detail';
+        $separator = str_contains($back, '?') ? '&' : '?';
+        header('Location: ' . $back . $separator . 'cart_error=invalid');
+        exit;
+      }
+      $customerPhone = str_replace(' ', '', (string) ($_POST['customer_phone'] ?? ''));
       $date = trim((string) ($_POST['booking_date'] ?? $_POST['date'] ?? (new DateTimeImmutable('+3 days'))->format('F j, Y')));
       $startTime = trim((string) ($_POST['start_time'] ?? ''));
       $endTime = trim((string) ($_POST['end_time'] ?? ''));
@@ -148,7 +161,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
       $coachUserId = empty($_POST['coach_user_id']) ? null : (int) $_POST['coach_user_id'];
       $sessionId = empty($_POST['session_id']) ? null : (int) $_POST['session_id'];
-      if (!preg_match('/^09\d{9}$/', $customerPhone)) {
+      try {
+        $customerPhone = validatePhonePH($customerPhone);
+      } catch (RuntimeException) {
         $back = $_SERVER['HTTP_REFERER'] ?? 'courts.php#court-detail';
         $separator = str_contains($back, '?') ? '&' : '?';
         header('Location: ' . $back . $separator . 'cart_error=phone');
@@ -185,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           $_SESSION['cart'],
           $_SESSION['user']['name'] ?? 'Guest',
           $selectedPayment,
-          trim($_POST['notes'] ?? '')
+          validateText($_POST['notes'] ?? '', false, 1000)
         );
       } catch (Throwable $e) {
         $message = $e instanceof RuntimeException ? $e->getMessage() : 'Your booking could not be completed right now. Please try again.';
@@ -332,7 +347,7 @@ include __DIR__ . '/../includes/header.php';
         <form method="post" class="checkout-card">
           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
           <h2>Order Special Instructions</h2>
-          <textarea name="notes" placeholder="Notes for the PICKLED team"></textarea>
+          <textarea name="notes" placeholder="Notes for the PICKLED team" maxlength="1000"></textarea>
           <h2 class="checkout-card__payment-title">Payment Method</h2>
           <?php include __DIR__ . '/../includes/payment-methods.php'; ?>
           <div class="gcash-instructions">
@@ -363,10 +378,14 @@ include __DIR__ . '/../includes/header.php';
             <span><small>Total</small><strong data-checkout-total>₱<?= number_format($checkoutTotal, 2) ?></strong></span>
           </div>
           <div class="policy">
-            <p>- Cancel before 48 hours: full credit.</p>
-            <p>- Late cancellation or no-show: booking forfeited.</p>
-            <p>- Weather issues may be rescheduled by PICKLED staff.</p>
-            <p>- <?= $member ? 'Member benefits applied: zero guest fee and discounted pricing.' : 'Create a member account for discounts, priority access, and zero guest fees.' ?></p>
+            <p><strong>Cancellation &amp; Payment Policy:</strong></p>
+            <p>- Pending unpaid bookings may be cancelled anytime before payment expires.</p>
+            <p>- Unpaid bookings automatically expire after 30 minutes.</p>
+            <p>- Confirmed bookings may be cancelled up to 24 hours before the scheduled time.</p>
+            <p>- Cancellations after receipt upload or verified payment are subject to admin refund review.</p>
+            <p>- Refunds, if approved, are processed manually through GCash.</p>
+            <p>- Bookings within 24 hours of the scheduled time can no longer be cancelled.</p>
+            <p>- No-show bookings are forfeited.</p>
           </div>
           <label class="terms"><input type="checkbox" name="terms" value="1" /> I agree with Terms & Conditions</label>
           <input type="hidden" name="action" value="checkout" />

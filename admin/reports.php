@@ -2,11 +2,18 @@
 $pageTitle = 'Reports & Analytics';
 $activePage = 'reports';
 $bodyClass = 'admin-dashboard-body';
-require_once __DIR__ . '/../includes/admin-header.php';
+require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/admin-paths.php';
+require_once __DIR__ . '/../includes/paths.php';
 require_once __DIR__ . '/../database/Database.php';
 require_once __DIR__ . '/../app/services/FeedbackService.php';
 require_once __DIR__ . '/../app/services/AdminLogService.php';
+
+pickled_start_secure_session();
+if (empty($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
+    header('Location: admin-login.php');
+    exit;
+}
 
 pickled_init_csrf();
 
@@ -17,8 +24,23 @@ $adminName = $_SESSION['user']['name'] ?? 'Admin';
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
 $todayLabel = $today->format('M j, Y (D)');
-$rangeStart = $today->modify('-24 days')->format('M j');
-$rangeEnd = $today->format('M j, Y');
+$defaultStart = $today->modify('-24 days')->format('Y-m-d');
+$defaultEnd = $today->format('Y-m-d');
+$dateFrom = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($_GET['date_from'] ?? '')) ? (string) $_GET['date_from'] : $defaultStart;
+$dateTo = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($_GET['date_to'] ?? '')) ? (string) $_GET['date_to'] : $defaultEnd;
+if (strtotime($dateFrom) === false) {
+    $dateFrom = $defaultStart;
+}
+if (strtotime($dateTo) === false) {
+    $dateTo = $defaultEnd;
+}
+if (strtotime($dateFrom) > strtotime($dateTo)) {
+    [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+}
+$rangeStart = date('M j', strtotime($dateFrom));
+$rangeEnd = date('M j, Y', strtotime($dateTo));
+$reportParams = ['date_from' => $dateFrom, 'date_to' => $dateTo];
+$reportDateClause = 'bi.booking_date BETWEEN :date_from AND :date_to';
 $feedbackRatingFilter = isset($_GET['feedback_rating']) && $_GET['feedback_rating'] !== '' ? (int) $_GET['feedback_rating'] : null;
 $feedbackSearch = trim((string) ($_GET['feedback_q'] ?? ''));
 $logActionFilter = trim((string) ($_GET['log_action'] ?? ''));
@@ -77,26 +99,63 @@ function reports_log_label(string $value): string {
     return ucwords(str_replace(['_', '-'], ' ', $value));
 }
 
-function reports_program_metric(?PDO $pdo, string $where, array $params): array {
-    if (!$pdo) {
-        return ['bookings' => 0, 'revenue' => 0.0];
+function reports_csv_download(string $filename, array $sections): void {
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    $out = fopen('php://output', 'wb');
+    fwrite($out, "\xEF\xBB\xBF");
+    foreach ($sections as $section) {
+        fputcsv($out, [$section['title']]);
+        foreach ($section['rows'] as $row) {
+            fputcsv($out, $row);
+        }
+        fputcsv($out, []);
     }
+    fclose($out);
+    exit;
+}
 
-    $row = reports_rows($pdo, "
-        SELECT COALESCE(SUM(bi.quantity), 0) AS bookings,
-               COALESCE(SUM(bi.quantity * bi.unit_price), 0) AS revenue
-        FROM booking_items bi
-        JOIN bookings b ON b.id = bi.booking_id
-        WHERE $where
-    ", $params)[0] ?? [];
-
-    $bookings = (int) ($row['bookings'] ?? 0);
-    $revenue = (float) ($row['revenue'] ?? 0);
-
-    return [
-        'bookings' => $bookings,
-        'revenue' => $revenue,
-    ];
+function reports_printable_report(array $report): void {
+    $logo = htmlspecialchars($report['logo'], ENT_QUOTES, 'UTF-8');
+    ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PICKLED Booking and Revenue Report</title>
+    <style>
+        body { margin: 0; background: #f3f4f6; color: #111827; font-family: Arial, sans-serif; }
+        .sheet { max-width: 1080px; margin: 28px auto; padding: 36px; background: #fff; border: 1px solid #d0d5dd; }
+        .print-actions { max-width: 1080px; margin: 18px auto 0; text-align: right; }
+        button { padding: 10px 16px; border: 1px solid #1f4d2b; background: #1f4d2b; color: #fff; border-radius: 4px; font-weight: 700; }
+        header { display: grid; grid-template-columns: 130px 1fr 130px; align-items: center; border-bottom: 2px solid #111827; padding-bottom: 18px; }
+        header img { max-width: 100px; }
+        h1 { margin: 0; text-align: center; font-size: 22px; text-transform: uppercase; }
+        h2 { margin: 28px 0 10px; font-size: 15px; text-transform: uppercase; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+        th, td { border: 1px solid #98a2b3; padding: 8px 10px; font-size: 12px; text-align: left; vertical-align: top; }
+        th { background: #f2f4f7; font-weight: 800; }
+        .summary td:first-child { width: 28%; font-weight: 800; background: #f9fafb; }
+        .footer { display: grid; grid-template-columns: 1fr 1fr; gap: 70px; margin-top: 42px; }
+        .line { border-top: 1px solid #111827; padding-top: 8px; font-size: 12px; text-align: center; }
+        @media print { body { background: #fff; } .sheet { margin: 0; max-width: none; border: 0; } .print-actions { display: none; } }
+    </style>
+</head>
+<body>
+    <div class="print-actions"><button type="button" onclick="window.print()">Print / Save as PDF</button></div>
+    <main class="sheet">
+        <header>
+            <img src="<?php echo $logo; ?>" alt="PICKLED">
+            <h1>PICKLED Booking and Revenue Report</h1>
+            <span></span>
+        </header>
+        <?php echo $report['html']; ?>
+    </main>
+</body>
+</html>
+    <?php
+    exit;
 }
 
 $icons = [
@@ -132,46 +191,56 @@ $dashboardNav = [
 ['type' => 'single', 'label' => 'Admin Profile', 'href' => 'admin-profile.php', 'key' => 'admin-profile', 'icon' => 'users'],
 ];
 
-$programs = [
-    'green' => [
-        'name' => 'Court Green Rental',
-        'short' => 'Court Green',
-        'tone' => 'green',
-        'icon' => 'target',
-        'metric' => reports_program_metric($pdo, "LOWER(bi.court) LIKE '%green%' AND (LOWER(bi.category) LIKE '%court%' OR LOWER(bi.name) LIKE '%rental%')", []),
-        'trend' => [18, 34, 24, 39, 28, 44, 36, 48, 43],
-    ],
-    'pink' => [
-        'name' => 'Court Pink Rental',
-        'short' => 'Court Pink',
-        'tone' => 'pink',
-        'icon' => 'tag',
-        'metric' => reports_program_metric($pdo, "LOWER(bi.court) LIKE '%pink%' AND (LOWER(bi.category) LIKE '%court%' OR LOWER(bi.name) LIKE '%rental%')", []),
-        'trend' => [20, 42, 25, 36, 22, 40, 30, 45, 38],
-    ],
-    'social' => [
-        'name' => 'Social Play',
-        'short' => 'Social Play',
-        'tone' => 'orange',
-        'icon' => 'users',
-        'metric' => reports_program_metric($pdo, "LOWER(bi.category) LIKE '%social%' OR LOWER(bi.name) LIKE '%match%' OR LOWER(bi.name) LIKE '%tournament%'", []),
-        'trend' => [16, 28, 21, 34, 24, 42, 22, 35, 44],
-    ],
-    'private' => [
-        'name' => 'Private Packages',
-        'short' => 'Private Packages',
-        'tone' => 'purple',
-        'icon' => 'trophy',
-        'metric' => reports_program_metric($pdo, "LOWER(bi.category) LIKE '%private%' OR LOWER(bi.name) LIKE '%private%'", []),
-        'trend' => [12, 32, 43, 24, 35, 20, 30, 22, 36],
-    ],
-];
+$programPerformance = reports_rows($pdo, "
+    SELECT COALESCE(NULLIF(TRIM(bi.name), ''), 'Unspecified Program') AS program_name,
+           COALESCE(NULLIF(TRIM(bi.category), ''), 'Uncategorized') AS category_name,
+           COALESCE(SUM(bi.quantity), 0) AS bookings,
+           COUNT(DISTINCT b.id) AS booking_records,
+           COALESCE(SUM(bi.quantity * bi.unit_price), 0) AS revenue
+    FROM booking_items bi
+    JOIN bookings b ON b.id = bi.booking_id
+    WHERE $reportDateClause
+      AND LOWER(COALESCE(b.status, '')) NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+    GROUP BY COALESCE(NULLIF(TRIM(bi.name), ''), 'Unspecified Program'),
+             COALESCE(NULLIF(TRIM(bi.category), ''), 'Uncategorized')
+    ORDER BY revenue DESC, bookings DESC, program_name ASC
+", $reportParams);
 
-$totalBookings = array_sum(array_map(fn($program) => (int) $program['metric']['bookings'], $programs));
-$totalRevenue = array_sum(array_map(fn($program) => (float) $program['metric']['revenue'], $programs));
-$activePlayers = (int) reports_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = 'player'", [], 0);
-$activeCoaches = (int) reports_scalar($pdo, "SELECT COUNT(*) FROM users WHERE role = 'coach'", [], 0);
-$platformFeedbackStats = $feedbackService->platformStats();
+$totalBookings = (int) reports_scalar($pdo, "
+    SELECT COUNT(DISTINCT b.id)
+    FROM bookings b
+    JOIN booking_items bi ON bi.booking_id = b.id
+    WHERE $reportDateClause
+      AND LOWER(COALESCE(b.status, '')) NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+", $reportParams, 0);
+$totalRevenue = (float) reports_scalar($pdo, "
+    SELECT COALESCE(SUM(bi.quantity * bi.unit_price), 0)
+    FROM booking_items bi
+    JOIN bookings b ON b.id = bi.booking_id
+    WHERE $reportDateClause
+      AND LOWER(COALESCE(b.status, '')) NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+", $reportParams, 0);
+$activePlayers = (int) reports_scalar($pdo, "
+    SELECT COUNT(DISTINCT b.user_id)
+    FROM bookings b
+    JOIN booking_items bi ON bi.booking_id = b.id
+    WHERE $reportDateClause
+      AND LOWER(COALESCE(b.status, '')) NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+", $reportParams, 0);
+$activeCoaches = (int) reports_scalar($pdo, "
+    SELECT COUNT(DISTINCT COALESCE(bi.coach_user_id, s.coach_user_id))
+    FROM booking_items bi
+    JOIN bookings b ON b.id = bi.booking_id
+    LEFT JOIN sessions s ON s.id = bi.session_id
+    WHERE $reportDateClause
+      AND COALESCE(bi.coach_user_id, s.coach_user_id) IS NOT NULL
+      AND LOWER(COALESCE(b.status, '')) NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+", $reportParams, 0);
+$platformFeedbackStats = reports_rows($pdo, "
+    SELECT COUNT(*) AS total_reviews, COALESCE(AVG(rating), 0) AS average_rating
+    FROM feedback
+    WHERE DATE(created_at) BETWEEN :date_from AND :date_to
+", $reportParams)[0] ?? ['total_reviews' => 0, 'average_rating' => 0];
 $coachFeedbackSummary = $feedbackService->coachSummary();
 $feedbackRows = $feedbackService->allFeedback($feedbackRatingFilter, $feedbackSearch, 80);
 $adminLogFilters = [];
@@ -196,26 +265,58 @@ try {
     error_log('Admin log report failed: ' . $e->getMessage());
 }
 
-$popularServices = [
-    ['name' => 'Court Green Rental', 'bookings' => (int) $programs['green']['metric']['bookings'], 'tone' => 'green', 'icon' => 'target'],
-    ['name' => 'Court Pink Rental', 'bookings' => (int) $programs['pink']['metric']['bookings'], 'tone' => 'pink', 'icon' => 'tag'],
-    ['name' => 'Open Match-Play', 'bookings' => (int) round($programs['social']['metric']['bookings'] * .6), 'tone' => 'orange', 'icon' => 'users'],
-    ['name' => 'Weekly Tournament', 'bookings' => (int) round($programs['social']['metric']['bookings'] * .4), 'tone' => 'purple', 'icon' => 'trophy'],
-];
-$popularServices = array_values(array_filter($popularServices, static fn(array $service): bool => (int) $service['bookings'] > 0));
-usort($popularServices, fn($a, $b) => $b['bookings'] <=> $a['bookings']);
+$popularServices = array_slice(array_values(array_filter($programPerformance, static fn(array $service): bool => (int) $service['bookings'] > 0)), 0, 5);
 $popularTotal = max(1, array_sum(array_column($popularServices, 'bookings')));
+
+$paymentSummary = reports_rows($pdo, "
+    SELECT COALESCE(p.status, b.payment_status, 'pending') AS status,
+           COUNT(DISTINCT b.id) AS bookings,
+           COALESCE(SUM(b.total), 0) AS amount
+    FROM bookings b
+    LEFT JOIN payments p ON p.id = (
+        SELECT p2.id FROM payments p2
+        WHERE p2.booking_id = b.id
+        ORDER BY p2.created_at DESC, p2.id DESC
+        LIMIT 1
+    )
+    WHERE EXISTS (
+        SELECT 1 FROM booking_items bi
+        WHERE bi.booking_id = b.id
+          AND bi.booking_date BETWEEN :date_from AND :date_to
+    )
+    GROUP BY COALESCE(p.status, b.payment_status, 'pending')
+    ORDER BY bookings DESC, status ASC
+", $reportParams);
+
+$bookingStatusSummary = reports_rows($pdo, "
+    SELECT COALESCE(b.status, 'pending') AS status,
+           COUNT(DISTINCT b.id) AS bookings,
+           COALESCE(SUM(b.total), 0) AS amount
+    FROM bookings b
+    WHERE EXISTS (
+        SELECT 1 FROM booking_items bi
+        WHERE bi.booking_id = b.id
+          AND bi.booking_date BETWEEN :date_from AND :date_to
+    )
+    GROUP BY COALESCE(b.status, 'pending')
+    ORDER BY bookings DESC, status ASC
+", $reportParams);
+
+$revenueByProgram = $programPerformance;
+usort($revenueByProgram, static fn(array $a, array $b): int => ((float) $b['revenue'] <=> (float) $a['revenue']) ?: ((int) $b['bookings'] <=> (int) $a['bookings']));
 
 $recentBookings = reports_rows($pdo, "
     SELECT b.reference, b.status, b.payment_status, b.total, b.created_at, u.name AS user_name,
-           GROUP_CONCAT(DISTINCT bi.name ORDER BY bi.id SEPARATOR ', ') AS program_names
+           GROUP_CONCAT(DISTINCT bi.name ORDER BY bi.id SEPARATOR ', ') AS program_names,
+           MIN(bi.booking_date) AS booking_date
     FROM bookings b
     LEFT JOIN users u ON u.id = b.user_id
-    LEFT JOIN booking_items bi ON bi.booking_id = b.id
+    JOIN booking_items bi ON bi.booking_id = b.id
+    WHERE $reportDateClause
     GROUP BY b.id
-    ORDER BY b.created_at DESC
-    LIMIT 5
-");
+    ORDER BY MIN(bi.booking_date) DESC, b.created_at DESC
+    LIMIT 10
+", $reportParams);
 
 $activityFeed = [];
 foreach ($recentBookings as $booking) {
@@ -226,9 +327,80 @@ foreach ($recentBookings as $booking) {
         'time' => date('M j, Y - g:i A', strtotime($booking['created_at'] ?? 'now')),
         'badge' => pickled_booking_status_label($booking['status'] ?? 'New Booking'),
         'tone' => reports_status_key(($booking['status'] ?? '') . ' ' . ($booking['payment_status'] ?? '')),
-        'icon' => 'calendar',
     ];
 }
+
+$exportParams = ['date_from' => $dateFrom, 'date_to' => $dateTo];
+$pdfExportUrl = pickled_admin_url('reports.php?' . http_build_query($exportParams + ['export' => 'pdf']));
+$excelExportUrl = pickled_admin_url('reports.php?' . http_build_query($exportParams + ['export' => 'excel']));
+
+ob_start();
+?>
+<table class="summary">
+    <tr><td>Prepared by</td><td><?php echo htmlspecialchars($adminName); ?></td><td>Date generated</td><td><?php echo htmlspecialchars($today->format('F j, Y g:i A')); ?></td></tr>
+    <tr><td>Coverage period</td><td><?php echo htmlspecialchars($rangeStart . ' - ' . $rangeEnd); ?></td><td>Total bookings</td><td><?php echo number_format($totalBookings); ?></td></tr>
+    <tr><td>Total revenue</td><td>PHP <?php echo number_format($totalRevenue, 2); ?></td><td>Active players</td><td><?php echo number_format($activePlayers); ?></td></tr>
+    <tr><td>Active coaches</td><td><?php echo number_format($activeCoaches); ?></td><td>Average rating</td><td><?php echo number_format((float) $platformFeedbackStats['average_rating'], 1); ?> / 5</td></tr>
+</table>
+<h2>Payment Summary</h2>
+<table><thead><tr><th>Status</th><th>Total Bookings</th><th>Total Amount</th></tr></thead><tbody>
+<?php foreach ($paymentSummary as $row): ?><tr><td><?php echo htmlspecialchars(reports_log_label((string) $row['status'])); ?></td><td><?php echo number_format((int) $row['bookings']); ?></td><td>PHP <?php echo number_format((float) $row['amount'], 2); ?></td></tr><?php endforeach; ?>
+<?php if (!$paymentSummary): ?><tr><td colspan="3">No payment records for this period.</td></tr><?php endif; ?>
+</tbody></table>
+<h2>Booking Status Summary</h2>
+<table><thead><tr><th>Status</th><th>Total Bookings</th><th>Total Amount</th></tr></thead><tbody>
+<?php foreach ($bookingStatusSummary as $row): ?><tr><td><?php echo htmlspecialchars(reports_log_label((string) $row['status'])); ?></td><td><?php echo number_format((int) $row['bookings']); ?></td><td>PHP <?php echo number_format((float) $row['amount'], 2); ?></td></tr><?php endforeach; ?>
+<?php if (!$bookingStatusSummary): ?><tr><td colspan="3">No booking records for this period.</td></tr><?php endif; ?>
+</tbody></table>
+<h2>Program / Service Performance</h2>
+<table><thead><tr><th>Program / Service</th><th>Category</th><th>Bookings</th><th>Revenue</th><th>Average Revenue</th></tr></thead><tbody>
+<?php foreach ($programPerformance as $row): $avg = (int) $row['bookings'] > 0 ? (float) $row['revenue'] / (int) $row['bookings'] : 0; ?><tr><td><?php echo htmlspecialchars((string) $row['program_name']); ?></td><td><?php echo htmlspecialchars((string) $row['category_name']); ?></td><td><?php echo number_format((int) $row['bookings']); ?></td><td>PHP <?php echo number_format((float) $row['revenue'], 2); ?></td><td>PHP <?php echo number_format($avg, 2); ?></td></tr><?php endforeach; ?>
+<?php if (!$programPerformance): ?><tr><td colspan="5">No program data for this period.</td></tr><?php endif; ?>
+<tr><th colspan="2">Totals</th><th><?php echo number_format(array_sum(array_map('intval', array_column($programPerformance, 'bookings')))); ?></th><th>PHP <?php echo number_format($totalRevenue, 2); ?></th><th></th></tr>
+</tbody></table>
+<h2>Revenue by Program</h2>
+<table><thead><tr><th>Program / Service</th><th>Revenue</th><th>Share</th></tr></thead><tbody>
+<?php foreach ($revenueByProgram as $row): $share = $totalRevenue > 0 ? ((float) $row['revenue'] / $totalRevenue) * 100 : 0; ?><tr><td><?php echo htmlspecialchars((string) $row['program_name']); ?></td><td>PHP <?php echo number_format((float) $row['revenue'], 2); ?></td><td><?php echo number_format($share, 1); ?>%</td></tr><?php endforeach; ?>
+<?php if (!$revenueByProgram): ?><tr><td colspan="3">No revenue data for this period.</td></tr><?php endif; ?>
+</tbody></table>
+<h2>Top Booked Services</h2>
+<table><thead><tr><th>Rank</th><th>Service</th><th>Bookings</th><th>Revenue</th></tr></thead><tbody>
+<?php foreach ($popularServices as $index => $row): ?><tr><td><?php echo $index + 1; ?></td><td><?php echo htmlspecialchars((string) $row['program_name']); ?></td><td><?php echo number_format((int) $row['bookings']); ?></td><td>PHP <?php echo number_format((float) $row['revenue'], 2); ?></td></tr><?php endforeach; ?>
+<?php if (!$popularServices): ?><tr><td colspan="4">No top services for this period.</td></tr><?php endif; ?>
+</tbody></table>
+<h2>Feedback / Rating Summary</h2>
+<table><thead><tr><th>Total Reviews</th><th>Average Rating</th></tr></thead><tbody><tr><td><?php echo number_format((int) $platformFeedbackStats['total_reviews']); ?></td><td><?php echo number_format((float) $platformFeedbackStats['average_rating'], 1); ?> / 5</td></tr></tbody></table>
+<div class="footer"><div class="line">Prepared by: <?php echo htmlspecialchars($adminName); ?></div><div class="line">Checked by</div></div>
+<?php
+$crystalReportHtml = ob_get_clean();
+
+if (($_GET['export'] ?? '') === 'excel') {
+    $sections = [
+        ['title' => 'PICKLED Booking and Revenue Report', 'rows' => [
+            ['Prepared by', $adminName],
+            ['Date generated', $today->format('Y-m-d H:i:s')],
+            ['Coverage period', $dateFrom . ' to ' . $dateTo],
+            ['Total bookings', $totalBookings],
+            ['Total revenue', number_format($totalRevenue, 2, '.', '')],
+            ['Active players', $activePlayers],
+            ['Active coaches', $activeCoaches],
+        ]],
+        ['title' => 'Payment Summary', 'rows' => array_merge([['Status', 'Bookings', 'Amount']], array_map(static fn(array $row): array => [(string) $row['status'], (int) $row['bookings'], number_format((float) $row['amount'], 2, '.', '')], $paymentSummary))],
+        ['title' => 'Booking Status Summary', 'rows' => array_merge([['Status', 'Bookings', 'Amount']], array_map(static fn(array $row): array => [(string) $row['status'], (int) $row['bookings'], number_format((float) $row['amount'], 2, '.', '')], $bookingStatusSummary))],
+        ['title' => 'Program Performance', 'rows' => array_merge([['Program', 'Category', 'Bookings', 'Revenue']], array_map(static fn(array $row): array => [(string) $row['program_name'], (string) $row['category_name'], (int) $row['bookings'], number_format((float) $row['revenue'], 2, '.', '')], $programPerformance))],
+        ['title' => 'Feedback Summary', 'rows' => [['Total Reviews', 'Average Rating'], [(int) $platformFeedbackStats['total_reviews'], number_format((float) $platformFeedbackStats['average_rating'], 1, '.', '')]]],
+    ];
+    reports_csv_download('pickled-crystal-report-' . $dateFrom . '-to-' . $dateTo . '.csv', $sections);
+}
+
+if (($_GET['export'] ?? '') === 'pdf') {
+    reports_printable_report([
+        'logo' => pickled_asset_url('img/WM-DGreen.png'),
+        'html' => $crystalReportHtml,
+    ]);
+}
+
+require_once __DIR__ . '/../includes/admin-header.php';
 ?>
 
 <div class="admin-app-shell">
@@ -250,9 +422,13 @@ foreach ($recentBookings as $booking) {
             <div><h1>Reports &amp; Analytics</h1><p>Business overview and performance insights</p></div>
             <div class="admin-topbar-actions">
                 <button class="admin-date-pill reports-range" type="button"><?php echo reports_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($rangeStart . ' - ' . $rangeEnd); ?></span></button>
-                <button class="bookings-button ghost" type="button"><?php echo reports_icon($icons, 'filter'); ?> Filter</button>
-                <button class="bookings-button ghost reports-export" type="button"><?php echo reports_icon($icons, 'download'); ?> Export PDF</button>
-                <button class="bookings-button primary reports-export" type="button"><?php echo reports_icon($icons, 'download'); ?> Export Excel</button>
+                <form class="reports-filter-form" method="get">
+                    <label><span>From</span><input type="date" name="date_from" value="<?php echo htmlspecialchars($dateFrom); ?>"></label>
+                    <label><span>To</span><input type="date" name="date_to" value="<?php echo htmlspecialchars($dateTo); ?>"></label>
+                    <button class="bookings-button ghost" type="submit">Filter</button>
+                </form>
+                <a class="bookings-button ghost reports-export" href="<?php echo htmlspecialchars($pdfExportUrl); ?>">Export PDF</a>
+                <a class="bookings-button primary reports-export" href="<?php echo htmlspecialchars($excelExportUrl); ?>">Export Excel</a>
                 <a class="admin-notification" href="<?php echo pickled_admin_url('notifications.php'); ?>" aria-label="Notifications"><?php echo reports_icon($icons, 'bell'); ?>
                 </a>
                 <?php echo pickled_admin_account_menu($adminName, $logoutCsrf, 'topbar'); ?>
@@ -260,20 +436,20 @@ foreach ($recentBookings as $booking) {
         </header>
 
         <section class="reports-kpi-grid" aria-label="Reports summary metrics">
-            <article class="reports-kpi-card report-green"><div><?php echo reports_icon($icons, 'calendar'); ?></div><span>Total Bookings</span><strong><?php echo number_format($totalBookings); ?></strong><small><?php echo $totalBookings > 0 ? 'Based on confirmed booking records' : 'No bookings yet'; ?></small></article>
-            <article class="reports-kpi-card report-pink"><div><?php echo reports_icon($icons, 'peso'); ?></div><span>Total Revenue</span><strong>₱<?php echo number_format($totalRevenue, 0); ?></strong><small><?php echo $totalRevenue > 0 ? 'From recorded booking items' : 'No revenue yet'; ?></small></article>
-            <article class="reports-kpi-card report-orange"><div><?php echo reports_icon($icons, 'users'); ?></div><span>Active Players</span><strong><?php echo number_format($activePlayers); ?></strong><small>Registered player accounts</small></article>
-            <article class="reports-kpi-card report-purple"><div><?php echo reports_icon($icons, 'shield'); ?></div><span>Active Coaches</span><strong><?php echo number_format($activeCoaches); ?></strong><small>No change</small></article>
-            <article class="reports-kpi-card report-green"><div><?php echo reports_icon($icons, 'star'); ?></div><span>Platform Rating</span><strong><?php echo number_format((float) $platformFeedbackStats['average_rating'], 1); ?></strong><small><?php echo number_format((int) $platformFeedbackStats['total_reviews']); ?> reviews</small></article>
+            <article class="reports-kpi-card"><span>Total Bookings</span><strong><?php echo number_format($totalBookings); ?></strong><small><?php echo $totalBookings > 0 ? 'Bookings within selected period' : 'No bookings yet'; ?></small></article>
+            <article class="reports-kpi-card"><span>Total Revenue</span><strong>₱<?php echo number_format($totalRevenue, 0); ?></strong><small><?php echo $totalRevenue > 0 ? 'Recorded booking item revenue' : 'No revenue yet'; ?></small></article>
+            <article class="reports-kpi-card"><span>Active Players</span><strong><?php echo number_format($activePlayers); ?></strong><small>Players with bookings in this period</small></article>
+            <article class="reports-kpi-card"><span>Active Coaches</span><strong><?php echo number_format($activeCoaches); ?></strong><small>Coaches assigned in this period</small></article>
+            <article class="reports-kpi-card"><span>Platform Rating</span><strong><?php echo number_format((float) $platformFeedbackStats['average_rating'], 1); ?></strong><small><?php echo number_format((int) $platformFeedbackStats['total_reviews']); ?> reviews in range</small></article>
         </section>
 
         <section class="reports-insights-grid">
             <article class="reports-panel popular-panel">
-                <header><h2><?php echo reports_icon($icons, 'trophy'); ?> Most Popular Services</h2></header>
+                <header><h2>Most Popular Services</h2></header>
                 <div class="popular-service-list">
                     <?php foreach ($popularServices as $index => $service): ?>
                         <?php $pct = (int) round(($service['bookings'] / $popularTotal) * 100); ?>
-                        <article class="popular-service-item report-<?php echo $service['tone']; ?>"><b><?php echo $index + 1; ?></b><span><?php echo reports_icon($icons, $service['icon']); ?></span><div><strong><?php echo htmlspecialchars($service['name']); ?></strong><small><?php echo number_format($service['bookings']); ?> bookings</small></div><em><?php echo $pct; ?>%</em></article>
+                        <article class="popular-service-item"><b><?php echo $index + 1; ?></b><div><strong><?php echo htmlspecialchars($service['program_name']); ?></strong><small><?php echo number_format((int) $service['bookings']); ?> bookings · ₱<?php echo number_format((float) $service['revenue'], 0); ?></small></div><em><?php echo $pct; ?>%</em></article>
                     <?php endforeach; ?>
                     <?php if (!$popularServices): ?>
                         <p class="reports-empty-state">No booking activity yet. Popular services will appear after customers complete bookings.</p>
@@ -282,14 +458,13 @@ foreach ($recentBookings as $booking) {
             </article>
 
             <article class="reports-panel revenue-panel">
-                <header><h2>Revenue by Program</h2><button type="button">View details</button></header>
+                <header><h2>Revenue by Program</h2></header>
                 <?php if ($totalRevenue > 0): ?>
                     <div class="revenue-breakdown">
-                        <div class="reports-donut" aria-hidden="true"></div>
                         <div class="revenue-list">
-                            <?php foreach ($programs as $program): ?>
-                                <?php $pct = (int) round(((float) $program['metric']['revenue'] / $totalRevenue) * 100); ?>
-                                <article class="revenue-item report-<?php echo $program['tone']; ?>"><span></span><strong><?php echo htmlspecialchars($program['short']); ?></strong><i><b style="width: <?php echo min(100, $pct); ?>%"></b></i><em>₱<?php echo number_format((float) $program['metric']['revenue'], 0); ?></em><small><?php echo $pct; ?>%</small></article>
+                            <?php foreach (array_slice($revenueByProgram, 0, 6) as $program): ?>
+                                <?php $pct = (int) round(((float) $program['revenue'] / $totalRevenue) * 100); ?>
+                                <article class="revenue-item"><strong><?php echo htmlspecialchars((string) $program['program_name']); ?></strong><i><b style="width: <?php echo min(100, $pct); ?>%"></b></i><em>₱<?php echo number_format((float) $program['revenue'], 0); ?></em><small><?php echo $pct; ?>%</small></article>
                             <?php endforeach; ?>
                         </div>
                     </div>
@@ -299,15 +474,15 @@ foreach ($recentBookings as $booking) {
             </article>
         </section>
 
-        <section class="reports-bottom-grid">
+        <section class="reports-bottom-grid reports-report-tables-grid">
             <article class="reports-panel performance-panel">
                 <header><h2>Program Performance</h2></header>
                 <?php if ($totalBookings > 0): ?>
                     <div class="program-performance-table">
-                        <div class="program-row head"><span>Program</span><span>Bookings</span><span>Revenue</span><span>Avg. Revenue / Booking</span><span>Trend</span></div>
-                        <?php foreach ($programs as $program): ?>
-                            <?php $avg = (int) $program['metric']['bookings'] > 0 ? ((float) $program['metric']['revenue'] / (int) $program['metric']['bookings']) : 0; ?>
-                            <div class="program-row report-<?php echo $program['tone']; ?>"><span><i><?php echo reports_icon($icons, $program['icon']); ?></i><?php echo htmlspecialchars($program['name']); ?></span><span><?php echo number_format((int) $program['metric']['bookings']); ?></span><span>₱<?php echo number_format((float) $program['metric']['revenue'], 0); ?></span><span>₱<?php echo number_format($avg, 0); ?></span><span><svg class="trend-line" viewBox="0 0 120 52" aria-hidden="true"><?php $points = []; foreach ($program['trend'] as $pointIndex => $value) { $points[] = ($pointIndex * 15) . ',' . (52 - $value); } ?><polyline points="<?php echo implode(' ', $points); ?>"/></svg></span></div>
+                        <div class="program-row head"><span>Program</span><span>Bookings</span><span>Revenue</span><span>Avg. Revenue / Booking</span><span>Share</span></div>
+                        <?php foreach ($programPerformance as $program): ?>
+                            <?php $avg = (int) $program['bookings'] > 0 ? ((float) $program['revenue'] / (int) $program['bookings']) : 0; $share = $totalRevenue > 0 ? ((float) $program['revenue'] / $totalRevenue) * 100 : 0; ?>
+                            <div class="program-row"><span><?php echo htmlspecialchars((string) $program['program_name']); ?></span><span><?php echo number_format((int) $program['bookings']); ?></span><span>₱<?php echo number_format((float) $program['revenue'], 0); ?></span><span>₱<?php echo number_format($avg, 0); ?></span><span><?php echo number_format($share, 1); ?>%</span></div>
                         <?php endforeach; ?>
                         <div class="program-row total"><span>Total</span><span><?php echo number_format($totalBookings); ?></span><span>₱<?php echo number_format($totalRevenue, 0); ?></span><span>₱<?php echo number_format($totalRevenue / $totalBookings, 0); ?></span><span></span></div>
                     </div>
@@ -317,21 +492,21 @@ foreach ($recentBookings as $booking) {
             </article>
 
             <article class="reports-panel report-export-panel">
-                <header><h2>Report Tables</h2><div><button type="button">PDF</button><button type="button">Excel</button></div></header>
+                <header><h2>Report Tables</h2><div><a href="<?php echo htmlspecialchars($pdfExportUrl); ?>">PDF</a><a href="<?php echo htmlspecialchars($excelExportUrl); ?>">Excel</a></div></header>
                 <section class="crystal-report-list">
                     <article>
                         <h3>Booking Report</h3>
                         <div class="mini-report-table"><span>Date</span><span>Reference</span><span>Player</span><span>Program</span><span>Amount</span><span>Status</span></div>
-                    <?php foreach (array_slice($recentBookings, 0, 3) as $booking): ?>
-                        <div class="mini-report-table"><span><?php echo date('M j, Y', strtotime($booking['created_at'] ?? 'now')); ?></span><span><?php echo htmlspecialchars($booking['reference'] ?? '-'); ?></span><span><?php echo htmlspecialchars($booking['user_name'] ?? 'Guest'); ?></span><span><?php echo htmlspecialchars($booking['program_names'] ?? 'Court Rental'); ?></span><span>₱<?php echo number_format((float) ($booking['total'] ?? 0), 0); ?></span><span><?php echo htmlspecialchars(pickled_booking_status_label($booking['status'] ?? 'pending')); ?></span></div>
+                    <?php foreach ($recentBookings as $booking): ?>
+                        <div class="mini-report-table"><span><?php echo date('M j, Y', strtotime($booking['booking_date'] ?? $booking['created_at'] ?? 'now')); ?></span><span><?php echo htmlspecialchars($booking['reference'] ?? '-'); ?></span><span><?php echo htmlspecialchars($booking['user_name'] ?? 'Guest'); ?></span><span><?php echo htmlspecialchars($booking['program_names'] ?? 'Court Rental'); ?></span><span>₱<?php echo number_format((float) ($booking['total'] ?? 0), 0); ?></span><span><?php echo htmlspecialchars(reports_log_label((string) ($booking['status'] ?? 'pending'))); ?></span></div>
                     <?php endforeach; ?>
                     <?php if (!$recentBookings): ?><p class="reports-empty-state">No booking report data yet.</p><?php endif; ?>
                     </article>
                     <article>
                         <h3>Revenue Report</h3>
-                        <div class="mini-report-table three"><span>Month</span><span>Revenue</span><span>Bookings</span><span>Average Revenue</span></div>
+                        <div class="mini-report-table three"><span>Period</span><span>Revenue</span><span>Bookings</span><span>Average Revenue</span></div>
                         <?php if ($totalBookings > 0): ?>
-                            <div class="mini-report-table three"><span><?php echo $today->format('F Y'); ?></span><span>₱<?php echo number_format($totalRevenue, 0); ?></span><span><?php echo number_format($totalBookings); ?></span><span>₱<?php echo number_format($totalRevenue / $totalBookings, 0); ?></span></div>
+                            <div class="mini-report-table three"><span><?php echo htmlspecialchars($rangeStart . ' - ' . $rangeEnd); ?></span><span>₱<?php echo number_format($totalRevenue, 0); ?></span><span><?php echo number_format($totalBookings); ?></span><span>₱<?php echo number_format($totalRevenue / $totalBookings, 0); ?></span></div>
                         <?php else: ?>
                             <p class="reports-empty-state">No revenue report data yet.</p>
                         <?php endif; ?>
@@ -339,9 +514,9 @@ foreach ($recentBookings as $booking) {
                     <article>
                         <h3>Program Report</h3>
                         <?php if ($totalBookings > 0): ?>
-                            <?php foreach ($programs as $program): ?>
-                                <?php $pct = (int) round(((int) $program['metric']['bookings'] / $totalBookings) * 100); ?>
-                                <div class="mini-report-table three"><span><?php echo htmlspecialchars($program['short']); ?></span><span><?php echo number_format((int) $program['metric']['bookings']); ?> bookings</span><span>₱<?php echo number_format((float) $program['metric']['revenue'], 0); ?></span><span><?php echo $pct; ?>%</span></div>
+                            <?php foreach ($programPerformance as $program): ?>
+                                <?php $pct = (int) round(((int) $program['bookings'] / max(1, array_sum(array_map('intval', array_column($programPerformance, 'bookings'))))) * 100); ?>
+                                <div class="mini-report-table three"><span><?php echo htmlspecialchars((string) $program['program_name']); ?></span><span><?php echo number_format((int) $program['bookings']); ?> bookings</span><span>₱<?php echo number_format((float) $program['revenue'], 0); ?></span><span><?php echo $pct; ?>%</span></div>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <p class="reports-empty-state">No program report data yet.</p>
@@ -351,14 +526,28 @@ foreach ($recentBookings as $booking) {
             </article>
         </section>
 
+        <section class="crystal-report-section" id="crystal-report">
+            <div class="crystal-report-toolbar">
+                <div><h2>Crystal Report</h2><p>Formal printable booking and revenue report for the selected coverage period.</p></div>
+                <div><a class="bookings-button ghost reports-export" href="<?php echo htmlspecialchars($pdfExportUrl); ?>">Export PDF</a><a class="bookings-button primary reports-export" href="<?php echo htmlspecialchars($excelExportUrl); ?>">Export Excel</a></div>
+            </div>
+            <article class="crystal-report-sheet">
+                <header class="crystal-report-header">
+                    <img src="<?php echo reports_asset('img/WM-DGreen.png'); ?>" alt="PICKLED">
+                    <div><h2>PICKLED Booking and Revenue Report</h2><p>Coverage Period: <?php echo htmlspecialchars($rangeStart . ' - ' . $rangeEnd); ?></p><p>Generated: <?php echo htmlspecialchars($today->format('F j, Y g:i A')); ?></p></div>
+                </header>
+                <?php echo $crystalReportHtml; ?>
+            </article>
+        </section>
+
         <section class="reports-bottom-grid" id="feedback">
             <article class="reports-panel performance-panel">
-                <header><h2><?php echo reports_icon($icons, 'star'); ?> Coach Ratings Summary</h2></header>
+                <header><h2>Coach Ratings Summary</h2></header>
                 <div class="program-performance-table">
-                    <div class="program-row head"><span>Coach</span><span>Email</span><span>Average Rating</span><span>Total Reviews</span><span>Trend</span></div>
+                    <div class="program-row head"><span>Coach</span><span>Email</span><span>Average Rating</span><span>Total Reviews</span><span>Status</span></div>
                     <?php foreach ($coachFeedbackSummary as $coachRow): ?>
-                        <div class="program-row report-green">
-                            <span><?php echo reports_icon($icons, 'user'); ?><?php echo htmlspecialchars($coachRow['coach_name'] ?? 'Coach'); ?></span>
+                        <div class="program-row">
+                            <span><?php echo htmlspecialchars($coachRow['coach_name'] ?? 'Coach'); ?></span>
                             <span><?php echo htmlspecialchars($coachRow['coach_email'] ?? '-'); ?></span>
                             <span><?php echo number_format((float) ($coachRow['average_rating'] ?? 0), 1); ?> / 5</span>
                             <span><?php echo number_format((int) ($coachRow['total_reviews'] ?? 0)); ?></span>
@@ -406,7 +595,7 @@ foreach ($recentBookings as $booking) {
 
         <section class="reports-bottom-grid" id="activity-logs">
             <article class="reports-panel performance-panel">
-                <header><h2><?php echo reports_icon($icons, 'shield'); ?> Activity Logs</h2></header>
+                <header><h2>Activity Logs</h2></header>
                 <form class="booking-filter-bar" method="get">
                     <input type="hidden" name="logs_section" value="1">
                     <select name="log_action">

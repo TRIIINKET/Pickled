@@ -18,14 +18,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? null)) {
         $message = 'Invalid request. Please refresh and try again.';
     } else {
-        $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
+        try {
+            $email = validateEmail($_POST['email'] ?? '');
+        } catch (RuntimeException) {
+            $email = '';
+        }
         $_SESSION['password_reset_otp'] = [
             'email' => strtolower((string) ($email ?: ($_POST['email'] ?? ''))),
             'user_id' => 0,
             'attempts' => 0,
         ];
 
-        if ($email) {
+        if ($email !== '') {
             try {
                 $issued = (new AuthService())->issuePasswordResetOtp($email);
                 if ($issued) {
@@ -68,7 +72,7 @@ include $frontendPath . '/includes/header.php';
       <div class="login-form-field">
         <label for="resetEmail">Email</label>
         <span class="login-field">
-          <input id="resetEmail" type="email" name="email" placeholder="Enter your email" autocomplete="email" required />
+          <input id="resetEmail" type="email" name="email" placeholder="Enter your email" autocomplete="email" maxlength="150" required />
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 6h16v12H4z"></path>
             <path d="m4 7 8 6 8-6"></path>

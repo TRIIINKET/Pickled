@@ -2,7 +2,9 @@
 
 This document defines the finalized database design for the PICKLED system. It reflects the current defended scope of the application: user authentication, player and coach account management, court and booking catalog management, scheduling, carts, bookings, payments, feedback, notifications, admin audit logs, and private session inquiries.
 
-The finalized scope intentionally excludes unsupported or out-of-scope entities such as generic events, content pages, media assets, waitlists, session attendance, session notes, and private events. Public content and images are handled as static/customizable assets, not database-managed records.
+The official ERD contains 18 core entities. Additional auxiliary implementation tables exist to support media management, reference code generation, and coach availability workflows. These tables are not counted as core ERD entities but are required for the working system.
+
+The finalized scope intentionally excludes unsupported or out-of-scope entities such as generic events, content pages, generic media asset libraries, waitlists, session attendance, session notes, and private events. Public content and images are primarily handled as static/customizable assets; the implementation may also use auxiliary support tables where needed for website operations.
 
 ## A. Final Entity Relationship Diagram
 
@@ -664,7 +666,21 @@ Important fields:
 | `status` | Inquiry status, such as new, contacted, confirmed, or closed. |
 | `created_at`, `updated_at` | Inquiry timestamps. |
 
-## C. Relationship and Cardinality Analysis
+## C. Auxiliary Implementation Support Tables
+
+The system has 18 core ERD entities. Additional auxiliary implementation tables exist to support media management, reference code generation, and coach availability workflows. These tables are not counted as core ERD entities but are required for the working system.
+
+These support tables must not be deleted or renamed because application features depend on them, but they remain outside the official 18-entity ERD count.
+
+| Auxiliary table | Purpose | ERD classification |
+| --- | --- | --- |
+| `court_media` | Stores uploaded court images, gallery images, and hero media used for website display. This supports court content management but is not part of the core booking transaction ERD. | Auxiliary support table for media/content management. |
+| `business_code_sequences` | Stores sequence counters used to generate business/reference codes such as booking references, payment references, user codes, session codes, or inquiry codes. This supports reference number generation but is not a core business entity. | Auxiliary support table for code generation. |
+| `coach_time_off_requests` | Stores coach time-off requests so coach availability can exclude unavailable dates. This supports scheduling operations and coach availability but is an auxiliary workflow table. | Auxiliary support table for coach availability workflow. |
+
+Note: Some UI or capstone documents may refer to `business_code_sequence` in singular form. The implemented database table is `business_code_sequences`.
+
+## D. Relationship and Cardinality Analysis
 
 ### Authentication and User Relationships
 
@@ -702,7 +718,7 @@ Important fields:
 - `private_packages` to `private_inquiries` is one-to-many. A package can receive multiple customer inquiries.
 - `users` to `private_inquiries` is one-to-many and optional. Guests can inquire without an account; logged-in users can be linked.
 
-## D. Scope Alignment
+## E. Scope Alignment
 
 This finalized design supports the defended PICKLED scope:
 
@@ -717,7 +733,7 @@ This finalized design supports the defended PICKLED scope:
 - Notifications through `notifications`.
 - Private Packages and inquiries through `private_packages` and `private_inquiries`.
 
-## E. Removed Out-of-Scope Entities
+## F. Removed Out-of-Scope Entities
 
 The following entities are intentionally not part of the finalized ERD:
 
@@ -731,7 +747,7 @@ The following entities are intentionally not part of the finalized ERD:
 | `session_notes` | Coach notes are not part of the finalized database scope. |
 | `private_events` | Private session demand is represented by packages and inquiries only. |
 
-## F. Referential Integrity Recommendations
+## G. Referential Integrity Recommendations
 
 - Use `ON DELETE CASCADE` for dependent rows that should not outlive their parent: `password_reset`, `cart_items`, and non-audit temporary records.
 - Use `ON DELETE RESTRICT` or soft deletes for `users`, `bookings`, `booking_items`, `payments`, `sessions`, `courts`, and `booking_variants` to preserve booking, payment, and audit history.
@@ -740,7 +756,7 @@ The following entities are intentionally not part of the finalized ERD:
 - `COACH_AVAILABILITY.coach_profile_id` references `COACH_PROFILES.id`.
 - `SESSIONS.availability_id` references `COACH_AVAILABILITY.id`.
 
-## G. Data Type and Constraint Recommendations
+## H. Data Type and Constraint Recommendations
 
 - Store session dates and times using `DATE` and `TIME` fields rather than display strings.
 - Keep snapshot fields in `booking_items` so historical booking receipts remain accurate even if service names, prices, or court labels change later.
@@ -748,7 +764,7 @@ The following entities are intentionally not part of the finalized ERD:
 - Add a constraint or application validation so `sessions.booked_count <= sessions.capacity`.
 - Standardize status values for bookings, payments, sessions, notifications, coach availability, and private inquiries.
 
-## H. Suggested Indexes
+## I. Suggested Indexes
 
 | Table | Suggested index | Purpose |
 | --- | --- | --- |
@@ -770,8 +786,8 @@ The following entities are intentionally not part of the finalized ERD:
 | `private_inquiries` | `inquiry_code` unique | Human-readable private inquiry lookup. |
 | `private_inquiries` | `(status, created_at)` | Admin private inquiry management. |
 
-## I. Defense Notes
+## J. Defense Notes
 
-This ERD is intentionally scoped to the operational database needs of PICKLED. It does not model every visual customization on the website because static page content, images, and purely decorative assets do not require database persistence. The final model prioritizes the core system workflows: account access, player and coach management, court/service scheduling, cart checkout, booking records, payment review, feedback, notifications, audit logging, and private package inquiries.
+This ERD is intentionally scoped to the operational database needs of PICKLED. It does not model every visual customization on the website because static page content and purely decorative assets do not require core ERD persistence. Court gallery uploads may be stored in `court_media` as an auxiliary implementation table, but that table is not counted as a core ERD entity. The final model prioritizes the core system workflows: account access, player and coach management, court/service scheduling, cart checkout, booking records, payment review, feedback, notifications, audit logging, and private package inquiries.
 
 Roles are handled by `users.role`. The finalized design does not add separate `admins`, `coaches`, or `players` tables; role-specific details are represented only where needed through optional profile tables.

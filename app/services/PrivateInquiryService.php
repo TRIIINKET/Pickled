@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/PrivateInquiryRepository.php';
 require_once __DIR__ . '/PrivatePackageService.php';
+require_once __DIR__ . '/../../includes/validation.php';
 
 final class PrivateInquiryService
 {
@@ -57,12 +58,12 @@ final class PrivateInquiryService
             throw new RuntimeException('Private inquiry was not found.');
         }
 
-        $response = trim($response);
+        $response = validateText($response, true, 1000);
         if ($response === '') {
             throw new RuntimeException('Admin response is required.');
         }
 
-        return $this->inquiries->respond($inquiryId, $this->status($status), substr($response, 0, 4000));
+        return $this->inquiries->respond($inquiryId, $this->status($status), $response);
     }
 
     public function setStatus(int $inquiryId, string $status, int $adminId): bool
@@ -77,12 +78,12 @@ final class PrivateInquiryService
 
     private function message(string $message): string
     {
-        $message = trim($message);
+        $message = validateText($message, true, 1000);
         if ($message === '') {
             throw new RuntimeException('Please include a message for the team.');
         }
 
-        return substr($message, 0, 4000);
+        return $message;
     }
 
     private function status(string $status): string

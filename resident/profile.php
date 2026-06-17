@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
 require_once __DIR__ . '/../includes/booking-system.php';
-require_once __DIR__ . '/../includes/upload-helper.php';
+require_once __DIR__ . '/../includes/avatar-helper.php';
 require_once __DIR__ . '/../database/Database.php';
 require_once __DIR__ . '/../includes/EmailVerification.php';
 
@@ -16,7 +16,7 @@ $basePath = '../';
 $csrfToken = pickled_csrf_token();
 $user = $_SESSION['user'] ?? [];
 $userId = (int) ($user['id'] ?? 0);
-$defaultAvatar = 'avatars/default.png';
+$defaultAvatar = pickled_avatar_default_path();
 $profile = [
   'phone' => '',
   'city' => '',
@@ -41,40 +41,8 @@ $provinceCities = [
   'Rizal' => ['Antipolo', 'Binangonan', 'Cainta', 'Rodriguez', 'San Mateo', 'Taytay'],
 ];
 
-function pickled_profile_avatar_url(string $avatar, string $defaultAvatar): string {
-  $avatar = trim($avatar);
-  if ($avatar === '' || $avatar === $defaultAvatar) {
-    return pickled_asset_url('img/nav-logo-lpink.png');
-  }
-
-  if (str_starts_with($avatar, 'assets/') || str_starts_with($avatar, 'uploads/')) {
-    return pickled_frontend_url($avatar);
-  }
-
-  return pickled_asset_url('uploads/' . ltrim($avatar, '/'));
-}
-
 function pickled_profile_valid_location(array $provinceCities, string $province, string $city): bool {
   return isset($provinceCities[$province]) && in_array($city, $provinceCities[$province], true);
-}
-
-function pickled_profile_store_avatar(array $file, int $userId): ?string {
-  if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-    return null;
-  }
-
-  return pickled_upload_file(
-    $file,
-    'uploads/avatars',
-    [
-      'jpg' => ['image/jpeg'],
-      'jpeg' => ['image/jpeg'],
-      'png' => ['image/png'],
-      'webp' => ['image/webp'],
-    ],
-    5 * 1024 * 1024,
-    'avatar_' . $userId
-  );
 }
 
 if ($userId > 0) {
@@ -146,12 +114,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $fieldErrors['profile'] = 'Please log in again before updating your profile.';
     }
 
-    if ($name === '') {
-      $fieldErrors['name'] = 'Full name is required.';
+    try {
+      $name = validateName($name);
+    } catch (RuntimeException $e) {
+      $fieldErrors['name'] = $e->getMessage();
     }
 
-    if (!preg_match('/^09\d{9}$/', $phone)) {
-      $fieldErrors['phone'] = 'Use an 11-digit Philippine mobile number, for example 09123456789.';
+    try {
+      $phone = validatePhonePH($phone);
+      $profile['phone'] = $phone;
+    } catch (RuntimeException $e) {
+      $fieldErrors['phone'] = $e->getMessage();
     }
 
     if (!pickled_profile_valid_location($provinceCities, $province, $city)) {
@@ -159,13 +132,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     try {
-      $newAvatar = pickled_profile_store_avatar($_FILES['avatar'] ?? [], $userId);
+      $newAvatar = pickled_store_avatar_upload($_FILES['avatar'] ?? [], $userId, 'player');
       if ($newAvatar !== null) {
         $profile['avatar'] = $newAvatar;
       }
     } catch (Throwable $e) {
       error_log('Profile avatar upload failed: ' . $e->getMessage());
-      $fieldErrors['avatar'] = 'Profile photo upload failed. Please try again.';
+      $fieldErrors['avatar'] = $e instanceof RuntimeException ? $e->getMessage() : 'Profile photo upload failed. Please try again.';
     }
 
     if ($fieldErrors) {
@@ -196,13 +169,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              province = VALUES(province),
              avatar = VALUES(avatar)'
         );
-        $stmt->execute([
+        $profileSaved = $stmt->execute([
           'user_id' => $userId,
           'phone' => $profile['phone'],
           'city' => $profile['city'],
           'province' => $profile['province'],
           'avatar' => $profile['avatar'],
         ]);
+        error_log('Avatar database update result: resident profile user_id=' . $userId . '; avatar=' . $profile['avatar'] . '; result=' . ($profileSaved ? 'success' : 'failed') . '; row_count=' . $stmt->rowCount());
 
         $pdo->commit();
 
@@ -229,8 +203,8 @@ $city = trim((string) ($profile['city'] ?? ''));
 $province = trim((string) ($profile['province'] ?? ''));
 $avatar = trim((string) ($profile['avatar'] ?? $defaultAvatar));
 $initial = strtoupper(substr($name !== '' ? $name : $email, 0, 1));
-$avatarUrl = pickled_profile_avatar_url($avatar, $defaultAvatar);
-$displayPhone = $phone !== '' ? $phone : 'Not added yet';
+$avatarUrl = pickled_avatar_url($avatar);
+$displayPhone = $phone !== '' ? formatPhonePH($phone) : 'Not added yet';
 $displayLocation = ($city !== '' && $province !== '') ? $city . ', ' . $province : 'Not added yet';
 
 $extraHead = '<link rel="stylesheet" href="../assets/css/player-profile.css?v=20260616a"/>';
@@ -245,7 +219,7 @@ include __DIR__ . '/../includes/header.php';
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M5 20a7 7 0 0 1 14 0"></path></svg>
         My Profile
       </a>
-      <a class="player-profile-nav__item" href="booking-details.php">
+      <a class="player-profile-nav__item" href="booking.php">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg>
         My Bookings
       </a>
@@ -354,7 +328,7 @@ include __DIR__ . '/../includes/header.php';
       <label class="player-profile-photo-input">
         <span>Profile Picture</span>
         <input id="avatarInput" type="file" name="avatar" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
-        <small>JPG, JPEG, PNG, or WEBP. Max 5MB.</small>
+        <small>JPG, JPEG, PNG, or WEBP. Max 2MB.</small>
         <?php if (isset($fieldErrors['avatar'])): ?><em><?= htmlspecialchars($fieldErrors['avatar']) ?></em><?php endif; ?>
       </label>
     </div>
@@ -362,7 +336,7 @@ include __DIR__ . '/../includes/header.php';
     <div class="player-profile-modal__grid">
       <label>
         <span>Full Name</span>
-        <input type="text" name="name" value="<?= htmlspecialchars($name) ?>" required />
+        <input type="text" name="name" value="<?= htmlspecialchars($name) ?>" minlength="2" maxlength="80" pattern="[A-Za-z][A-Za-z .'\-]*" title="Please enter a valid name." required />
         <?php if (isset($fieldErrors['name'])): ?><em><?= htmlspecialchars($fieldErrors['name']) ?></em><?php endif; ?>
       </label>
       <label>
@@ -388,8 +362,8 @@ include __DIR__ . '/../includes/header.php';
       </label>
       <label class="player-profile-modal__wide">
         <span>Phone Number</span>
-        <input id="phoneInput" type="tel" name="phone" value="<?= htmlspecialchars($phone) ?>" inputmode="numeric" maxlength="11" pattern="09[0-9]{9}" placeholder="09123456789" required />
-        <small>Numbers only. Use 11 digits starting with 09.</small>
+        <input id="phoneInput" type="tel" name="phone" value="<?= htmlspecialchars($phone) ?>" inputmode="tel" maxlength="13" pattern="(9[0-9]{9}|09[0-9]{9}|\+639[0-9]{9}|639[0-9]{9})" placeholder="09123456789" required />
+        <small>Use 9XXXXXXXXX, 09XXXXXXXXX, or +639XXXXXXXXX.</small>
         <?php if (isset($fieldErrors['phone'])): ?><em><?= htmlspecialchars($fieldErrors['phone']) ?></em><?php endif; ?>
       </label>
     </div>
@@ -434,17 +408,17 @@ include __DIR__ . '/../includes/header.php';
   syncCities();
 
   phoneInput?.addEventListener('input', () => {
-    phoneInput.value = phoneInput.value.replace(/\D/g, '').slice(0, 11);
-    phoneInput.setCustomValidity(/^09\d{9}$/.test(phoneInput.value) ? '' : 'Enter an 11-digit Philippine mobile number starting with 09.');
+    phoneInput.value = phoneInput.value.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '').slice(0, 13);
+    phoneInput.setCustomValidity(/^(9\d{9}|09\d{9}|\+639\d{9}|639\d{9})$/.test(phoneInput.value) ? '' : 'Please enter a valid Philippine mobile number.');
   });
 
   avatarInput?.addEventListener('change', () => {
     const file = avatarInput.files?.[0];
     if (!file || !avatarPreview) return;
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowed.includes(file.type)) {
+    if (!allowed.includes(file.type) || file.size > 2 * 1024 * 1024) {
       avatarInput.value = '';
-      alert('Profile photo must be JPG, JPEG, PNG, or WEBP.');
+      alert('Profile photo must be JPG, JPEG, PNG, or WEBP and 2MB or smaller.');
       return;
     }
     avatarPreview.src = URL.createObjectURL(file);

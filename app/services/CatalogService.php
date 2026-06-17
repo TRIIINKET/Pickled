@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/CatalogRepository.php';
 require_once __DIR__ . '/AdminLogService.php';
+require_once __DIR__ . '/../../includes/validation.php';
 
 final class CatalogService
 {
@@ -113,7 +114,7 @@ final class CatalogService
 
     private function courtData(array $input): array
     {
-        $name = trim((string) ($input['name'] ?? ''));
+        $name = validateText($input['name'] ?? '', true, 80);
         $slug = $this->slug((string) ($input['slug'] ?? $name));
         if ($name === '' || $slug === '') {
             throw new RuntimeException('Court name and slug are required.');
@@ -123,23 +124,23 @@ final class CatalogService
             'name' => $name,
             'slug' => $slug,
             'status' => $this->status((string) ($input['status'] ?? 'active')),
-            'description' => trim((string) ($input['description'] ?? '')) ?: null,
-            'base_price' => max(0, (float) ($input['base_price'] ?? 0)),
-            'capacity' => max(1, (int) ($input['capacity'] ?? 1)),
-            'operating_hours' => trim((string) ($input['operating_hours'] ?? '')) ?: null,
-            'court_type' => trim((string) ($input['court_type'] ?? '')) ?: null,
+            'description' => validateText($input['description'] ?? '', false, 1000) ?: null,
+            'base_price' => (float) validateMoney($input['base_price'] ?? 0),
+            'capacity' => validatePositiveInt($input['capacity'] ?? 1, null, 'Please enter a valid number of players.'),
+            'operating_hours' => validateText($input['operating_hours'] ?? '', false, 80) ?: null,
+            'court_type' => validateText($input['court_type'] ?? '', false, 80) ?: null,
         ];
     }
 
     private function variantData(array $input): array
     {
-        $name = trim((string) ($input['name'] ?? ''));
+        $name = validateText($input['name'] ?? '', true, 80);
         $slug = $this->slug((string) ($input['slug'] ?? $name));
-        $category = trim((string) ($input['category'] ?? ''));
-        $duration = trim((string) ($input['duration_label'] ?? ''));
-        $price = (float) ($input['price'] ?? -1);
-        $participants = (int) ($input['participants_limit'] ?? 0);
-        $capacity = (int) ($input['capacity'] ?? 0);
+        $category = $this->category((string) ($input['category'] ?? ''));
+        $duration = validateText($input['duration_label'] ?? '', true, 80);
+        $price = (float) validateMoney($input['price'] ?? -1);
+        $participants = validatePositiveInt($input['participants_limit'] ?? 0, null, 'Please enter a valid number of players.');
+        $capacity = validatePositiveInt($input['capacity'] ?? 0, null, 'Please enter a valid number of players.');
         $courtId = (int) ($input['court_id'] ?? 0);
         $pricingType = $this->pricingType((string) ($input['pricing_type'] ?? ''));
 
@@ -154,7 +155,7 @@ final class CatalogService
             'court_id' => $courtId,
             'slug' => $slug,
             'name' => $name,
-            'description' => trim((string) ($input['description'] ?? '')) ?: null,
+            'description' => validateText($input['description'] ?? '', false, 1000) ?: null,
             'category' => $category,
             'duration_label' => $duration,
             'price' => $price,
@@ -162,7 +163,7 @@ final class CatalogService
             'participants_limit' => $participants,
             'coach_required' => $this->coachRequired((string) ($input['coach_required'] ?? 'no')),
             'capacity' => $capacity,
-            'image' => trim((string) ($input['image'] ?? '')) ?: null,
+            'image' => validateText($input['image'] ?? '', false, 255) ?: null,
             'active' => !empty($input['active']),
             'sort_order' => max(0, (int) ($input['sort_order'] ?? 0)),
         ];
@@ -172,7 +173,41 @@ final class CatalogService
     {
         $value = strtolower(trim($value));
         $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
-        return trim($value, '-');
+        $value = trim($value, '-');
+        if ($value === '' || strlen($value) > 150 || !preg_match('/^[a-z0-9-]+$/', $value)) {
+            throw new RuntimeException('Slug must use lowercase letters, numbers, and hyphens only.');
+        }
+        return $value;
+    }
+
+    private function category(string $category): string
+    {
+        $key = strtolower(trim(str_replace(['-', ' '], '_', $category)));
+        $map = [
+            'court_rental' => 'court_rental',
+            'court_rentals' => 'court_rental',
+            'court_reservation' => 'court_rental',
+            'private_coaching' => 'private_coaching',
+            'coaching' => 'private_coaching',
+            'lessons' => 'private_coaching',
+            'lesson' => 'private_coaching',
+            'social_play' => 'social_play',
+            'match_play' => 'social_play',
+            'open_match_play' => 'social_play',
+            'community_event' => 'social_play',
+            'tournament' => 'tournament',
+            'training' => 'training_session',
+            'training_session' => 'training_session',
+            'class' => 'training_session',
+            'kids_class' => 'training_session',
+            'youth_class' => 'training_session',
+        ];
+
+        if (!isset($map[$key])) {
+            throw new RuntimeException('Choose a valid service category.');
+        }
+
+        return $map[$key];
     }
 
     private function status(string $status): string

@@ -244,9 +244,9 @@ function pickled_cart_total(): float {
 
 function pickled_cancellation_policy(int $bookingTimestamp): array {
     $hoursUntilBooking = ($bookingTimestamp - time()) / 3600;
-    if ($hoursUntilBooking >= 48) {
-        return ['eligible' => true, 'label' => 'Full credit eligible'];
+    if ($hoursUntilBooking > 24) {
+        return ['eligible' => true, 'label' => 'Cancellable until 24 hours before schedule'];
     }
 
-    return ['eligible' => false, 'label' => 'Late cancellation - no refund'];
+    return ['eligible' => false, 'label' => 'Within 24 hours - cancellation unavailable'];
 }

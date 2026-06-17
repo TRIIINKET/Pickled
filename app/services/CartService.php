@@ -5,6 +5,7 @@ require_once __DIR__ . '/../repositories/CartRepository.php';
 require_once __DIR__ . '/../repositories/CatalogRepository.php';
 require_once __DIR__ . '/SchedulingService.php';
 require_once __DIR__ . '/../../includes/schedule-time.php';
+require_once __DIR__ . '/../../includes/validation.php';
 
 final class CartService
 {
@@ -250,11 +251,7 @@ final class CartService
 
     private function normalizeSlot(string $date, string $time): array
     {
-        try {
-            $sessionDate = (new DateTimeImmutable($date))->format('Y-m-d');
-        } catch (Throwable) {
-            throw new RuntimeException('Date is invalid.');
-        }
+        $sessionDate = validateDate($date, false);
 
         $ranges = array_values(array_filter(array_map('trim', explode(',', $time)), static fn(string $range): bool => $range !== ''));
         if (!$ranges) {
@@ -267,11 +264,7 @@ final class CartService
             if (!$parts || count($parts) !== 2) {
                 throw new RuntimeException('Time range is invalid.');
             }
-            $start = $this->normalizeTime($parts[0]);
-            $end = $this->normalizeTime($parts[1]);
-            if ($start >= $end) {
-                throw new RuntimeException('Time range is invalid.');
-            }
+            [$start, $end] = validateTime($parts[0], $parts[1], $sessionDate);
             $normalizedRanges[] = [$start, $end];
         }
 

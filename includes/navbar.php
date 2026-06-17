@@ -1,6 +1,8 @@
 <?php
 // Shared site navigation.
 require_once __DIR__ . '/paths.php';
+require_once __DIR__ . '/avatar-helper.php';
+require_once __DIR__ . '/../database/Database.php';
 require_once __DIR__ . '/../app/services/NotificationService.php';
 $activePage = $activePage ?? '';
 $links = [
@@ -42,7 +44,21 @@ if ($loggedIn && empty($_SESSION['csrf_token'])) {
 $logoutCsrf = htmlspecialchars($_SESSION['csrf_token'] ?? '');
 $accountName = trim((string) ($_SESSION['user']['name'] ?? 'Member'));
 $accountEmail = trim((string) ($_SESSION['user']['email'] ?? 'member@pickled.ph'));
-$accountInitial = strtoupper(substr($accountName !== '' ? $accountName : $accountEmail, 0, 1));
+$accountFirstName = preg_split('/\s+/', $accountName)[0] ?? $accountName;
+$accountFirstName = trim((string) $accountFirstName);
+$accountInitial = strtoupper(substr($accountFirstName !== '' ? $accountFirstName : ($accountName !== '' ? $accountName : $accountEmail), 0, 1));
+$accountAvatar = pickled_avatar_default_path();
+if ($loggedIn && (int) ($_SESSION['user']['id'] ?? 0) > 0 && Database::enabled()) {
+    try {
+        $avatarStmt = Database::connection()->prepare('SELECT avatar FROM user_profiles WHERE user_id = :user_id LIMIT 1');
+        $avatarStmt->execute(['user_id' => (int) $_SESSION['user']['id']]);
+        $accountAvatar = trim((string) ($avatarStmt->fetchColumn() ?: $accountAvatar));
+    } catch (Throwable $e) {
+        error_log('Navbar avatar load failed: ' . $e->getMessage());
+    }
+}
+$accountAvatarUrl = pickled_avatar_url($accountAvatar);
+$hasAccountAvatar = $accountAvatar !== '' && $accountAvatar !== pickled_avatar_default_path();
 ?>
 
 <div class="promo-bar">Promotion - ₱250 Trial Class</div>
@@ -96,21 +112,28 @@ $accountInitial = strtoupper(substr($accountName !== '' ? $accountName : $accoun
         <details class="nav-account" data-account-menu>
           <summary class="nav-account__trigger" aria-label="Open account menu">
             <span class="nav-account__avatar" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <circle cx="12" cy="8" r="4"></circle>
-                <path d="M5 20a7 7 0 0 1 14 0"></path>
-              </svg>
+              <?php if ($hasAccountAvatar): ?>
+                <img src="<?= htmlspecialchars($accountAvatarUrl) ?>" alt="" onerror="this.remove(); this.parentElement.textContent='<?= htmlspecialchars($accountInitial) ?>';" />
+              <?php else: ?>
+                <?= htmlspecialchars($accountInitial) ?>
+              <?php endif; ?>
             </span>
-            <span class="nav-account__name"><?= htmlspecialchars($accountName ?: 'Member') ?></span>
+            <span class="nav-account__name"><?= htmlspecialchars($accountFirstName ?: 'Member') ?></span>
             <svg class="nav-account__chevron" viewBox="0 0 24 24" aria-hidden="true">
               <path d="m6 9 6 6 6-6"></path>
             </svg>
           </summary>
           <div class="nav-account__menu">
             <div class="nav-account__header">
-              <span class="nav-account__large-avatar" aria-hidden="true"><?= htmlspecialchars($accountInitial) ?></span>
+              <span class="nav-account__large-avatar" aria-hidden="true">
+                <?php if ($hasAccountAvatar): ?>
+                  <img src="<?= htmlspecialchars($accountAvatarUrl) ?>" alt="" onerror="this.remove(); this.parentElement.textContent='<?= htmlspecialchars($accountInitial) ?>';" />
+                <?php else: ?>
+                  <?= htmlspecialchars($accountInitial) ?>
+                <?php endif; ?>
+              </span>
               <span>
-                <strong><?= htmlspecialchars($accountName ?: 'Member') ?></strong>
+                <strong><?= htmlspecialchars($accountFirstName ?: 'Member') ?></strong>
                 <small><?= htmlspecialchars($accountEmail) ?></small>
               </span>
             </div>

@@ -5,6 +5,11 @@ $activePage = 'index.php';
 $showInitialLoader = true;
 include __DIR__ . '/includes/header.php';
 $courtBookingHref = !empty($_SESSION['user']) ? 'resident/courts.php#court-detail' : 'auth/login.php?notice=booking&redirect=resident/courts.php%23court-detail';
+$welcomeBanner = '';
+if (!empty($_SESSION['welcome_banner'])) {
+  $welcomeBanner = (string) $_SESSION['welcome_banner'];
+  unset($_SESSION['welcome_banner']);
+}
 
 $events = [
   ['day' => 'Tue', 'date' => 'May 7',  'title' => 'Beginner Open Play',  'time' => '7:00 PM', 'spots' => '8 spots'],
@@ -41,6 +46,9 @@ $rules = [
 ?>
 
 <main class="home-page">
+  <?php if ($welcomeBanner): ?>
+    <section class="home-welcome-banner" role="status"><?= htmlspecialchars($welcomeBanner) ?></section>
+  <?php endif; ?>
   <section class="home-hero" aria-label="Pickled indoor pickleball">
     <div class="home-hero__shade"></div>
     <div class="home-hero__content">

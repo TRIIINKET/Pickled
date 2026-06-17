@@ -1,6 +1,11 @@
 CREATE DATABASE IF NOT EXISTS pickled CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE pickled;
 
+-- Auxiliary/support table, not a core ERD entity.
+-- Purpose: stores sequence counters used to generate business/reference
+-- codes such as booking references, payment references, user codes,
+-- session codes, and inquiry codes. This supports reference number
+-- generation but is not counted as one of the 18 core ERD entities.
 CREATE TABLE IF NOT EXISTS business_code_sequences (
   entity VARCHAR(40) NOT NULL,
   last_value INT UNSIGNED NOT NULL DEFAULT 0,

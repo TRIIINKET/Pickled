@@ -492,6 +492,7 @@ button:disabled {
 
 .schedule-tabs button,
 .schedule-tabs a,
+.schedule-tabs span,
 .schedule-range button,
 .schedule-range a,
 .schedule-toolbar select {
@@ -508,12 +509,14 @@ button:disabled {
 }
 
 .schedule-tabs button,
-.schedule-tabs a {
+.schedule-tabs a,
+.schedule-tabs span {
     border: 0;
 }
 
 .schedule-tabs button.active,
-.schedule-tabs a.active {
+.schedule-tabs a.active,
+.schedule-tabs span.active {
     background: var(--green);
     color: #fff;
 }
@@ -829,7 +832,8 @@ button:disabled {
 .schedule-row i.orange { background: var(--orange); }
 .schedule-row i.purple { background: var(--purple); }
 
-.schedule-row button {
+.schedule-row button,
+.schedule-row a {
     min-height: 34px;
     display: inline-flex;
     align-items: center;
@@ -841,6 +845,7 @@ button:disabled {
     background: #fff;
     color: #111827;
     font-weight: 800;
+    text-decoration: none;
 }
 
 .schedule-row button.icon-only {
@@ -950,9 +955,9 @@ button:disabled {
 }
 
 .student-list-row {
-    min-width: 860px;
+    min-width: 1120px;
     display: grid;
-    grid-template-columns: 1.35fr 1.2fr .9fr 1fr .7fr 1.2fr;
+    grid-template-columns: 1.25fr 1.35fr .95fr 1.2fr 1.25fr .85fr 1.35fr;
     align-items: center;
     gap: 14px;
     min-height: 62px;
@@ -2453,7 +2458,7 @@ button:disabled {
 
 .announcements-workspace {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-columns: minmax(0, 1fr);
     gap: 24px;
     align-items: start;
 }
@@ -2820,6 +2825,7 @@ button:disabled {
 
 .profile-actions button,
 .profile-actions a,
+.profile-actions .coach-photo-upload,
 .security-card button {
     min-height: 42px;
     display: inline-flex;
@@ -2835,10 +2841,28 @@ button:disabled {
 }
 
 .profile-actions button,
+.profile-actions .coach-photo-upload,
 .security-card button {
     border-color: transparent;
     background: var(--green);
     color: #fff;
+    cursor: pointer;
+}
+
+.coach-photo-upload input {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.profile-actions .form-error,
+.profile-form-grid em {
+    color: #b42318;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 800;
 }
 
 .coach-toast {
@@ -2890,6 +2914,10 @@ button:disabled {
 }
 
 .profile-form-grid .full {
+    grid-column: 1 / -1;
+}
+
+.profile-form-grid .settings-actions.full {
     grid-column: 1 / -1;
 }
 
@@ -3784,6 +3812,12 @@ button:disabled {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.coach-photo[data-fallback]:empty::before {
+    content: attr(data-fallback);
+    color: var(--green);
+    font-weight: 950;
 }
 
 .profile-row {

@@ -199,13 +199,20 @@ final class BookingRepository
 
     public function findExpiredPendingIds(DateTimeInterface $cutoff, int $limit = 100): array
     {
+        $proofExpression = $this->paymentProofExpression('p');
         $stmt = Database::connection()->prepare(
             "SELECT id
-             FROM bookings
-             WHERE status = 'pending'
-               AND LOWER(payment_status) <> 'paid'
-               AND created_at <= :cutoff
-             ORDER BY created_at ASC, id ASC
+             FROM bookings b
+             WHERE b.status = 'pending'
+               AND LOWER(b.payment_status) <> 'paid'
+               AND b.created_at <= :cutoff
+               AND NOT EXISTS (
+                    SELECT 1
+                    FROM payments p
+                    WHERE p.booking_id = b.id
+                      AND $proofExpression <> ''
+               )
+             ORDER BY b.created_at ASC, b.id ASC
              LIMIT :limit_count"
         );
         $stmt->bindValue(':cutoff', $cutoff->format('Y-m-d H:i:s'));
@@ -228,6 +235,13 @@ final class BookingRepository
             $stmt->execute(['id' => $id]);
             $booking = $stmt->fetch();
             if (!$booking || $booking['status'] !== 'pending' || strtolower((string) $booking['payment_status']) === 'paid' || (string) $booking['created_at'] > $cutoff->format('Y-m-d H:i:s')) {
+                if ($startedTransaction) {
+                    $pdo->commit();
+                }
+                return false;
+            }
+
+            if ($this->bookingHasPaymentProof($id)) {
                 if ($startedTransaction) {
                     $pdo->commit();
                 }
@@ -348,6 +362,86 @@ final class BookingRepository
         return $stmt->execute(['id' => $id, 'status' => $this->normalizePaymentStatus($status)]);
     }
 
+    public function cancellationEligibility(array $booking): array
+    {
+        $status = strtolower(trim((string) ($booking['status'] ?? '')));
+        $paymentStatus = strtolower(trim((string) ($booking['payment_status'] ?? '')));
+        if (in_array($status, ['completed', 'cancelled', 'expired', 'rejected', 'refunded'], true) || in_array($paymentStatus, ['expired', 'rejected', 'refunded', 'refund_pending', 'refund_rejected'], true)) {
+            return ['allowed' => false, 'reason' => 'This booking can no longer be cancelled.'];
+        }
+
+        $firstSchedule = $this->firstScheduleDateTime((int) ($booking['id'] ?? 0));
+        if ($status !== 'pending' && !$firstSchedule) {
+            return ['allowed' => false, 'reason' => 'This booking schedule could not be verified.'];
+        }
+
+        $now = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
+        if ($firstSchedule && $firstSchedule <= $now->modify('+24 hours')) {
+            return ['allowed' => false, 'reason' => 'This booking can no longer be cancelled because it is within 24 hours of the scheduled time.'];
+        }
+
+        if ($status === 'pending') {
+            return ['allowed' => true, 'reason' => 'Pending unpaid bookings may be cancelled anytime before payment expires.'];
+        }
+
+        return ['allowed' => true, 'reason' => 'This booking may be cancelled.'];
+    }
+
+    public function cancelForUser(int $bookingId, int $userId, string $reason = 'Cancelled by user'): array
+    {
+        $booking = $this->findByIdForUser($bookingId, $userId);
+        if (!$booking) {
+            throw new RuntimeException('Booking not found.');
+        }
+
+        $eligibility = $this->cancellationEligibility($booking);
+        if (empty($eligibility['allowed'])) {
+            throw new RuntimeException((string) $eligibility['reason']);
+        }
+
+        $hasProof = $this->bookingHasPaymentProof($bookingId);
+        $paymentStatus = strtolower(trim((string) ($booking['payment_status'] ?? '')));
+        $isPaid = in_array($paymentStatus, ['approved', 'verified', 'paid', 'completed'], true);
+        $requiresRefundReview = $hasProof || $isPaid;
+
+        if (!$this->updateStatus($bookingId, 'cancelled')) {
+            throw new RuntimeException('Unable to cancel booking right now.');
+        }
+
+        $note = $requiresRefundReview
+            ? 'Cancellation request submitted by user. Receipt or verified payment exists; admin refund review may be required. Refunds are processed manually through GCash.'
+            : 'Booking cancelled by user before payment receipt upload.';
+        $label = $requiresRefundReview ? 'Cancellation/refund review requested' : $reason;
+
+        $stmt = Database::connection()->prepare(
+            "UPDATE bookings
+             SET cancellation_label = :label,
+                 payment_status = CASE
+                    WHEN :requires_refund_review = 1 THEN 'refund_pending'
+                    ELSE payment_status
+                 END,
+                 notes = CASE
+                    WHEN notes IS NULL OR notes = '' THEN :note_first
+                    WHEN notes LIKE :note_match THEN notes
+                    ELSE CONCAT(notes, CHAR(10), :note_append)
+                 END
+             WHERE id = :id AND user_id = :user_id"
+        );
+        $stmt->execute([
+            'id' => $bookingId,
+            'user_id' => $userId,
+            'label' => $label,
+            'requires_refund_review' => $requiresRefundReview ? 1 : 0,
+            'note_first' => $note,
+            'note_match' => '%' . $note . '%',
+            'note_append' => $note,
+        ]);
+
+        $updated = $this->findByIdForUser($bookingId, $userId) ?: $booking;
+        $updated['cancellation_requires_refund_review'] = $requiresRefundReview;
+        return $updated;
+    }
+
     public function getBookingItems(int $bookingId): array
     {
         $stmt = Database::connection()->prepare($this->itemSelect() . ' WHERE booking_id = :booking_id ORDER BY id ASC');
@@ -379,14 +473,19 @@ final class BookingRepository
                        b.reference,
                        b.status AS booking_status,
                        b.payment_status,
+                       b.notes,
                        b.user_id,
                        u.name AS user_name,
-                       u.email AS user_email
+                       u.email AS user_email,
+                       COALESCE(up.phone, '') AS user_phone
                 FROM booking_items bi
                 JOIN bookings b ON b.id = bi.booking_id
+                LEFT JOIN sessions s ON s.id = bi.session_id
                 LEFT JOIN users u ON u.id = b.user_id
-                WHERE bi.coach_user_id = :coach_user_id
-	                  AND b.status <> 'cancelled'";
+                LEFT JOIN user_profiles up ON up.user_id = u.id
+                WHERE COALESCE(bi.coach_user_id, s.coach_user_id) = :coach_user_id
+                  AND LOWER(b.status) IN ('confirmed', 'ongoing', 'completed')
+                  AND LOWER(COALESCE(b.payment_status, '')) NOT IN ('expired', 'refunded', 'rejected')";
         $params = ['coach_user_id' => $coachUserId];
 
         if ($startDate) {
@@ -632,6 +731,28 @@ final class BookingRepository
         return $stmt->fetchAll() ?: [];
     }
 
+    private function firstScheduleDateTime(int $bookingId): ?DateTimeImmutable
+    {
+        $stmt = Database::connection()->prepare(
+            'SELECT booking_date, start_time
+             FROM booking_items
+             WHERE booking_id = :booking_id
+             ORDER BY booking_date ASC, start_time ASC
+             LIMIT 1'
+        );
+        $stmt->execute(['booking_id' => $bookingId]);
+        $row = $stmt->fetch();
+        if (!$row) {
+            return null;
+        }
+
+        try {
+            return new DateTimeImmutable((string) $row['booking_date'] . ' ' . (string) $row['start_time'], new DateTimeZone('Asia/Manila'));
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
     private function releaseBookingCapacity(int $bookingId): void
     {
         $stmt = Database::connection()->prepare(
@@ -742,5 +863,44 @@ final class BookingRepository
         ');
         $stmt->execute(['table_name' => $table, 'column_name' => $column]);
         return (bool) $stmt->fetchColumn();
+    }
+
+    private function bookingHasPaymentProof(int $bookingId): bool
+    {
+        $proofExpression = $this->paymentProofExpression('p');
+        $stmt = Database::connection()->prepare(
+            "SELECT 1
+             FROM payments p
+             WHERE p.booking_id = :booking_id
+               AND $proofExpression <> ''
+             LIMIT 1"
+        );
+        $stmt->execute(['booking_id' => $bookingId]);
+        return (bool) $stmt->fetchColumn();
+    }
+
+    private function paymentProofExpression(string $alias = 'p'): string
+    {
+        $pdo = Database::connection();
+        $columns = [];
+        foreach (['proof_of_payment', 'proof_image'] as $column) {
+            try {
+                $stmt = $pdo->prepare(
+                    'SELECT COUNT(*)
+                     FROM information_schema.COLUMNS
+                     WHERE TABLE_SCHEMA = DATABASE()
+                       AND TABLE_NAME = :table_name
+                       AND COLUMN_NAME = :column_name'
+                );
+                $stmt->execute(['table_name' => 'payments', 'column_name' => $column]);
+                if ((int) $stmt->fetchColumn() > 0) {
+                    $columns[] = 'NULLIF(' . $alias . '.' . $column . ", '')";
+                }
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        return $columns ? 'COALESCE(' . implode(', ', $columns) . ", '')" : "''";
     }
 }

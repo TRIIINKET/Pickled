@@ -11,6 +11,7 @@ require_once __DIR__ . '/../app/services/BookingExpiryService.php';
 require_once __DIR__ . '/../app/services/NotificationService.php';
 require_once __DIR__ . '/../app/services/EmailService.php';
 require_once __DIR__ . '/../includes/upload-helper.php';
+require_once __DIR__ . '/../includes/validation.php';
 require_once __DIR__ . '/../database/Database.php';
 
 pickled_init_csrf();
@@ -142,12 +143,12 @@ function booking_program_aliases(string $program): array {
 }
 
 function booking_status_filter_options(array $allowedStatuses): array {
-    $preferred = ['pending', 'confirmed', 'completed', 'cancelled', 'rejected', 'expired', 'refunded'];
+    $preferred = ['pending', 'confirmed', 'completed', 'cancelled', 'refund_pending', 'rejected', 'expired', 'refunded'];
     $allowed = array_flip(array_map('strtolower', $allowedStatuses));
     $options = [];
 
     foreach ($preferred as $status) {
-        if (isset($allowed[$status]) || in_array($status, ['expired', 'refunded'], true)) {
+        if (isset($allowed[$status]) || in_array($status, ['expired', 'refunded', 'refund_pending'], true)) {
             $options[$status] = booking_admin_label($status);
         }
     }
@@ -178,8 +179,23 @@ function booking_payment_label(string $status): string {
     $status = strtolower(trim($status));
     return match ($status) {
         'approved', 'paid', 'verified' => 'Verified',
+        'refund_pending' => 'Refund Review',
         default => ucwords(str_replace('_', ' ', $status ?: 'pending')),
     };
+}
+
+function booking_has_cancellation_refund_request(array $booking): bool {
+    $paymentStatus = strtolower((string) ($booking['payment_status'] ?? ''));
+    if (in_array($paymentStatus, ['refunded', 'refund_rejected'], true)) {
+        return false;
+    }
+    $label = strtolower((string) ($booking['cancellation_label'] ?? ''));
+    $notes = strtolower((string) ($booking['notes'] ?? ''));
+    return $paymentStatus === 'refund_pending'
+        || str_contains($label, 'refund review')
+        || str_contains($label, 'cancellation/refund')
+        || str_contains($notes, 'admin refund review')
+        || str_contains($notes, 'refund review may be required');
 }
 
 function booking_asset(string $path): string {
@@ -238,6 +254,7 @@ function booking_upload_has_file(array $file): bool {
 
 function booking_store_payment_proof(int $bookingId, array $file): string {
     try {
+        validateUploadedFile($file, 'receipt');
         return pickled_upload_file(
             $file,
             'uploads/payments',
@@ -248,15 +265,18 @@ function booking_store_payment_proof(int $bookingId, array $file): string {
                 'webp' => ['image/webp'],
                 'pdf' => ['application/pdf', 'application/x-pdf'],
             ],
-            10485760,
+            5242880,
             'payment_' . $bookingId
         );
     } catch (RuntimeException $e) {
-        if (str_contains($e->getMessage(), 'too large')) {
-            throw new RuntimeException('Receipt file must be 10MB or smaller.');
+        if (str_contains($e->getMessage(), 'too large') || str_contains($e->getMessage(), '5MB')) {
+            throw new RuntimeException('Receipt file must be 5MB or smaller.');
         }
-        if (str_contains($e->getMessage(), 'type')) {
+        if (str_contains($e->getMessage(), 'type') || str_contains($e->getMessage(), 'JPG')) {
             throw new RuntimeException('Receipt must be a JPG, JPEG, PNG, WEBP, or PDF file.');
+        }
+        if (str_contains($e->getMessage(), 'choose')) {
+            throw new RuntimeException('Please choose a receipt file before submitting.');
         }
         throw new RuntimeException('Receipt upload failed. Please try again.');
     }
@@ -426,6 +446,8 @@ function booking_filter_parts(string $query, string $statusFilter, string $court
         $where[] = "(LOWER(b.status) = 'expired' OR (LOWER(b.status) = 'cancelled' AND LOWER(COALESCE(b.cancellation_label, '')) LIKE '%expired%') OR LOWER(b.payment_status) = 'expired')";
     } elseif ($statusFilter === 'refunded') {
         $where[] = "(LOWER(b.status) = 'refunded' OR LOWER(b.payment_status) = 'refunded')";
+    } elseif ($statusFilter === 'refund_pending') {
+        $where[] = "LOWER(COALESCE(b.payment_status, '')) NOT IN ('refunded', 'refund_rejected') AND (LOWER(b.payment_status) = 'refund_pending' OR LOWER(COALESCE(b.cancellation_label, '')) LIKE '%refund review%' OR LOWER(COALESCE(b.notes, '')) LIKE '%admin refund review%')";
     } elseif ($statusFilter !== 'all') {
         $normalizedFilter = match (strtolower($statusFilter)) {
             'approved' => 'confirmed',
@@ -921,29 +943,19 @@ function booking_walkin_available_slots(PDO $pdo, array $variant, int $days = 21
 }
 
 function booking_create_walkin(PDO $pdo, array $input, int $adminId, array $files = []): int {
-    $name = trim((string) ($input['customer_name'] ?? ''));
-    $email = trim((string) ($input['customer_email'] ?? ''));
-    $phone = trim((string) ($input['customer_phone'] ?? ''));
+    $name = validateName($input['customer_name'] ?? '');
+    $email = validateEmail($input['customer_email'] ?? '', false);
+    $phone = validatePhonePH($input['customer_phone'] ?? '', false);
     $courtId = (int) ($input['court_id'] ?? 0);
     $variantId = (int) ($input['variant_id'] ?? 0);
     $bookingDate = trim((string) ($input['booking_date'] ?? ''));
     $startTime = trim((string) ($input['start_time'] ?? ''));
     $endTime = trim((string) ($input['end_time'] ?? ''));
     $coachUserId = empty($input['coach_user_id']) ? null : (int) $input['coach_user_id'];
-    $players = max(1, (int) ($input['players'] ?? 1));
+    $players = validatePositiveInt($input['players'] ?? 1, null, 'Please enter a valid number of players.');
     $paymentMethod = trim((string) ($input['payment_method'] ?? 'Cash'));
     $paymentChoice = strtolower(trim((string) ($input['payment_status'] ?? 'pending')));
-    $notes = trim((string) ($input['notes'] ?? ''));
-
-    if ($name === '') {
-        throw new RuntimeException('Customer name is required.');
-    }
-    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        throw new RuntimeException('Please enter a valid email address.');
-    }
-    if ($phone !== '' && !preg_match('/^[0-9]{7,15}$/', $phone)) {
-        throw new RuntimeException('Please enter a valid phone number.');
-    }
+    $notes = validateText($input['notes'] ?? '', false, 1000);
     if (!in_array($paymentMethod, ['Cash', 'GCash'], true)) {
         throw new RuntimeException('Please choose a valid payment method.');
     }
@@ -1244,6 +1256,29 @@ function booking_admin_mark_paid(PDO $pdo, int $bookingId, int $adminId, string 
     }
 }
 
+function booking_admin_append_note(PDO $pdo, int $bookingId, string $label, string $note, ?string $paymentStatus = null): bool {
+    $sets = [
+        'cancellation_label = :label',
+        "notes = CASE
+            WHEN notes IS NULL OR notes = '' THEN :note_first
+            ELSE CONCAT(notes, CHAR(10), :note_append)
+        END",
+    ];
+    $params = [
+        'booking_id' => $bookingId,
+        'label' => $label,
+        'note_first' => $note,
+        'note_append' => $note,
+    ];
+    if ($paymentStatus !== null) {
+        $sets[] = 'payment_status = :payment_status';
+        $params['payment_status'] = $paymentStatus;
+    }
+
+    $stmt = $pdo->prepare('UPDATE bookings SET ' . implode(', ', $sets) . ' WHERE id = :booking_id');
+    return $stmt->execute($params);
+}
+
 if (($_GET['export'] ?? '') === 'csv' && $pdo) {
     try {
         booking_export_csv($pdo, $query, $statusFilter, $courtFilter, $programFilter, $dateFilter);
@@ -1302,6 +1337,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($action === 'cancel_booking' && $id && $pdo) {
                 $successMsg = booking_admin_update_booking($pdo, $adminService, $id, 'cancelled', (int) $_SESSION['user']['id'], $remarks) ? 'Booking cancelled and slot released.' : '';
                 $errorMsg = $successMsg ? '' : 'Failed to cancel booking.';
+            } elseif ($action === 'approve_cancellation' && $id && $pdo) {
+                $note = 'Cancellation approved by admin. Refund is not automatic; process any approved GCash refund manually.';
+                if ($remarks !== '') {
+                    $note .= ' Admin note: ' . $remarks;
+                }
+                $successMsg = booking_admin_append_note($pdo, $id, 'Cancellation approved - refund review', $note, 'refund_pending') ? 'Cancellation approved for admin refund review.' : '';
+                if ($successMsg) {
+                    booking_admin_notify($pdo, $notificationService, $id, 'Cancellation Approved', 'Your cancellation request for booking {reference} was approved. Refunds, if applicable, are processed manually through GCash.', 'booking_cancelled');
+                }
+                $errorMsg = $successMsg ? '' : 'Failed to approve cancellation.';
+            } elseif ($action === 'mark_refund_processed' && $id && $pdo) {
+                $note = 'Refund marked as processed by admin. Refund was manually processed through GCash.';
+                if ($remarks !== '') {
+                    $note .= ' Admin note: ' . $remarks;
+                }
+                $successMsg = booking_admin_append_note($pdo, $id, 'Refund processed manually through GCash', $note, 'refunded') ? 'Refund marked as processed.' : '';
+                if ($successMsg) {
+                    booking_admin_notify($pdo, $notificationService, $id, 'Refund Processed', 'Refund for booking {reference} has been marked as processed through GCash.', 'payment_refunded');
+                }
+                $errorMsg = $successMsg ? '' : 'Failed to mark refund as processed.';
+            } elseif ($action === 'reject_cancellation' && $id && $pdo) {
+                if ($remarks === '') {
+                    throw new RuntimeException('Please add an admin note before rejecting a cancellation request.');
+                }
+                $successMsg = booking_admin_append_note($pdo, $id, 'Cancellation request rejected by admin', 'Cancellation request rejected by admin. Admin note: ' . $remarks, 'refund_rejected') ? 'Cancellation request rejected.' : '';
+                if ($successMsg) {
+                    booking_admin_notify($pdo, $notificationService, $id, 'Cancellation Request Rejected', 'Your cancellation request for booking {reference} was rejected. Please check the admin note for details.', 'booking_cancelled');
+                }
+                $errorMsg = $successMsg ? '' : 'Failed to reject cancellation request.';
             } elseif ($action === 'complete_booking' && $id && $pdo) {
                 $successMsg = booking_admin_update_booking($pdo, $adminService, $id, 'completed', (int) $_SESSION['user']['id'], $remarks) ? 'Booking marked as completed.' : '';
                 if ($successMsg) {
@@ -1571,7 +1635,7 @@ $calendarLanes = [
                             $statusKey = booking_status_key((string) $booking['status']);
                             $isExpiredBooking = strtolower((string) $booking['status']) === 'cancelled' && str_contains(strtolower((string) ($booking['cancellation_label'] ?? '')), 'expired');
                             $bookingStatusLabel = $isExpiredBooking ? 'Expired' : booking_display_status_label($booking);
-                            $displayPaymentStatus = (string) ($booking['latest_payment_status'] ?: $booking['payment_status']);
+                            $displayPaymentStatus = booking_has_cancellation_refund_request($booking) ? (string) ($booking['payment_status'] ?: 'refund_pending') : (string) ($booking['latest_payment_status'] ?: $booking['payment_status']);
                             $paymentKey = booking_payment_key($displayPaymentStatus);
                             $canReviewPayment = $displayPaymentStatus === 'pending' && !empty($booking['latest_payment_id']);
                             $bookingStatus = strtolower((string) $booking['status']);
@@ -1591,7 +1655,7 @@ $calendarLanes = [
                             <span><?php echo htmlspecialchars($booking['booking_time'] ?: '-'); ?></span>
                             <span><?php echo (int) ($booking['players'] ?? 1); ?></span>
                             <span><em class="status-pill status-<?php echo $statusKey; ?>"><?php echo htmlspecialchars($bookingStatusLabel); ?></em><?php if ($isExpiredBooking): ?><small><?php echo htmlspecialchars($booking['cancellation_label']); ?></small><?php endif; ?></span>
-                            <span><em class="status-pill payment-<?php echo $paymentKey; ?>"><?php echo htmlspecialchars(booking_payment_label($displayPaymentStatus)); ?></em><?php if (!empty($booking['latest_payment_reference'])): ?><small><?php echo htmlspecialchars($booking['latest_payment_reference']); ?></small><?php endif; ?></span>
+                            <span><em class="status-pill payment-<?php echo $paymentKey; ?>"><?php echo htmlspecialchars(booking_payment_label($displayPaymentStatus)); ?></em><?php if (booking_has_cancellation_refund_request($booking)): ?><small>Cancellation/refund review</small><?php elseif (!empty($booking['latest_payment_reference'])): ?><small><?php echo htmlspecialchars($booking['latest_payment_reference']); ?></small><?php endif; ?></span>
                             <span>₱<?php echo number_format((float) $booking['total'], 2); ?></span>
                             <span class="row-actions">
                                 <a href="<?php echo pickled_admin_url('manage-bookings.php?view=table&id=' . (int) $booking['id']); ?>">Review Booking</a>
@@ -1654,9 +1718,9 @@ $calendarLanes = [
 
             <section>
                 <h3>Customer Details</h3>
-                <label><span>Customer Name</span><input type="text" name="customer_name" required maxlength="120" autocomplete="name"></label>
-                <label><span>Email optional</span><input type="email" name="customer_email" maxlength="160" autocomplete="email"></label>
-                <label><span>Phone optional</span><input type="tel" name="customer_phone" inputmode="numeric" pattern="[0-9]{7,15}" maxlength="15" autocomplete="tel"></label>
+                <label><span>Customer Name</span><input type="text" name="customer_name" required minlength="2" maxlength="80" pattern="[A-Za-z][A-Za-z .'\-]*" title="Please enter a valid name." autocomplete="name"></label>
+                <label><span>Email optional</span><input type="email" name="customer_email" maxlength="150" autocomplete="email"></label>
+                <label><span>Phone optional</span><input type="tel" name="customer_phone" inputmode="tel" pattern="(09[0-9]{9}|\+639[0-9]{9}|639[0-9]{9})" maxlength="13" autocomplete="tel"></label>
             </section>
 
             <section>
@@ -1692,7 +1756,7 @@ $calendarLanes = [
 
             <section>
                 <h3>Notes</h3>
-                <label><span>Optional admin notes</span><textarea name="notes" rows="3" placeholder="Add walk-in notes"></textarea></label>
+                <label><span>Optional admin notes</span><textarea name="notes" rows="3" maxlength="1000" placeholder="Add walk-in notes"></textarea></label>
             </section>
 
             <footer class="walkin-form-actions">
@@ -1710,7 +1774,7 @@ $calendarLanes = [
         $currentItems = $currentBooking['items'] ?? [];
         $firstItem = $currentItems[0] ?? [];
         $playersTotal = array_sum(array_map(static fn($item): int => (int) ($item['quantity'] ?? 0), $currentItems));
-        $currentPaymentStatus = (string) (($latestPayment['status'] ?? '') ?: ($currentBooking['payment_status'] ?? 'pending'));
+        $currentPaymentStatus = booking_has_cancellation_refund_request($currentBooking) ? (string) ($currentBooking['payment_status'] ?? 'refund_pending') : (string) (($latestPayment['status'] ?? '') ?: ($currentBooking['payment_status'] ?? 'pending'));
         $currentStatus = strtolower((string) ($currentBooking['status'] ?? 'pending'));
         $currentPaymentNormalized = strtolower($currentPaymentStatus);
         $currentIsPaid = in_array($currentPaymentNormalized, ['approved', 'paid', 'verified'], true);
@@ -1719,6 +1783,7 @@ $calendarLanes = [
         $currentIsCompleted = $currentStatus === 'completed';
         $currentIsRejected = booking_is_rejected_action($currentBooking);
         $currentIsCancelled = $currentStatus === 'cancelled' && !$currentIsRejected;
+        $currentHasRefundRequest = booking_has_cancellation_refund_request($currentBooking);
         $currentClosed = $currentIsCompleted || $currentIsRejected || $currentIsCancelled;
         $currentCanComplete = !empty($firstItem['booking_date_raw']) && !empty($firstItem['end_time'])
             && strtotime((string) $firstItem['booking_date_raw'] . ' ' . (string) $firstItem['end_time']) !== false
@@ -1731,7 +1796,7 @@ $calendarLanes = [
         <section><h3>Booking Information</h3><p><strong>Reference</strong><?php echo htmlspecialchars($currentBooking['reference']); ?></p><p><strong>Court</strong><?php echo htmlspecialchars($firstItem['court'] ?? 'Any Court'); ?></p><p><strong>Program / Service</strong><?php echo htmlspecialchars($firstItem['name'] ?? 'Booking'); ?></p><p><strong>Date</strong><?php echo htmlspecialchars($firstItem['booking_date'] ?? date('M j, Y', strtotime($currentBooking['created_at']))); ?></p><p><strong>Time</strong><?php echo htmlspecialchars($firstItem['booking_time'] ?? '-'); ?></p><p><strong>Number of Players</strong><?php echo number_format($playersTotal ?: 1); ?></p></section>
         <section><h3>Player Information</h3><p><strong>Player Name</strong><?php echo htmlspecialchars($currentBooking['user']['name'] ?? 'Guest'); ?></p><p><strong>Email</strong><?php echo htmlspecialchars($currentBooking['user']['email'] ?? '-'); ?></p><p><strong>Phone Number</strong><?php echo htmlspecialchars(($currentBooking['user']['phone'] ?? '') !== '' ? $currentBooking['user']['phone'] : '-'); ?></p></section>
         <section><h3>Payment Information</h3><p><strong>Payment Method</strong><?php echo htmlspecialchars($currentBooking['payment_method'] ?? '-'); ?></p><p><strong>Payment Status</strong><em class="status-pill payment-<?php echo booking_payment_key($currentPaymentStatus); ?>"><?php echo htmlspecialchars(booking_payment_label($currentPaymentStatus)); ?></em></p><?php if ($latestPayment): ?><?php $latestProofPath = booking_payment_proof_path($latestPayment); ?><p><strong>Reference No.</strong><?php echo htmlspecialchars($latestPayment['reference_number'] ?? '-'); ?></p><p><strong>Amount</strong>&#8369;<?php echo number_format((float) ($latestPayment['amount'] ?? $currentBooking['total']), 2); ?></p><?php if (!empty($latestPayment['reviewed_at'])): ?><p><strong>Reviewed At</strong><?php echo htmlspecialchars((string) $latestPayment['reviewed_at']); ?></p><?php endif; ?><?php if ($latestProofPath !== ''): ?><p><a href="<?php echo booking_public_url($latestProofPath); ?>" target="_blank" rel="noopener">View proof of payment</a></p><?php if (booking_proof_is_image($latestProofPath)): ?><img src="<?php echo booking_public_url($latestProofPath); ?>" alt="Proof of payment" style="max-width:100%;border-radius:8px;margin-top:10px;"><?php endif; ?><?php else: ?><p><strong>Proof of Payment</strong>No uploaded proof.</p><?php endif; ?><?php else: ?><p>No payment record yet.</p><?php endif; ?></section>
-        <section><h3>Status Information</h3><p><strong>Booking Status</strong><em class="status-pill status-<?php echo booking_status_key((string) $currentBooking['status']); ?>"><?php echo htmlspecialchars(booking_display_status_label($currentBooking)); ?></em></p><p><strong>Total</strong>₱<?php echo number_format((float) $currentBooking['total'], 2); ?></p><?php if (!empty($currentBooking['cancellation_label']) && $currentStatus === 'cancelled'): ?><p><strong>Admin Note</strong><?php echo htmlspecialchars($currentBooking['cancellation_label']); ?></p><?php endif; ?></section>
+        <section><h3>Status Information</h3><p><strong>Booking Status</strong><em class="status-pill status-<?php echo booking_status_key((string) $currentBooking['status']); ?>"><?php echo htmlspecialchars(booking_display_status_label($currentBooking)); ?></em></p><p><strong>Total</strong>₱<?php echo number_format((float) $currentBooking['total'], 2); ?></p><?php if ($currentHasRefundRequest): ?><p><strong>Cancellation / Refund</strong>Refund review may be required. Refunds are manually processed by admin through GCash.</p><?php endif; ?><?php if (!empty($currentBooking['cancellation_label']) && $currentStatus === 'cancelled'): ?><p><strong>Admin Note</strong><?php echo htmlspecialchars($currentBooking['cancellation_label']); ?></p><?php endif; ?></section>
         <?php if ($paymentRows): ?><section><h3>Receipt History</h3><?php foreach ($paymentRows as $payment): ?><p><strong><?php echo htmlspecialchars(booking_payment_label((string) $payment['status'])); ?></strong> <?php echo htmlspecialchars($payment['reference_number']); ?> - &#8369;<?php echo number_format((float) $payment['amount'], 2); ?><?php if (!empty($payment['reviewer_name'])): ?><br><small>Reviewed by <?php echo htmlspecialchars($payment['reviewer_name']); ?></small><?php endif; ?><?php if (!empty($payment['remarks'])): ?><br><small><?php echo htmlspecialchars($payment['remarks']); ?></small><?php endif; ?></p><?php endforeach; ?></section><?php endif; ?>
         <form class="drawer-actions" method="post">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token()); ?>">
@@ -1741,7 +1806,11 @@ $calendarLanes = [
             <?php endif; ?>
             <section class="drawer-note-section"><h3>Admin Notes</h3><p>Required when rejecting a booking. Optional for other actions.</p><textarea name="remarks" rows="3" placeholder="Add an admin note"></textarea></section>
             <div class="drawer-action-buttons">
-                <?php if ($currentIsPending && !$currentIsPaid): ?>
+                <?php if ($currentHasRefundRequest): ?>
+                    <button name="action" value="approve_cancellation" class="approve">Approve Cancellation</button>
+                    <button name="action" value="mark_refund_processed" class="approve">Mark Refund Processed</button>
+                    <button name="action" value="reject_cancellation" class="reject" data-requires-note="true">Reject Cancellation</button>
+                <?php elseif ($currentIsPending && !$currentIsPaid): ?>
                     <button name="action" value="approve_booking" class="approve">Approve Booking</button>
                     <button name="action" value="reject_booking" class="reject" data-requires-note="true">Reject Booking</button>
                 <?php elseif (($currentIsApproved || !$currentIsPending) && !$currentIsPaid && !$currentClosed): ?>

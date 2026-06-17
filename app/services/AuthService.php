@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/UserRepository.php';
 require_once __DIR__ . '/../repositories/PasswordResetRepository.php';
+require_once __DIR__ . '/../../includes/validation.php';
 
 final class AuthService
 {
@@ -13,6 +14,10 @@ final class AuthService
 
     public function register(string $name, string $email, string $password, array $profile = []): array
     {
+        $name = validateName($name);
+        $email = validateEmail($email);
+        $password = validatePassword($password);
+
         if ($this->users->findByEmail($email)) {
             throw new RuntimeException('Email is already registered. Please log in.');
         }
@@ -22,6 +27,15 @@ final class AuthService
 
     public function attempt(string $email, string $password): ?array
     {
+        try {
+            $email = validateEmail($email);
+        } catch (RuntimeException) {
+            return null;
+        }
+        if ($password === '' || strlen($password) > 72) {
+            return null;
+        }
+
         $user = $this->users->findByEmail($email);
         if (!$user || !password_verify($password, $user['password_hash'])) {
             return null;
@@ -32,7 +46,7 @@ final class AuthService
 
     public function findByEmail(string $email): ?array
     {
-        return $this->users->findByEmail($email);
+        return $this->users->findByEmail(validateEmail($email));
     }
 
     public function isVerified(array $user): bool
@@ -47,6 +61,7 @@ final class AuthService
 
     public function issuePasswordReset(string $email): ?string
     {
+        $email = validateEmail($email);
         $user = $this->users->findByEmail($email);
         if (!$user) {
             return null;
@@ -62,6 +77,7 @@ final class AuthService
 
     public function issuePasswordResetOtp(string $email): ?array
     {
+        $email = validateEmail($email);
         $user = $this->users->findByEmail($email);
         if (!$user) {
             return null;
@@ -106,6 +122,7 @@ final class AuthService
 
     public function resetPasswordWithOtp(int $userId, int $resetId, string $password): bool
     {
+        $password = validatePassword($password);
         $user = $this->users->findById($userId);
         if (!$user) {
             return false;
@@ -133,6 +150,7 @@ final class AuthService
 
     public function resetPassword(string $token, string $password): bool
     {
+        $password = validatePassword($password);
         if ($token === '' || !preg_match('/\A[a-f0-9]{64}\z/i', $token)) {
             return false;
         }
@@ -156,6 +174,7 @@ final class AuthService
 
     public function changePassword(int $userId, string $currentPassword, string $newPassword): bool
     {
+        $newPassword = validatePassword($newPassword);
         $user = $this->users->findById($userId);
         if (!$user || !password_verify($currentPassword, (string) $user['password_hash'])) {
             return false;

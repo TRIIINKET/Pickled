@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/PrivatePackageRepository.php';
+require_once __DIR__ . '/../../includes/validation.php';
 
 final class PrivatePackageService
 {
@@ -70,25 +71,19 @@ final class PrivatePackageService
 
     private function data(array $input): array
     {
-        $title = trim((string) ($input['title'] ?? ''));
+        $title = validateText($input['title'] ?? '', true, 80);
         $category = trim((string) ($input['category'] ?? 'Private Coaching'));
-        $description = trim((string) ($input['description'] ?? ''));
-        $duration = trim((string) ($input['duration'] ?? ''));
-        $price = (float) ($input['price'] ?? -1);
+        $description = validateText($input['description'] ?? '', true, 1000);
+        $duration = validateText($input['duration'] ?? '', true, 80);
+        $price = (float) validateMoney($input['price'] ?? -1);
         $capacity = (int) ($input['capacity'] ?? 0);
         $coachProfileId = (int) ($input['coach_profile_id'] ?? 0);
         $requiredCoach = in_array((string) ($input['required_coach'] ?? '1'), ['1', 'yes', 'required'], true);
         $slug = trim((string) ($input['slug'] ?? ''));
         $sortOrder = (int) ($input['sort_order'] ?? 0);
 
-        if ($title === '' || $description === '' || $duration === '') {
-            throw new RuntimeException('Title, description, and duration are required.');
-        }
         if (!in_array($category, self::CATEGORIES, true)) {
             throw new RuntimeException('Choose a valid package category.');
-        }
-        if ($price < 0) {
-            throw new RuntimeException('Package price must be zero or greater.');
         }
         if ($capacity < 0) {
             throw new RuntimeException('Capacity must be zero or greater.');
@@ -101,15 +96,15 @@ final class PrivatePackageService
         }
 
         return [
-            'title' => substr($title, 0, 160),
+            'title' => $title,
             'category' => $category,
-            'description' => substr($description, 0, 4000),
+            'description' => $description,
             'price' => $price,
-            'duration' => substr($duration, 0, 80),
+            'duration' => $duration,
             'capacity' => $capacity,
             'coach_profile_id' => $coachProfileId > 0 ? $coachProfileId : null,
             'required_coach' => $requiredCoach,
-            'slug' => substr($slug !== '' ? $slug : $this->slug($title), 0, 190),
+            'slug' => $this->slug($slug !== '' ? $slug : $title),
             'sort_order' => $sortOrder,
             'status' => $this->status((string) ($input['status'] ?? 'active')),
         ];
@@ -131,6 +126,9 @@ final class PrivatePackageService
     private function slug(string $value): string
     {
         $slug = strtolower(trim((string) preg_replace('/[^a-zA-Z0-9]+/', '-', $value), '-'));
-        return $slug !== '' ? $slug : 'private-package';
+        if ($slug === '' || strlen($slug) > 150 || !preg_match('/^[a-z0-9-]+$/', $slug)) {
+            throw new RuntimeException('Slug must use lowercase letters, numbers, and hyphens only.');
+        }
+        return $slug;
     }
 }

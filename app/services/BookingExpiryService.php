@@ -7,7 +7,7 @@ require_once __DIR__ . '/AdminLogService.php';
 
 final class BookingExpiryService
 {
-    private const DEFAULT_PENDING_EXPIRY_HOURS = 24;
+    private const DEFAULT_PENDING_EXPIRY_MINUTES = 30;
 
     public function __construct(
         private readonly BookingRepository $bookings = new BookingRepository(),
@@ -34,10 +34,16 @@ final class BookingExpiryService
         return $expired;
     }
 
-    public function pendingExpiryHours(): int
+    public function pendingExpiryMinutes(): int
     {
         $config = require __DIR__ . '/../../includes/config.php';
-        return max(1, (int) ($config['booking']['pending_expiry_hours'] ?? self::DEFAULT_PENDING_EXPIRY_HOURS));
+        if (isset($config['booking']['pending_expiry_minutes'])) {
+            return max(1, (int) $config['booking']['pending_expiry_minutes']);
+        }
+        if (isset($config['booking']['pending_expiry_hours'])) {
+            return max(1, (int) $config['booking']['pending_expiry_hours']) * 60;
+        }
+        return self::DEFAULT_PENDING_EXPIRY_MINUTES;
     }
 
     public function cutoff(?DateTimeImmutable $now = null): DateTimeImmutable
@@ -46,6 +52,22 @@ final class BookingExpiryService
         $timezone = new DateTimeZone((string) ($config['timezone'] ?? 'Asia/Manila'));
         $now ??= new DateTimeImmutable('now', $timezone);
 
-        return $now->setTimezone($timezone)->modify('-' . $this->pendingExpiryHours() . ' hours');
+        return $now->setTimezone($timezone)->modify('-' . $this->pendingExpiryMinutes() . ' minutes');
+    }
+
+    public function deadlineForBooking(array $booking): ?DateTimeImmutable
+    {
+        $createdAt = trim((string) ($booking['created_at'] ?? ''));
+        if ($createdAt === '') {
+            return null;
+        }
+
+        $config = require __DIR__ . '/../../includes/config.php';
+        $timezone = new DateTimeZone((string) ($config['timezone'] ?? 'Asia/Manila'));
+        try {
+            return (new DateTimeImmutable($createdAt, $timezone))->modify('+' . $this->pendingExpiryMinutes() . ' minutes');
+        } catch (Throwable) {
+            return null;
+        }
     }
 }

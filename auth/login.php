@@ -40,8 +40,13 @@ $roleLabels = [
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'login';
-    $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
-    $password = trim($_POST['password'] ?? '');
+    $rawEmail = (string) ($_POST['email'] ?? '');
+    try {
+        $email = validateEmail($rawEmail);
+    } catch (RuntimeException) {
+        $email = null;
+    }
+    $password = (string) ($_POST['password'] ?? '');
     $csrfToken = $_POST['csrf_token'] ?? null;
 
     if (!pickled_validate_csrf_token($csrfToken)) {
@@ -63,28 +68,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } elseif ($action === 'signup') {
             $mode = 'signup';
-            $name = trim($_POST['name'] ?? '');
-            $confirmPassword = trim($_POST['confirm_password'] ?? '');
+            $confirmPassword = (string) ($_POST['confirm_password'] ?? '');
 
-            if ($name === '') {
-                $signupError = 'Name is required.';
-            } elseif (!$email) {
-                $signupError = 'Enter a valid email.';
-            } elseif (strlen($password) < 6) {
-                $signupError = 'Password must be at least 6 characters.';
-            } elseif ($password !== $confirmPassword) {
-                $signupError = 'Passwords do not match.';
-            } else {
-                try {
+            try {
+                $name = validateName($_POST['name'] ?? '');
+                $email = validateEmail($rawEmail);
+                $password = validatePassword($password);
+                if ($password !== $confirmPassword) {
+                    throw new RuntimeException('Passwords do not match.');
+                }
+
                     $user = $auth->register($name, $email, $password);
                     if (EmailVerification::issue($user)) {
                         header('Location: verify-otp.php');
                         exit;
                     }
                     $signupError = 'Account created, but the OTP email could not be sent. Please use resend OTP on the login page.';
-                } catch (RuntimeException $e) {
-                    $signupError = $e->getMessage();
-                }
+            } catch (RuntimeException $e) {
+                $signupError = $e->getMessage();
             }
         } else {
             $mode = 'login';
@@ -97,6 +98,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 session_regenerate_id(true);
                 $_SESSION['user'] = pickled_session_user($user);
                 $_SESSION['user_id'] = $_SESSION['user']['id'];
+                $firstName = trim((string) (preg_split('/\s+/', (string) ($_SESSION['user']['name'] ?? ''))[0] ?? ''));
+                $_SESSION['welcome_banner'] = 'Welcome back, ' . ($firstName !== '' ? $firstName : 'Player') . '!';
                 pickled_restore_cart_for_user();
                 $emailService = new EmailService();
                 if (!$emailService->sendLoginNotification($_SESSION['user'])) {
@@ -139,18 +142,18 @@ include $frontendPath . '/includes/header.php';
 
       <label>
         <span>Name</span>
-        <input type="text" name="name" placeholder="Name" autocomplete="name" required/>
+        <input type="text" name="name" placeholder="Name" autocomplete="name" minlength="2" maxlength="80" pattern="[A-Za-z][A-Za-z .'\-]*" title="Please enter a valid name." required/>
       </label>
 
       <label>
         <span>Email</span>
-        <input type="email" name="email" placeholder="Email" autocomplete="email" required/>
+        <input type="email" name="email" placeholder="Email" autocomplete="email" maxlength="150" required/>
       </label>
 
       <div class="login-form-field">
         <label for="signupPassword">Password</label>
         <span class="login-field login-field--password">
-          <input id="signupPassword" type="password" name="password" placeholder="Password" autocomplete="new-password" required/>
+          <input id="signupPassword" type="password" name="password" placeholder="Password" autocomplete="new-password" minlength="8" maxlength="72" pattern="(?=.*[A-Za-z])(?=.*\d).{8,72}" title="Password must be at least 8 characters and include letters and numbers." required/>
           <button class="login-password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="signupPassword" data-password-toggle>
             <svg class="login-password-toggle__icon login-password-toggle__icon--show" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
@@ -168,7 +171,7 @@ include $frontendPath . '/includes/header.php';
       <div class="login-form-field">
         <label for="signupConfirmPassword">Confirm Password</label>
         <span class="login-field login-field--password">
-          <input id="signupConfirmPassword" type="password" name="confirm_password" placeholder="Confirm password" autocomplete="new-password" required/>
+          <input id="signupConfirmPassword" type="password" name="confirm_password" placeholder="Confirm password" autocomplete="new-password" minlength="8" maxlength="72" required/>
           <button class="login-password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="signupConfirmPassword" data-password-toggle>
             <svg class="login-password-toggle__icon login-password-toggle__icon--show" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
@@ -224,7 +227,7 @@ include $frontendPath . '/includes/header.php';
       <label>
         <span>Email</span>
         <span class="login-field">
-          <input type="email" name="email" placeholder="Enter your email" autocomplete="email" required value="<?= htmlspecialchars($unverifiedEmail ?: ($_POST['email'] ?? '')) ?>"/>
+          <input type="email" name="email" placeholder="Enter your email" autocomplete="email" maxlength="150" required value="<?= htmlspecialchars($unverifiedEmail ?: ($_POST['email'] ?? '')) ?>"/>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 6h16v12H4z"></path>
             <path d="m4 7 8 6 8-6"></path>
@@ -235,7 +238,7 @@ include $frontendPath . '/includes/header.php';
       <div class="login-form-field">
         <label for="loginPassword">Password</label>
         <span class="login-field login-field--password">
-          <input id="loginPassword" type="password" name="password" placeholder="Enter your password" autocomplete="current-password" required/>
+          <input id="loginPassword" type="password" name="password" placeholder="Enter your password" autocomplete="current-password" maxlength="72" required/>
           <button class="login-password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="loginPassword" data-password-toggle>
             <svg class="login-password-toggle__icon login-password-toggle__icon--show" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>

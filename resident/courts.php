@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/schedule-time.php';
+require_once __DIR__ . '/../includes/avatar-helper.php';
 require_once __DIR__ . '/../app/services/CatalogService.php';
 require_once __DIR__ . '/../app/services/SchedulingService.php';
 pickled_init_csrf();
@@ -282,7 +283,7 @@ $cartErrorMessages = [
   'limit' => 'Cart limit reached. Please complete checkout before adding more reservations.',
   'expired_schedule' => 'This schedule is no longer available. Please select a future time slot.',
   'login' => 'Please log in before booking.',
-  'phone' => 'Please enter a valid 11-digit mobile number.',
+  'phone' => 'Please enter a valid Philippine mobile number.',
 ];
 $cartError = $cartErrorMessages[(string) ($_GET['cart_error'] ?? '')] ?? '';
 $serverNow = pickled_schedule_now();
@@ -294,28 +295,48 @@ if (!empty($currentUser['id'])) {
   try {
     $phoneStmt = Database::connection()->prepare('SELECT phone FROM user_profiles WHERE user_id = :user_id LIMIT 1');
     $phoneStmt->execute(['user_id' => (int) $currentUser['id']]);
-    $currentUserPhone = trim((string) ($phoneStmt->fetchColumn() ?: ''));
+        $currentUserPhone = formatPhonePH(trim((string) ($phoneStmt->fetchColumn() ?: '')));
   } catch (Throwable $e) {
     error_log('Unable to load booking phone autofill: ' . $e->getMessage());
   }
 }
 
 $coaches = [];
+$coachProgramNames = [];
+foreach ($courtRateCatalog as $rates) {
+  foreach ($rates as $rate) {
+    $label = trim((string) ($rate['label'] ?? ''));
+    $search = strtolower(($rate['variant'] ?? '') . ' ' . $label);
+    if ($label !== '' && (str_contains($search, 'coach') || str_contains($search, 'training') || str_contains($search, 'lesson') || str_contains($search, 'class') || str_contains($search, 'kids') || str_contains($search, 'youth') || str_contains($search, 'parent'))) {
+      $coachProgramNames[$label] = true;
+    }
+  }
+}
+$coachProgramLabel = $coachProgramNames ? implode(', ', array_slice(array_keys($coachProgramNames), 0, 4)) : 'Private Coaching, Training, Kids Class';
 foreach ($coachRows as $index => $coachRow) {
   $availability = $schedulingService->availabilityForCoach((int) $coachRow['id'], true);
   [$scheduleLabel, $daysLabel, $slotsLabel] = pickled_public_coach_schedule($availability);
+  $coachName = trim((string) ($coachRow['name'] ?? 'Coach'));
+  $initials = implode('', array_map(static fn(string $part): string => strtoupper(substr($part, 0, 1)), array_slice(preg_split('/\s+/', $coachName) ?: ['C'], 0, 2)));
+  $avatar = trim((string) ($coachRow['avatar'] ?? ''));
+  $gender = strtolower(trim((string) ($coachRow['gender'] ?? '')));
+  $gender = in_array($gender, ['men', 'man', 'male', 'm'], true) ? 'men' : (in_array($gender, ['women', 'woman', 'female', 'f'], true) ? 'women' : '');
   $coaches[] = [
     str_pad((string) $coachRow['id'], 2, '0', STR_PAD_LEFT),
-    $coachRow['name'],
-    $index % 2 ? 'green' : 'pink',
+    $coachName,
+    'neutral',
     $coachRow['bio'] ?: (($coachRow['specialization'] ?? 'Pickleball') . ' coach available for PICKLED sessions.'),
-    'all',
+    $gender,
     $scheduleLabel,
     $daysLabel,
     $slotsLabel,
-    '../assets/img/court/academy.png',
+    $avatar !== '' ? pickled_avatar_url($avatar) : '',
+    trim((string) ($coachRow['specialization'] ?? 'Pickleball Coach')) ?: 'Pickleball Coach',
+    $coachProgramLabel,
+    $initials ?: 'C',
   ];
 }
+$hasCoachGenderFilter = (bool) array_filter($coaches, static fn(array $coach): bool => in_array((string) ($coach[4] ?? ''), ['men', 'women'], true));
 ?>
 
 <main class="courts-page">
@@ -456,22 +477,34 @@ foreach ($coachRows as $index => $coachRow) {
         <h2>COACHES</h2>
         <span>Our team is a diverse group of internationally certified coaches united by a common goal, working together harmoniously to achieve success.</span>
         <button class="book-trigger coaches-book" type="button" data-tooltip="Order now" <?= pickled_booking_rate_attrs($privateCoachRate + ['dateMode' => $privateCoachRate['dateMode'] ?? 'coach'], true) ?>>BOOK NOW ›</button>
-        <div class="coach-filter">
-          <button class="is-active" type="button" data-coach-filter="all">All</button>
-          <button type="button" data-coach-filter="mens">Men</button>
-          <button type="button" data-coach-filter="women">Women</button>
-        </div>
+        <?php if ($hasCoachGenderFilter): ?>
+          <div class="coach-filter">
+            <button class="is-active" type="button" data-coach-filter="all">All</button>
+            <button type="button" data-coach-filter="men">Men</button>
+            <button type="button" data-coach-filter="women">Women</button>
+          </div>
+        <?php endif; ?>
       </aside>
       <div class="coach-grid">
         <?php foreach ($coaches as $coach): ?>
           <article class="coach-card coach-card--<?= htmlspecialchars($coach[2]) ?>" data-coach-gender="<?= htmlspecialchars($coach[4]) ?>">
-            <button class="coach-toggle" type="button" aria-expanded="false">+</button>
-            <p><?= htmlspecialchars($coach[0]) ?></p>
-            <h3><?= htmlspecialchars($coach[1]) ?></h3>
             <div class="coach-photo">
-              <img src="<?= htmlspecialchars($coach[8]) ?>" alt="<?= htmlspecialchars($coach[1]) ?> photo placeholder" />
+              <?php if ($coach[8] !== ''): ?>
+                <img src="<?= htmlspecialchars($coach[8]) ?>" alt="<?= htmlspecialchars($coach[1]) ?> photo" onerror="this.remove(); this.parentElement.dataset.initials='<?= htmlspecialchars($coach[11]) ?>';" />
+              <?php else: ?>
+                <span><?= htmlspecialchars($coach[11]) ?></span>
+              <?php endif; ?>
             </div>
-            <div class="coach-detail"><?= htmlspecialchars($coach[3]) ?><strong>Schedule: <?= htmlspecialchars($coach[5]) ?></strong></div>
+            <div class="coach-card__body">
+              <p><?= htmlspecialchars($coach[9]) ?></p>
+              <h3><?= htmlspecialchars($coach[1]) ?></h3>
+              <span class="coach-card__bio"><?= htmlspecialchars($coach[3]) ?></span>
+              <dl>
+                <div><dt>Schedule</dt><dd><?= htmlspecialchars($coach[5]) ?></dd></div>
+                <div><dt>Programs</dt><dd><?= htmlspecialchars($coach[10]) ?></dd></div>
+              </dl>
+              <button type="button" data-coach-profile>View Profile</button>
+            </div>
           </article>
         <?php endforeach; ?>
       </div>
@@ -482,7 +515,7 @@ foreach ($coachRows as $index => $coachRow) {
 
 <?php
 $bookingReference = 'PKL-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
-$defaultCoach = $coaches[0] ?? ['00', 'Coach', 'green', '', 'all', '', '', '', '../assets/img/court/academy.png'];
+$defaultCoach = $coaches[0] ?? ['00', 'Coach', 'neutral', '', '', '', '', '', '', 'Pickleball Coach', 'Private Coaching', 'C'];
 $initialCalendar = new DateTimeImmutable('first day of this month');
 $initialCalendarTitle = $initialCalendar->format('F Y');
 $initialDaysInMonth = (int) $initialCalendar->format('t');
@@ -585,9 +618,9 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       <form class="booking-form booking-details-form">
         <h2>Your details</h2>
         <div class="booking-alert">This will add your selected schedule to cart. Payment happens during checkout.</div>
-        <label>Name *<input type="text" name="customer_name" placeholder="Enter your name" value="<?= htmlspecialchars($currentUserName) ?>" required autocomplete="name" /></label>
-        <label>Email *<input type="email" name="customer_email" placeholder="Enter your email" value="<?= htmlspecialchars($currentUserEmail) ?>" required autocomplete="email" <?= $currentUserEmail !== '' ? 'readonly' : '' ?> /></label>
-        <label>Phone Number *<input type="tel" name="customer_phone" placeholder="09123456789" value="<?= htmlspecialchars($currentUserPhone) ?>" inputmode="numeric" maxlength="11" pattern="09[0-9]{9}" required autocomplete="tel" data-booking-phone /></label>
+        <label>Name *<input type="text" name="customer_name" placeholder="Enter your name" value="<?= htmlspecialchars($currentUserName) ?>" minlength="2" maxlength="80" pattern="[A-Za-z][A-Za-z .'\-]*" title="Please enter a valid name." required autocomplete="name" /></label>
+        <label>Email *<input type="email" name="customer_email" placeholder="Enter your email" value="<?= htmlspecialchars($currentUserEmail) ?>" maxlength="150" required autocomplete="email" /></label>
+        <label>Phone Number *<input type="tel" name="customer_phone" placeholder="+63 912 345 6789" value="<?= htmlspecialchars($currentUserPhone) ?>" inputmode="tel" maxlength="16" pattern="(9[0-9]{9}|09[0-9]{9}|\+639[0-9]{9}|639[0-9]{9}|\+63 9[0-9]{2} [0-9]{3} [0-9]{4})" required autocomplete="tel" data-booking-phone /></label>
         <fieldset>
           <legend>What is your or your group's experience level in pickleball? *</legend>
           <label><input type="radio" name="level" value="New or had trial class experience" required /> New or had trial class experience</label>
@@ -1174,8 +1207,9 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
 
   const bookingPhoneInput = modal.querySelector('[data-booking-phone]');
   bookingPhoneInput?.addEventListener('input', () => {
-    bookingPhoneInput.value = bookingPhoneInput.value.replace(/\D/g, '').slice(0, 11);
-    bookingPhoneInput.setCustomValidity(/^09\d{9}$/.test(bookingPhoneInput.value) ? '' : 'Please enter a valid 11-digit mobile number.');
+    bookingPhoneInput.value = bookingPhoneInput.value.replace(/[^\d+ ]/g, '').replace(/(?!^)\+/g, '').slice(0, 16);
+    const compact = bookingPhoneInput.value.replace(/\s+/g, '');
+    bookingPhoneInput.setCustomValidity(/^(9\d{9}|09\d{9}|\+639\d{9}|639\d{9})$/.test(compact) ? '' : 'Please enter a valid Philippine mobile number.');
   });
 
   personInput.addEventListener('input', event => {
@@ -1264,15 +1298,16 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     const form = event.currentTarget;
     const phone = form.querySelector('[data-booking-phone]');
     if (phone) {
-      phone.value = phone.value.replace(/\D/g, '').slice(0, 11);
-      phone.setCustomValidity(/^09\d{9}$/.test(phone.value) ? '' : 'Please enter a valid 11-digit mobile number.');
+      phone.value = phone.value.replace(/[^\d+ ]/g, '').replace(/(?!^)\+/g, '').slice(0, 16);
+      const compact = phone.value.replace(/\s+/g, '');
+      phone.setCustomValidity(/^(9\d{9}|09\d{9}|\+639\d{9}|639\d{9})$/.test(compact) ? '' : 'Please enter a valid Philippine mobile number.');
     }
     if (!form.reportValidity()) {
       return;
     }
     state.name = form.querySelector('input[name="customer_name"]').value.trim();
     state.email = form.querySelector('input[name="customer_email"]').value.trim();
-    state.phone = phone ? phone.value.trim() : '';
+    state.phone = phone ? phone.value.replace(/\s+/g, '').trim() : '';
     updateTotals();
     submitBookingToCart();
   });
@@ -1296,6 +1331,15 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
       card.classList.toggle('is-open');
       button.textContent = card.classList.contains('is-open') ? '×' : '+';
       button.setAttribute('aria-expanded', card.classList.contains('is-open') ? 'true' : 'false');
+    });
+  });
+
+  document.querySelectorAll('[data-coach-profile]').forEach(button => {
+    button.addEventListener('click', () => {
+      const card = button.closest('.coach-card');
+      const expanded = !card.classList.contains('is-open');
+      card.classList.toggle('is-open', expanded);
+      button.textContent = expanded ? 'Hide Profile' : 'View Profile';
     });
   });
 

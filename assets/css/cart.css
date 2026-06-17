@@ -70,10 +70,13 @@
 .booking-card__status--ongoing{background:#e7f3ff;color:#0b4a7a}
 .booking-card__status--completed{background:#f2f2f2;color:#6b6b6b}
 .booking-card__status--cancelled{background:#ffe7e9;color:#8f1d2f}
+.booking-card__status--expired{background:#ffe7e9;color:#8f1d2f}
 .payment-state--awaiting{background:#fff9db;color:#6d4b00}
 .payment-state--uploaded{background:#e7f3ff;color:#0b4a7a}
 .payment-state--paid{background:#e8ffe1;color:#12401f}
 .payment-state--rejected{background:#ffe7e9;color:#8f1d2f}
+.payment-state--expired{background:#ffe7e9;color:#8f1d2f}
+.payment-state--refund_pending{background:#fff6cf;color:#6d4b00}
 
 /* Selected filter button colors match the badges */
 .booking-filters button[data-booking-filter="pending"].is-selected{background:#fff9db;color:#6d4b00;border-color:#d6c570}
@@ -87,7 +90,11 @@
 .booking-action--secondary{background:#fff;color:#204f3b}
 .booking-action--feedback{background:#70e956;color:#10240e;border-color:#70e956}
 .booking-action--upload{background:#204f3b;color:#fff;border-color:#204f3b}
+.booking-action--danger{background:#ffe7e9;color:#8f1d2f;border-color:#f0b2bb}
 .booking-action--disabled{background:#f2f2f2;color:#6b6b6b;border-color:#e1e1e1;cursor:not-allowed}
+.booking-inline-form{display:inline-flex;margin:0}
+.booking-inline-form button{font:inherit}
+.booking-deadline{color:#8f1d2f!important;font-weight:950!important}
 .booking-items{display:grid;gap:14px}
 .booking-item{display:flex;gap:14px;align-items:flex-start}
 .booking-item img{width:94px;height:74px;object-fit:cover;border-radius:10px;flex-shrink:0}

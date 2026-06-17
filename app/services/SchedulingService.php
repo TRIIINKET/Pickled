@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../repositories/SchedulingRepository.php';
 require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/AdminLogService.php';
+require_once __DIR__ . '/../../includes/validation.php';
 
 final class SchedulingService
 {
@@ -96,8 +97,8 @@ final class SchedulingService
 
     public function findOrCreateSession(int $variantId, string $date, string $time, int $capacity, ?int $coachUserId = null): array
     {
-        $sessionDate = $this->date($date);
-        [$start, $end] = $this->timeRange($time);
+        $sessionDate = validateDate($date, false);
+        [$start, $end] = $this->timeRange($time, $sessionDate);
         return $this->schedules->findOrCreateSession($variantId, $sessionDate, $start, $end, max(1, $capacity), $coachUserId);
     }
 
@@ -210,10 +211,9 @@ final class SchedulingService
     private function sessionData(array $input): array
     {
         $variantId = (int) ($input['variant_id'] ?? 0);
-        $sessionDate = $this->date((string) ($input['session_date'] ?? ''));
-        $start = $this->time((string) ($input['start_time'] ?? ''));
-        $end = $this->time((string) ($input['end_time'] ?? ''));
-        $capacity = (int) ($input['capacity'] ?? 0);
+        $sessionDate = validateDate($input['session_date'] ?? '', false);
+        [$start, $end] = validateTime($input['start_time'] ?? '', $input['end_time'] ?? '', $sessionDate);
+        $capacity = validatePositiveInt($input['capacity'] ?? 0, null, 'Please enter a valid number of players.');
         $booked = (int) ($input['booked_count'] ?? 0);
 
         if ($variantId <= 0 || $capacity <= 0) {
@@ -242,8 +242,7 @@ final class SchedulingService
     {
         $coachUserId = (int) ($input['coach_user_id'] ?? 0);
         $dayOfWeek = (int) ($input['day_of_week'] ?? -1);
-        $start = $this->time((string) ($input['start_time'] ?? ''));
-        $end = $this->time((string) ($input['end_time'] ?? ''));
+        [$start, $end] = validateTime($input['start_time'] ?? '', $input['end_time'] ?? '');
 
         if ($coachUserId <= 0 || !$this->schedules->coachById($coachUserId)) {
             throw new RuntimeException('A valid coach is required.');
@@ -298,36 +297,21 @@ final class SchedulingService
 
     private function date(string $value): string
     {
-        $value = trim($value);
-        if ($value === '') {
-            throw new RuntimeException('Date is required.');
-        }
-        try {
-            return (new DateTimeImmutable($value))->format('Y-m-d');
-        } catch (Throwable) {
-            throw new RuntimeException('Date is invalid.');
-        }
+        return validateDate($value, true);
     }
 
-    private function timeRange(string $value): array
+    private function timeRange(string $value, ?string $date = null): array
     {
         $parts = preg_split('/\s*-\s*/', trim($value));
         if (!$parts || count($parts) !== 2) {
             throw new RuntimeException('Time range is invalid.');
         }
-        return [$this->time($parts[0]), $this->time($parts[1])];
+        return validateTime($parts[0], $parts[1], $date);
     }
 
     private function time(string $value): string
     {
-        $value = trim($value);
-        foreach (['H:i:s', 'H:i', 'g:i A', 'h:i A', 'g A', 'h A'] as $format) {
-            $time = DateTimeImmutable::createFromFormat($format, $value);
-            if ($time instanceof DateTimeImmutable) {
-                return $time->format('H:i:s');
-            }
-        }
-        throw new RuntimeException('Time is invalid.');
+        return validateTime($value);
     }
 
     private function sessionStatus(string $status): string
@@ -351,10 +335,10 @@ final class SchedulingService
     private function timeOffData(array $input): array
     {
         $coachUserId = (int) ($input['coach_user_id'] ?? 0);
-        $startDate = $this->date((string) ($input['start_date'] ?? ''));
-        $endDate = $this->date((string) ($input['end_date'] ?? ''));
+        $startDate = validateDate($input['start_date'] ?? '', false);
+        $endDate = validateDate($input['end_date'] ?? '', false);
         $reason = trim((string) ($input['reason'] ?? ''));
-        $notes = trim((string) ($input['notes'] ?? ''));
+        $notes = validateText($input['notes'] ?? '', false, 1000);
         $status = strtolower(trim((string) ($input['status'] ?? 'pending')));
 
         if ($coachUserId <= 0 || !$this->schedules->coachById($coachUserId)) {

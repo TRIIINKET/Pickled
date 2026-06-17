@@ -152,31 +152,33 @@ function court_normalize_image_path(string $path): string {
 
 function court_category_options(): array {
     return [
-        'Court Rental' => 'Court Rental',
-        'Private Coaching' => 'Private Coaching',
-        'Class' => 'Class',
-        'Training' => 'Training',
-        'Social Play' => 'Social Play',
-        'Tournament' => 'Tournament',
+        'court_rental' => 'Court Rental',
+        'private_coaching' => 'Private Coaching',
+        'training_session' => 'Training / Class',
+        'social_play' => 'Social Play',
+        'tournament' => 'Tournament',
     ];
 }
 
 function court_category_value(string $category): string {
     $normalized = strtolower(trim(str_replace(['-', ' '], '_', $category)));
     $map = [
-        'court_reservation' => 'Court Rental',
-        'court_rental' => 'Court Rental',
-        'court_rentals' => 'Court Rental',
-        'coaching' => 'Private Coaching',
-        'private_coaching' => 'Private Coaching',
-        'social_play' => 'Social Play',
-        'tournament' => 'Tournament',
-        'training' => 'Training',
-        'training_session' => 'Training',
-        'class' => 'Class',
-        'family_session' => 'Class',
+        'court_reservation' => 'court_rental',
+        'court_rental' => 'court_rental',
+        'court_rentals' => 'court_rental',
+        'coaching' => 'private_coaching',
+        'private_coaching' => 'private_coaching',
+        'private_coaching_' => 'private_coaching',
+        'social_play' => 'social_play',
+        'match_play' => 'social_play',
+        'community_event' => 'social_play',
+        'tournament' => 'tournament',
+        'training' => 'training_session',
+        'training_session' => 'training_session',
+        'class' => 'training_session',
+        'family_session' => 'training_session',
     ];
-    return $map[$normalized] ?? (array_key_exists($category, court_category_options()) ? $category : 'Court Rental');
+    return $map[$normalized] ?? (array_key_exists($category, court_category_options()) ? $category : 'court_rental');
 }
 
 function court_category_label(string $category): string {
@@ -857,11 +859,11 @@ $dashboardNav = [
                 <input type="hidden" name="pricing_type" value="per_participant">
                 <input type="hidden" name="image" value="">
                 <input type="hidden" name="sort_order" value="<?php echo count($socialServices) * 10; ?>">
-                <label><span>Event Name</span><input type="text" name="name" data-social-name required></label>
-                <label><span>Category</span><select name="category" required><?php foreach (['Tournament', 'Social Play', 'Match Play', 'Community Event'] as $option): ?><option value="<?php echo court_h($option); ?>"><?php echo court_h($option); ?></option><?php endforeach; ?></select></label>
+                <label><span>Event Name</span><input type="text" name="name" maxlength="80" data-social-name required></label>
+                <label><span>Category</span><select name="category" required><option value="tournament">Tournament</option><option value="social_play">Social Play</option></select></label>
                 <label><span>Court</span><select name="court_id" required><?php foreach ($allCourts as $selectCourt): ?><option value="<?php echo (int) $selectCourt['id']; ?>"><?php echo court_h($selectCourt['name']); ?></option><?php endforeach; ?></select></label>
-                <label><span>Price</span><input type="number" name="price" step="0.01" min="0.01" required></label>
-                <label><span>Duration</span><input type="text" name="duration_label" placeholder="2 Hours" required></label>
+                <label><span>Price</span><input type="number" name="price" step="0.01" min="0.01" max="999999.99" required></label>
+                <label><span>Duration</span><input type="text" name="duration_label" maxlength="80" placeholder="2 Hours" required></label>
                 <label><span>Player Limit</span><input type="number" name="participants_limit" min="1" value="16" required></label>
                 <input type="hidden" name="capacity" value="16" data-social-capacity>
                 <label><span>Status</span><select name="active"><option value="1">Active</option><option value="0">Inactive</option></select></label>
@@ -880,10 +882,10 @@ $dashboardNav = [
                     <input type="hidden" name="pricing_type" value="<?php echo court_h((string) ($service['pricing_type'] ?? 'per_participant')); ?>">
                     <input type="hidden" name="image" value="<?php echo court_h($service['image'] ?? ''); ?>">
                     <input type="hidden" name="sort_order" value="<?php echo (int) ($service['sort_order'] ?? 0); ?>">
-                    <label><span>Event Name</span><input type="text" name="name" value="<?php echo court_h($service['name']); ?>" required></label>
-                    <label><span>Category</span><select name="category" required><?php foreach (['Tournament', 'Social Play', 'Match Play', 'Community Event'] as $option): ?><option value="<?php echo court_h($option); ?>" <?php echo (string) $service['category'] === $option ? 'selected' : ''; ?>><?php echo court_h($option); ?></option><?php endforeach; ?></select></label>
-                    <label><span>Price</span><input type="number" name="price" step="0.01" min="0.01" value="<?php echo court_h($service['price']); ?>" required></label>
-                    <label><span>Duration</span><input type="text" name="duration_label" value="<?php echo court_h($service['duration_label']); ?>" required></label>
+                    <label><span>Event Name</span><input type="text" name="name" maxlength="80" value="<?php echo court_h($service['name']); ?>" required></label>
+                    <label><span>Category</span><select name="category" required><option value="tournament" <?php echo court_category_value((string) $service['category']) === 'tournament' ? 'selected' : ''; ?>>Tournament</option><option value="social_play" <?php echo court_category_value((string) $service['category']) === 'social_play' ? 'selected' : ''; ?>>Social Play</option></select></label>
+                    <label><span>Price</span><input type="number" name="price" step="0.01" min="0.01" max="999999.99" value="<?php echo court_h($service['price']); ?>" required></label>
+                    <label><span>Duration</span><input type="text" name="duration_label" maxlength="80" value="<?php echo court_h($service['duration_label']); ?>" required></label>
                     <label><span>Player Limit</span><input type="number" name="participants_limit" min="1" value="<?php echo (int) $service['participants_limit']; ?>" required></label>
                     <input type="hidden" name="capacity" value="<?php echo (int) $service['capacity']; ?>">
                     <label><span>Status</span><select name="active"><option value="1" <?php echo !empty($service['active']) ? 'selected' : ''; ?>>Active</option><option value="0" <?php echo empty($service['active']) ? 'selected' : ''; ?>>Inactive</option></select></label>
@@ -897,9 +899,9 @@ $dashboardNav = [
                 <?php echo court_csrf_input(); ?>
                 <label><span>Event Type</span><select name="variant_id" required><?php foreach ($socialServices as $service): ?><option value="<?php echo (int) $service['id']; ?>" data-capacity="<?php echo (int) $service['capacity']; ?>"><?php echo court_h($service['name']); ?> · <?php echo court_h($service['court_name'] ?? $service['court'] ?? 'Court'); ?></option><?php endforeach; ?></select></label>
                 <label><span>Court</span><select disabled><?php foreach ($allCourts as $selectCourt): ?><option><?php echo court_h($selectCourt['name']); ?></option><?php endforeach; ?></select></label>
-                <label><span>Date</span><input type="date" name="session_date" value="<?php echo date('Y-m-d'); ?>" required></label>
-                <label><span>Start Time</span><input type="time" name="start_time" value="09:00" required></label>
-                <label><span>End Time</span><input type="time" name="end_time" value="10:00" required></label>
+                <label><span>Date</span><input type="date" name="session_date" min="<?php echo date('Y-m-d'); ?>" value="<?php echo date('Y-m-d'); ?>" required></label>
+                <label><span>Start Time</span><input type="time" name="start_time" min="08:00" max="21:00" value="09:00" required></label>
+                <label><span>End Time</span><input type="time" name="end_time" min="09:00" max="22:00" value="10:00" required></label>
                 <label><span>Capacity Override</span><input type="number" name="capacity" min="1" value="16" required></label>
                 <input type="hidden" name="booked_count" value="0">
                 <label><span>Status</span><select name="status"><option value="open">Open</option><option value="full">Full</option><option value="cancelled">Cancelled</option></select></label>
@@ -915,9 +917,9 @@ $dashboardNav = [
                     <input type="hidden" name="booked_count" value="<?php echo (int) $session['booked_count']; ?>">
                     <label><span>Event Type</span><select name="variant_id" required><?php foreach ($socialServices as $service): ?><option value="<?php echo (int) $service['id']; ?>" <?php echo (int) $service['id'] === (int) $session['format_id'] ? 'selected' : ''; ?>><?php echo court_h($service['name']); ?></option><?php endforeach; ?></select></label>
                     <label><span>Court</span><input type="text" value="<?php echo court_h($session['court_name']); ?>" disabled></label>
-                    <label><span>Date</span><input type="date" name="session_date" value="<?php echo court_h($session['session_date_raw']); ?>" required></label>
-                    <label><span>Start Time</span><input type="time" name="start_time" value="<?php echo court_h(substr((string) $session['start_time_raw'], 0, 5)); ?>" required></label>
-                    <label><span>End Time</span><input type="time" name="end_time" value="<?php echo court_h(substr((string) $session['end_time_raw'], 0, 5)); ?>" required></label>
+                    <label><span>Date</span><input type="date" name="session_date" min="<?php echo date('Y-m-d'); ?>" value="<?php echo court_h($session['session_date_raw']); ?>" required></label>
+                    <label><span>Start Time</span><input type="time" name="start_time" min="08:00" max="21:00" value="<?php echo court_h(substr((string) $session['start_time_raw'], 0, 5)); ?>" required></label>
+                    <label><span>End Time</span><input type="time" name="end_time" min="09:00" max="22:00" value="<?php echo court_h(substr((string) $session['end_time_raw'], 0, 5)); ?>" required></label>
                     <label><span>Capacity Override</span><input type="number" name="capacity" min="<?php echo max(1, (int) $session['booked_count']); ?>" value="<?php echo (int) ($session['capacity'] ?? $session['variant_capacity'] ?? 16); ?>" required></label>
                     <label><span>Status</span><select name="status"><option value="open" <?php echo ($session['status'] ?? '') === 'open' ? 'selected' : ''; ?>>Open</option><option value="full" <?php echo ($session['status'] ?? '') === 'full' ? 'selected' : ''; ?>>Full</option><option value="cancelled" <?php echo ($session['status'] ?? '') === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option></select></label>
                     <footer><button class="archive-service-button danger" type="submit" name="action" value="set_session_status" onclick="this.form.status.value='cancelled'">Cancel Session</button><button class="bookings-button primary" type="submit" name="action" value="update_session">Save Session</button></footer>
@@ -960,13 +962,13 @@ $dashboardNav = [
                                 <section class="service-form-section">
                                     <h4>Basic Information</h4>
                                     <div class="service-field-grid">
-                                        <label><span>Service Name</span><input type="text" name="name" placeholder="Court Rental" data-service-name required></label>
+                                        <label><span>Service Name</span><input type="text" name="name" maxlength="80" placeholder="Court Rental" data-service-name required></label>
                                         <label><span>Category</span><select name="category" data-service-category required>
                                             <?php foreach (court_category_options() as $value => $label): ?>
                                                 <option value="<?php echo court_h($value); ?>"><?php echo court_h($label); ?></option>
                                             <?php endforeach; ?>
                                         </select></label>
-                                        <label class="service-field-wide"><span>Description</span><textarea name="description" rows="3" placeholder="Optional description"></textarea></label>
+                                        <label class="service-field-wide"><span>Description</span><textarea name="description" rows="3" maxlength="1000" placeholder="Optional description"></textarea></label>
                                     </div>
                                 </section>
                                 <section class="service-form-section">
@@ -977,7 +979,7 @@ $dashboardNav = [
                                                 <option value="<?php echo court_h($value); ?>"><?php echo court_h($label); ?></option>
                                             <?php endforeach; ?>
                                         </select></label>
-                                        <label><span>Price</span><input type="number" name="price" step="0.01" min="0.01" placeholder="0.00" required><small class="field-help">Amount charged for this service.</small></label>
+                                        <label><span>Price</span><input type="number" name="price" step="0.01" min="0.01" max="999999.99" placeholder="0.00" required><small class="field-help">Amount charged for this service.</small></label>
                                         <label><span>Duration</span><select name="duration_choice" data-duration-select required>
                                             <?php foreach (court_duration_options() as $option): ?>
                                                 <option value="<?php echo court_h($option); ?>" <?php echo $option === '1 Hour' ? 'selected' : ''; ?>><?php echo court_h($option); ?></option>
@@ -1001,7 +1003,7 @@ $dashboardNav = [
                                 <details class="service-form-section service-advanced-settings">
                                     <summary>Show Advanced Settings</summary>
                                     <div class="service-field-grid">
-                                        <label><span>Slug</span><input type="text" name="slug" placeholder="<?php echo court_h($courtSlug); ?>-court-rental" data-service-slug required><small class="field-help">Auto-generates from the service name unless edited.</small></label>
+                                        <label><span>Slug</span><input type="text" name="slug" maxlength="150" pattern="[a-z0-9-]+" placeholder="<?php echo court_h($courtSlug); ?>-court-rental" data-service-slug required><small class="field-help">Auto-generates from the service name unless edited.</small></label>
                                         <label><span>Sort Order</span><input type="number" name="sort_order" min="0" value="<?php echo count($services) * 10; ?>"></label>
                                         <label class="session-capacity-field is-hidden"><span>Session Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $capacity; ?>" required><small class="field-help">Default capacity used when creating scheduled sessions. Mostly used for Social Play or event-based services.</small></label>
                                     </div>
@@ -1052,13 +1054,13 @@ $dashboardNav = [
                                             <section class="service-form-section">
                                                 <h4>Basic Information</h4>
                                                 <div class="service-field-grid">
-                                                    <label><span>Service Name</span><input type="text" name="name" value="<?php echo court_h($service['name']); ?>" data-service-name required></label>
+                                                    <label><span>Service Name</span><input type="text" name="name" maxlength="80" value="<?php echo court_h($service['name']); ?>" data-service-name required></label>
                                                     <label><span>Category</span><select name="category" data-service-category required>
                                                         <?php foreach (court_category_options() as $value => $label): ?>
                                                             <option value="<?php echo court_h($value); ?>" <?php echo $categoryValue === $value ? 'selected' : ''; ?>><?php echo court_h($label); ?></option>
                                                         <?php endforeach; ?>
                                                     </select></label>
-                                                    <label class="service-field-wide"><span>Description</span><textarea name="description" rows="3" placeholder="Optional description"><?php echo court_h($service['description'] ?? ''); ?></textarea></label>
+                                                    <label class="service-field-wide"><span>Description</span><textarea name="description" rows="3" maxlength="1000" placeholder="Optional description"><?php echo court_h($service['description'] ?? ''); ?></textarea></label>
                                                 </div>
                                             </section>
                                             <section class="service-form-section">
@@ -1069,7 +1071,7 @@ $dashboardNav = [
                                                             <option value="<?php echo court_h($value); ?>" <?php echo $pricingTypeValue === $value ? 'selected' : ''; ?>><?php echo court_h($label); ?></option>
                                                         <?php endforeach; ?>
                                                     </select></label>
-                                                    <label><span>Price</span><input type="number" name="price" step="0.01" min="0.01" value="<?php echo court_h($service['price']); ?>" required><small class="field-help">Amount charged for this service.</small></label>
+                                                    <label><span>Price</span><input type="number" name="price" step="0.01" min="0.01" max="999999.99" value="<?php echo court_h($service['price']); ?>" required><small class="field-help">Amount charged for this service.</small></label>
                                                     <label><span>Duration</span><select name="duration_choice" data-duration-select required>
                                                         <?php foreach ($durationOptions as $option): ?>
                                                             <option value="<?php echo court_h($option); ?>" <?php echo (!$isCustomDuration && $durationValue === $option) ? 'selected' : ''; ?>><?php echo court_h($option); ?></option>
@@ -1093,7 +1095,7 @@ $dashboardNav = [
                                             <details class="service-form-section service-advanced-settings">
                                                 <summary>Show Advanced Settings</summary>
                                                 <div class="service-field-grid">
-                                                    <label><span>Slug</span><input type="text" name="slug" value="<?php echo court_h($service['slug']); ?>" data-service-slug required><small class="field-help">Auto-generates from the service name unless edited.</small></label>
+                                                    <label><span>Slug</span><input type="text" name="slug" maxlength="150" pattern="[a-z0-9-]+" value="<?php echo court_h($service['slug']); ?>" data-service-slug required><small class="field-help">Auto-generates from the service name unless edited.</small></label>
                                                     <label><span>Sort Order</span><input type="number" name="sort_order" min="0" value="<?php echo (int) ($service['sort_order'] ?? 0); ?>"></label>
                                                     <label class="session-capacity-field is-hidden"><span>Session Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $service['capacity']; ?>" required><small class="field-help">Default capacity used when creating scheduled sessions. Mostly used for Social Play or event-based services.</small></label>
                                                 </div>
@@ -1123,7 +1125,7 @@ $dashboardNav = [
                         <?php echo court_csrf_input(); ?>
                         <input type="hidden" name="court_id" value="<?php echo (int) ($court['id'] ?? 0); ?>">
                         <input type="hidden" name="slug" value="<?php echo court_h($courtSlug); ?>">
-                        <label><span>Court name</span><input type="text" name="name" value="<?php echo court_h($pageTitle); ?>" data-live-field="name" required></label>
+                        <label><span>Court name</span><input type="text" name="name" maxlength="80" value="<?php echo court_h($pageTitle); ?>" data-live-field="name" required></label>
                         <label><span>Description</span><textarea name="description" data-live-field="description" rows="3"><?php echo court_h($subtitle); ?></textarea></label>
                         <label><span>Base price</span><input type="number" name="base_price" step="0.01" min="0" value="<?php echo court_h((string) $basePrice); ?>" data-live-field="price"></label>
                         <label><span>Capacity</span><input type="number" name="capacity" min="1" value="<?php echo (int) $capacity; ?>" data-live-field="capacity"></label>

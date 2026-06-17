@@ -35,14 +35,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Invalid request. Please refresh and try again.';
     } elseif ($currentPassword === '') {
         $error = 'Current password is required.';
-    } elseif (strlen($password) < 6) {
-        $error = 'New password must be at least 6 characters.';
     } elseif ($password !== $confirm) {
         $error = 'Passwords do not match.';
-    } elseif (!(new AuthService())->changePassword((int) ($_SESSION['user']['id'] ?? 0), $currentPassword, $password)) {
-        $error = 'Current password is incorrect.';
     } else {
-        $success = 'Password updated successfully.';
+        try {
+            $password = validatePassword($password);
+            if (!(new AuthService())->changePassword((int) ($_SESSION['user']['id'] ?? 0), $currentPassword, $password)) {
+                $error = 'Current password is incorrect.';
+            } else {
+                $success = 'Password updated successfully.';
+            }
+        } catch (RuntimeException $e) {
+            $error = $e->getMessage();
+        }
     }
 }
 
@@ -84,7 +89,7 @@ include $frontendPath . '/includes/header.php';
         <div class="security-settings-field">
           <label for="newPassword">New Password</label>
           <span class="login-field login-field--password">
-            <input id="newPassword" type="password" name="password" autocomplete="new-password" minlength="6" required />
+            <input id="newPassword" type="password" name="password" autocomplete="new-password" minlength="8" maxlength="72" pattern="(?=.*[A-Za-z])(?=.*\d).{8,72}" title="Password must be at least 8 characters and include letters and numbers." required />
             <button class="login-password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="newPassword" data-password-toggle>
               <svg class="login-password-toggle__icon login-password-toggle__icon--show" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               <svg class="login-password-toggle__icon login-password-toggle__icon--hide" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle><path d="m3 3 18 18"></path></svg>
@@ -94,7 +99,7 @@ include $frontendPath . '/includes/header.php';
         <div class="security-settings-field">
           <label for="confirmPassword">Confirm New Password</label>
           <span class="login-field login-field--password">
-            <input id="confirmPassword" type="password" name="confirm_password" autocomplete="new-password" minlength="6" required />
+            <input id="confirmPassword" type="password" name="confirm_password" autocomplete="new-password" minlength="8" maxlength="72" required />
             <button class="login-password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="confirmPassword" data-password-toggle>
               <svg class="login-password-toggle__icon login-password-toggle__icon--show" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               <svg class="login-password-toggle__icon login-password-toggle__icon--hide" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle><path d="m3 3 18 18"></path></svg>

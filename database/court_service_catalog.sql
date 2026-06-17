@@ -56,6 +56,10 @@ CREATE TABLE IF NOT EXISTS booking_variants (
   CONSTRAINT chk_booking_variants_active CHECK (active IN (0, 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Auxiliary/support table, not a core ERD entity.
+-- Purpose: stores uploaded court images/gallery/media used for the
+-- website display. This supports court content management but is not
+-- part of the core booking transaction ERD.
 CREATE TABLE IF NOT EXISTS court_media (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   court_id INT UNSIGNED NOT NULL,

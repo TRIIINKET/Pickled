@@ -623,20 +623,20 @@ select {
 
 .coaches-section {
   padding: 78px 0;
-  background: #acd9b1;
+  background: #f6efe1;
 }
 
 .coaches-layout {
   display: grid;
-  grid-template-columns: 370px minmax(0, 1fr);
-  gap: 70px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 34px;
   align-items: start;
 }
 
 .coaches-intro {
   position: sticky;
   top: 96px;
-  padding-top: 44px;
+  padding-top: 12px;
 }
 
 .coaches-intro p {
@@ -652,9 +652,9 @@ select {
 .coaches-intro span {
   display: block;
   max-width: 300px;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.45;
-  margin-bottom: 30px;
+  margin-bottom: 22px;
 }
 
 .coaches-book {
@@ -689,8 +689,8 @@ select {
 
 .coach-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
 }
 
 .coach-card[hidden] {
@@ -698,97 +698,122 @@ select {
 }
 
 .coach-card {
-  position: relative;
-  min-height: 300px;
+  min-height: 520px;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
-  gap: 10px;
-  padding: 24px;
+  grid-template-rows: 210px minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
   border-radius: 8px;
   color: var(--court-ink);
+  background: #fff;
+  border: 1px solid rgba(36,95,73,.14);
   overflow: hidden;
-}
-
-.coach-card--green {
-  background: var(--court-deep);
-  color: #ffd5e6;
-}
-
-.coach-card--pink {
-  background: var(--court-pink);
-}
-
-.coach-toggle {
-  position: absolute;
-  left: 22px;
-  top: 22px;
-  width: 38px;
-  height: 38px;
-  border-radius: 5px;
-  background: var(--court-pink);
-  color: var(--court-ink);
-  font-size: 22px;
-  z-index: 2;
-  cursor: pointer;
-}
-
-.coach-card p,
-.coach-card h3 {
-  padding-left: 52px;
-}
-
-.coach-card--pink .coach-toggle {
-  background: var(--court-deep);
-  color: var(--court-pink);
-}
-
-.coach-card p {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 22px;
-  color: inherit;
-  text-shadow: 1px 1px 0 #fff;
-}
-
-.coach-card h3 {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 24px;
-  line-height: 1.1;
+  box-shadow: 0 16px 34px rgba(32,79,59,.08);
 }
 
 .coach-photo {
-  align-self: end;
-  aspect-ratio: 1 / 1;
   width: 100%;
-  max-width: 100%;
-  border-radius: 18px;
-  background: #f8f8f5;
-  overflow: hidden;
+  height: 210px;
+  background: #204f3b;
+  color: #f5bad9;
+  display: grid;
+  place-items: center;
+  font-size: 54px;
+  font-weight: 950;
+}
+
+.coach-photo img,
+.coach-photo span {
+  width: 100%;
+  height: 100%;
 }
 
 .coach-photo img {
-  width: 100%;
-  height: 100%;
   display: block;
   object-fit: cover;
 }
 
-.coach-detail {
-  display: none;
-  padding-top: 8px;
-  padding-left: 60px;
-  font-size: 15px;
-  line-height: 1.5;
-  font-weight: 700;
+.coach-photo span {
+  display: grid;
+  place-items: center;
 }
 
-.coach-detail strong {
-  display: block;
-  margin-top: 10px;
-  color: inherit;
+.coach-photo[data-initials]::before {
+  content: attr(data-initials);
 }
 
-.coach-card.is-open .coach-detail {
-  display: block;
+.coach-card__body {
+  display: grid;
+  grid-template-rows: auto auto minmax(64px, auto) 1fr auto;
+  gap: 10px;
+  padding: 18px;
+}
+
+.coach-card__body p {
+  margin: 0;
+  color: #6c7f6f;
+  font-size: 12px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.coach-card__body h3 {
+  margin: 0;
+  color: #204f3b;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 23px;
+  line-height: 1.12;
+}
+
+.coach-card__bio {
+  color: #35634f;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.coach-card.is-open .coach-card__bio {
+  -webkit-line-clamp: unset;
+}
+
+.coach-card__body dl {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  align-content: start;
+}
+
+.coach-card__body dl div {
+  display: grid;
+  gap: 3px;
+}
+
+.coach-card__body dt {
+  color: #6c7f6f;
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.coach-card__body dd {
+  margin: 0;
+  color: #204f3b;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.coach-card__body button {
+  min-height: 42px;
+  border-radius: 8px;
+  background: #204f3b;
+  color: #fff;
+  font-weight: 900;
+  cursor: pointer;
 }
 
 .club-footer {

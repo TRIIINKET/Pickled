@@ -27,12 +27,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$error) {
 
     if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? null)) {
         $error = 'Invalid request. Please refresh and try again.';
-    } elseif (strlen($password) < 8) {
-        $error = 'Password must be at least 8 characters.';
     } elseif ($password !== $confirm) {
         $error = 'Passwords do not match.';
     } else {
         try {
+            $password = validatePassword($password);
             $ok = $auth->resetPasswordWithOtp(
                 (int) ($verified['user_id'] ?? 0),
                 (int) ($verified['reset_id'] ?? 0),
@@ -50,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$error) {
             $error = 'This reset request is invalid or expired.';
         } catch (Throwable $e) {
             error_log('Password reset OTP update failed: ' . $e->getMessage());
-            $error = 'Unable to update password right now.';
+            $error = $e instanceof RuntimeException ? $e->getMessage() : 'Unable to update password right now.';
         }
     }
 }
@@ -70,7 +69,7 @@ include $frontendPath . '/includes/header.php';
         <div class="login-form-field">
           <label for="resetPassword">Password</label>
           <span class="login-field login-field--password">
-            <input id="resetPassword" type="password" name="password" autocomplete="new-password" required />
+            <input id="resetPassword" type="password" name="password" autocomplete="new-password" minlength="8" maxlength="72" pattern="(?=.*[A-Za-z])(?=.*\d).{8,72}" title="Password must be at least 8 characters and include letters and numbers." required />
             <button class="login-password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="resetPassword" data-password-toggle>
               <svg class="login-password-toggle__icon login-password-toggle__icon--show" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
@@ -87,7 +86,7 @@ include $frontendPath . '/includes/header.php';
         <div class="login-form-field">
           <label for="resetConfirmPassword">Confirm Password</label>
           <span class="login-field login-field--password">
-            <input id="resetConfirmPassword" type="password" name="confirm_password" autocomplete="new-password" required />
+            <input id="resetConfirmPassword" type="password" name="confirm_password" autocomplete="new-password" minlength="8" maxlength="72" required />
             <button class="login-password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="resetConfirmPassword" data-password-toggle>
               <svg class="login-password-toggle__icon login-password-toggle__icon--show" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>

@@ -136,6 +136,10 @@ CREATE TABLE `booking_variants` (
   CONSTRAINT `chk_booking_variants_active` CHECK (`active` in (0,1))
 ) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+-- Auxiliary/support table, not a core ERD entity.
+-- Purpose: stores uploaded court images/gallery/media used for the
+-- website display. This supports court content management but is not
+-- part of the core booking transaction ERD.
 DROP TABLE IF EXISTS `court_media`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;

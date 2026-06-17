@@ -193,13 +193,13 @@ $dashboardNav = [
                             <input type="hidden" name="action" value="create_package">
                             <header class="service-editor-header"><h3>Add Package</h3><p>Create a private package offering for coaching, birthdays, corporate events, or custom inquiries.</p></header>
                             <section class="service-form-section"><h4>Basic Information</h4><div class="service-field-grid">
-                                <label><span>Package Name</span><input name="title" required></label>
+                                <label><span>Package Name</span><input name="title" maxlength="80" required></label>
                                 <label><span>Category</span><select name="category"><?php echo private_category_options('Private Coaching'); ?></select></label>
-                                <label class="service-field-wide"><span>Description</span><textarea name="description" rows="3" required></textarea></label>
+                                <label class="service-field-wide"><span>Description</span><textarea name="description" rows="3" maxlength="1000" required></textarea></label>
                             </div></section>
                             <section class="service-form-section"><h4>Pricing</h4><div class="service-field-grid">
-                                <label><span>Price</span><input name="price" type="number" min="0" step="0.01" required></label>
-                                <label><span>Duration</span><input name="duration" required placeholder="1 Hour"></label>
+                                <label><span>Price</span><input name="price" type="number" min="0" max="999999.99" step="0.01" required></label>
+                                <label><span>Duration</span><input name="duration" maxlength="80" required placeholder="1 Hour"></label>
                                 <label><span>Capacity</span><input name="capacity" type="number" min="0" step="1" placeholder="20"></label>
                             </div></section>
                             <section class="service-form-section"><h4>Assignment</h4><div class="service-field-grid">
@@ -210,7 +210,7 @@ $dashboardNav = [
                                 <label><span>Status</span><select name="status"><?php echo private_status_options('active', ['active', 'inactive']); ?></select></label>
                             </div></section>
                             <section class="service-form-section service-advanced-section"><h4>Advanced</h4><div class="service-field-grid">
-                                <label><span>Slug</span><input name="slug" placeholder="birthday-package"></label>
+                                <label><span>Slug</span><input name="slug" maxlength="150" pattern="[a-z0-9-]+" placeholder="birthday-package"></label>
                                 <label><span>Sort Order</span><input name="sort_order" type="number" step="1" value="0"></label>
                             </div></section>
                             <div class="service-form-actions"><button class="bookings-button ghost service-cancel-button" type="button" data-private-add-cancel>Cancel</button><button class="bookings-button primary" type="submit">Create Package</button></div>
@@ -242,13 +242,13 @@ $dashboardNav = [
                                         <input type="hidden" name="package_id" value="<?php echo (int) $package['id']; ?>">
                                         <header class="service-editor-header"><h3>Edit Package: <?php echo private_h($package['title']); ?></h3><p>Update this package offering and how it appears to players.</p></header>
                                         <section class="service-form-section"><h4>Basic Information</h4><div class="service-field-grid">
-                                            <label><span>Package Name</span><input name="title" value="<?php echo private_h($package['title']); ?>" required></label>
+                                            <label><span>Package Name</span><input name="title" maxlength="80" value="<?php echo private_h($package['title']); ?>" required></label>
                                             <label><span>Category</span><select name="category"><?php echo private_category_options((string) ($package['category'] ?? 'Private Coaching')); ?></select></label>
-                                            <label class="service-field-wide"><span>Description</span><textarea name="description" rows="3" required><?php echo private_h($package['description']); ?></textarea></label>
+                                            <label class="service-field-wide"><span>Description</span><textarea name="description" rows="3" maxlength="1000" required><?php echo private_h($package['description']); ?></textarea></label>
                                         </div></section>
                                         <section class="service-form-section"><h4>Pricing</h4><div class="service-field-grid">
-                                            <label><span>Price</span><input name="price" type="number" min="0" step="0.01" value="<?php echo private_h($package['price']); ?>" required></label>
-                                            <label><span>Duration</span><input name="duration" value="<?php echo private_h($package['duration']); ?>" required></label>
+                                            <label><span>Price</span><input name="price" type="number" min="0" max="999999.99" step="0.01" value="<?php echo private_h($package['price']); ?>" required></label>
+                                            <label><span>Duration</span><input name="duration" maxlength="80" value="<?php echo private_h($package['duration']); ?>" required></label>
                                             <label><span>Capacity</span><input name="capacity" type="number" min="0" step="1" value="<?php echo private_h($package['capacity'] ?? 0); ?>"></label>
                                         </div></section>
                                         <section class="service-form-section"><h4>Assignment</h4><div class="service-field-grid">
@@ -259,7 +259,7 @@ $dashboardNav = [
                                             <label><span>Status</span><select name="status"><?php echo private_status_options((string) $package['status'], ['active', 'inactive']); ?></select></label>
                                         </div></section>
                                         <section class="service-form-section service-advanced-section"><h4>Advanced</h4><div class="service-field-grid">
-                                            <label><span>Slug</span><input name="slug" value="<?php echo private_h($package['slug'] ?? ''); ?>"></label>
+                                            <label><span>Slug</span><input name="slug" maxlength="150" pattern="[a-z0-9-]+" value="<?php echo private_h($package['slug'] ?? ''); ?>"></label>
                                             <label><span>Sort Order</span><input name="sort_order" type="number" step="1" value="<?php echo private_h($package['sort_order'] ?? 0); ?>"></label>
                                         </div></section>
                                         <div class="service-form-actions"><button class="bookings-button ghost service-cancel-button" type="button" data-private-package-cancel>Cancel</button><button class="bookings-button primary" type="submit">Save Changes</button></div>

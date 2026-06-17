@@ -20,12 +20,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? null)) {
     $contactError = 'Invalid request. Please refresh and try again.';
   } else {
-    $name = trim((string) ($_POST['name'] ?? ''));
-    $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
-    $subject = trim((string) ($_POST['subject'] ?? ''));
-    $message = trim((string) ($_POST['message'] ?? ''));
+    try {
+      $name = validateName($_POST['name'] ?? '');
+      $email = validateEmail($_POST['email'] ?? '');
+      $subject = validateText($_POST['subject'] ?? '', true, 100);
+      $message = validateText($_POST['message'] ?? '', true, 1000);
+    } catch (RuntimeException $e) {
+      $contactError = $e->getMessage();
+      $name = '';
+      $email = '';
+      $subject = '';
+      $message = '';
+    }
 
-    if ($name === '' || !$email || $subject === '' || $message === '') {
+    if ($contactError) {
+      // Validation message already set.
+    } elseif ($name === '' || $email === '' || $subject === '' || $message === '') {
       $contactError = 'Please complete all contact fields.';
     } else {
       $emailService = new EmailService();
@@ -73,11 +83,11 @@ include __DIR__ . '/../includes/header.php';
       <form class="contact-form" action="contact.php" method="post" id="contactForm">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
         <div class="contact-form__row">
-          <input type="text" name="name" placeholder="Full Name" required value="<?= htmlspecialchars($_POST['name'] ?? '') ?>" />
-          <input type="email" name="email" placeholder="Email Address" required value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" />
+          <input type="text" name="name" placeholder="Full Name" minlength="2" maxlength="80" pattern="[A-Za-z][A-Za-z .'\-]*" title="Please enter a valid name." required value="<?= htmlspecialchars($_POST['name'] ?? '') ?>" />
+          <input type="email" name="email" placeholder="Email Address" maxlength="150" required value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" />
         </div>
-        <input type="text" name="subject" placeholder="Subject" required value="<?= htmlspecialchars($_POST['subject'] ?? $prefillSubject) ?>" />
-        <textarea name="message" placeholder="Comment" required><?= htmlspecialchars($_POST['message'] ?? $prefillMessage) ?></textarea>
+        <input type="text" name="subject" placeholder="Subject" maxlength="100" required value="<?= htmlspecialchars($_POST['subject'] ?? $prefillSubject) ?>" />
+        <textarea name="message" placeholder="Comment" maxlength="1000" required><?= htmlspecialchars($_POST['message'] ?? $prefillMessage) ?></textarea>
         <button type="submit">Send message</button>
       </form>
     </div>

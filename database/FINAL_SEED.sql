@@ -10,6 +10,11 @@ USE pickled;
 
 SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- Auxiliary/support table, not a core ERD entity.
+-- Purpose: stores sequence counters used to generate business/reference
+-- codes such as booking references, payment references, user codes,
+-- session codes, and inquiry codes. This supports reference number
+-- generation but is not counted as one of the 18 core ERD entities.
 CREATE TABLE IF NOT EXISTS business_code_sequences (
   entity VARCHAR(40) NOT NULL,
   last_value INT UNSIGNED NOT NULL DEFAULT 0,
@@ -366,6 +371,10 @@ CREATE TABLE IF NOT EXISTS booking_variants (
   CONSTRAINT chk_booking_variants_active CHECK (active IN (0, 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Auxiliary/support table, not a core ERD entity.
+-- Purpose: stores uploaded court images/gallery/media used for the
+-- website display. This supports court content management but is not
+-- part of the core booking transaction ERD.
 CREATE TABLE IF NOT EXISTS court_media (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   court_id INT UNSIGNED NOT NULL,

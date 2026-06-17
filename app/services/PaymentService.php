@@ -9,11 +9,12 @@ require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/AdminLogService.php';
 require_once __DIR__ . '/EmailService.php';
 require_once __DIR__ . '/../../includes/upload-helper.php';
+require_once __DIR__ . '/../../includes/validation.php';
 require_once __DIR__ . '/../../database/Database.php';
 
 final class PaymentService
 {
-    private const MAX_UPLOAD_BYTES = 10485760;
+    private const MAX_UPLOAD_BYTES = 5242880;
 
     public function __construct(
         private readonly PaymentRepository $payments = new PaymentRepository(),
@@ -29,6 +30,9 @@ final class PaymentService
         $booking = $this->bookings->findByIdForUser($bookingId, $userId);
         if (!$booking) {
             throw new RuntimeException('Booking not found.');
+        }
+        if (strtolower((string) ($booking['payment_status'] ?? '')) === 'expired') {
+            throw new RuntimeException('This booking expired because payment was not submitted within the required time.');
         }
         if (($booking['status'] ?? '') === 'cancelled') {
             throw new RuntimeException('Cancelled bookings cannot accept payment uploads.');
@@ -213,6 +217,7 @@ final class PaymentService
     private function storeProofImage(int $bookingId, array $file): string
     {
         try {
+            validateUploadedFile($file, 'receipt');
             return pickled_upload_file(
                 $file,
                 'uploads/payments',
@@ -232,7 +237,7 @@ final class PaymentService
                 throw new RuntimeException('Receipt upload is temporarily unavailable. Please try again later.');
             }
             if (str_contains($e->getMessage(), 'too large')) {
-                throw new RuntimeException('Receipt file must be 10MB or smaller.');
+                throw new RuntimeException('Receipt file must be 5MB or smaller.');
             }
             if (str_contains($e->getMessage(), 'type')) {
                 throw new RuntimeException('Receipt must be a JPG, JPEG, PNG, WEBP, or PDF file.');

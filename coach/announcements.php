@@ -83,24 +83,6 @@ $navItems = [
     ['Profile', pickled_frontend_url('coach/profile.php'), 'profile', false],
 ];
 
-$announcements = [
-    ['SCHEDULE CHANGE', '2 hours ago', 'Court Green Maintenance', 'Court Green will be unavailable on June 15 from 8:00 AM - 12:00 PM due to floor maintenance.', 'Affected sessions will be rescheduled.', 'Admin Team', 'Urgent', 'pink', 'wrench'],
-    ['COACHING UPDATE', 'Yesterday', 'New Beginner Program Launch', 'A new Beginner Fundamentals Program has been added to Court Pink.', 'Coaches may now accept students under this category.', 'Programs Team', 'Coaching', 'green', 'racket'],
-    ['EVENT ANNOUNCEMENT', 'May 30, 2026', 'Weekly Tournament Schedule', "This week's tournament will be held on Saturday at 6:00 PM.", 'Expected Participants: 16 Players', 'Events Team', 'Event', 'orange', 'trophy'],
-    ['SYSTEM UPDATE', 'May 28, 2026', 'New Attendance Feature', 'A new attendance tracking feature is now available.', 'You can now record attendance directly from the My Schedule page.', 'System Admin', 'Update', 'purple', 'gear'],
-];
-
-$reminders = [
-    ['JUN 15', 'Court Green Maintenance', '8:00 AM - 12:00 PM', 'Urgent', 'pink'],
-    ['JUN 18', 'Coach Meeting', 'Wednesday • 4:00 PM', 'Meeting', 'green'],
-    ['JUN 21', 'Weekly Tournament', 'Saturday • 6:00 PM', 'Event', 'orange'],
-];
-
-$pinned = [
-    ['Facility Rules', 'Updated May 10, 2026', 'file', 'pink'],
-    ['Coaching Guidelines', 'Updated Apr 25, 2026', 'calendar', 'green'],
-    ['Emergency Contact Procedures', 'Updated Mar 18, 2026', 'phone', 'purple'],
-];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -164,45 +146,16 @@ $pinned = [
                         </article>
                     <?php endforeach; ?>
                 <?php else: ?>
-                <?php foreach ($announcements as [$category, $time, $title, $body, $detail, $team, $badge, $tone, $icon]): ?>
-                    <article class="announcement-feed-card <?php echo htmlspecialchars($tone); ?>">
-                        <i><?php echo announcements_icon($icons, $icon); ?></i>
+                    <article class="announcement-feed-card green">
                         <div class="announcement-card-body">
-                            <header><span><?php echo htmlspecialchars($category); ?></span><time><?php echo htmlspecialchars($time); ?></time></header>
-                            <h2><?php echo htmlspecialchars($title); ?></h2>
-                            <p><?php echo htmlspecialchars($body); ?></p>
-                            <p><?php echo htmlspecialchars($detail); ?></p>
-                            <footer><strong><img src="<?php echo htmlspecialchars(pickled_asset_url('img/LM-DGreen.png')); ?>" alt=""> <?php echo htmlspecialchars($team); ?></strong></footer>
-                        </div>
-                        <em><?php echo htmlspecialchars($badge); ?></em>
-                    </article>
-                <?php endforeach; ?>
-                <?php foreach ($pinned as [$title, $updated, $icon, $tone]): ?>
-                    <article class="announcement-feed-card <?php echo htmlspecialchars($tone); ?>">
-                        <i><?php echo announcements_icon($icons, $icon); ?></i>
-                        <div class="announcement-card-body">
-                            <header><span>Reference</span><time><?php echo htmlspecialchars($updated); ?></time></header>
-                            <h2><?php echo htmlspecialchars($title); ?></h2>
-                            <p>Important coaching reference available in the announcements feed.</p>
-                            <footer><strong>Admin Team</strong></footer>
+                            <header><span>Announcements</span></header>
+                            <h2>No announcements</h2>
+                            <p>Admin notifications from MySQL will appear here.</p>
                         </div>
                         <em>Read</em>
                     </article>
-                <?php endforeach; ?>
                 <?php endif; ?>
             </div>
-
-            <aside class="announcements-side">
-                <section class="coach-card reminder-card">
-                    <header><h2><?php echo announcements_icon($icons, 'calendar'); ?>Upcoming Reminders</h2></header>
-                    <div class="reminder-list">
-                        <?php foreach ($reminders as [$date, $title, $time, $badge, $tone]): ?>
-                            <article><time class="<?php echo htmlspecialchars($tone); ?>"><?php echo htmlspecialchars($date); ?></time><div><strong><?php echo htmlspecialchars($title); ?></strong><span><?php echo htmlspecialchars($time); ?></span></div><em class="<?php echo htmlspecialchars($tone); ?>"><?php echo htmlspecialchars($badge); ?></em></article>
-                        <?php endforeach; ?>
-                    </div>
-                    <a class="side-card-link" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/schedule.php')); ?>">View full calendar <?php echo announcements_icon($icons, 'arrow'); ?></a>
-                </section>
-            </aside>
         </section>
     </main>
 </div>

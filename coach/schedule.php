@@ -3,6 +3,8 @@ require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
 require_once __DIR__ . '/../app/services/SchedulingService.php';
 require_once __DIR__ . '/../app/repositories/BookingRepository.php';
+require_once __DIR__ . '/../app/services/NotificationService.php';
+require_once __DIR__ . '/../database/Database.php';
 
 pickled_start_secure_session();
 pickled_init_csrf();
@@ -35,6 +37,58 @@ $weekRangeLabel = $weekStart->format('M j') . ' - ' . $weekEnd->format('M j, Y')
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $schedulingService = new SchedulingService();
 $bookingRepository = new BookingRepository();
+$notificationService = new NotificationService();
+$coachUnreadCount = $coachId > 0 ? $notificationService->unreadCount($coachId) : 0;
+$successMsg = '';
+$errorMsg = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? null)) {
+        $errorMsg = 'Invalid request. Please refresh and try again.';
+    } else {
+        try {
+            $action = (string) ($_POST['action'] ?? '');
+            if ($action === 'save_notes') {
+                $bookingId = (int) ($_POST['booking_id'] ?? 0);
+                $notes = validateText($_POST['notes'] ?? '', false, 1000);
+                $ownerStmt = Database::connection()->prepare(
+                    "SELECT 1
+                     FROM bookings b
+                     WHERE b.id = :booking_id
+                       AND EXISTS (
+                           SELECT 1
+                           FROM booking_items bi
+                           LEFT JOIN sessions s ON s.id = bi.session_id
+                           WHERE bi.booking_id = b.id
+                             AND COALESCE(bi.coach_user_id, s.coach_user_id) = :coach_user_id
+                       )
+                     LIMIT 1"
+                );
+                $ownerStmt->execute([
+                    'booking_id' => $bookingId,
+                    'coach_user_id' => $coachId,
+                ]);
+                if (!$ownerStmt->fetchColumn()) {
+                    throw new RuntimeException('Booking was not found for this coach.');
+                }
+
+                $stmt = Database::connection()->prepare(
+                    "UPDATE bookings
+                     SET notes = :notes
+                     WHERE id = :booking_id"
+                );
+                $stmt->execute([
+                    'notes' => $notes !== '' ? $notes : null,
+                    'booking_id' => $bookingId,
+                ]);
+                $successMsg = 'Notes saved.';
+            }
+        } catch (Throwable $e) {
+            error_log('Coach schedule action failed: ' . $e->getMessage());
+            $errorMsg = $e instanceof RuntimeException ? $e->getMessage() : 'Unable to save notes.';
+        }
+    }
+}
 
 function schedule_icon(array $icons, string $name): string {
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['calendar']) . '</svg>';
@@ -115,6 +169,11 @@ foreach ($coachSessions as $session) {
         'start' => (string) $startHour,
         'span' => (string) max(1, ($endHour - $startHour) * 1.7),
         'quantity' => (int) $session['booked_count'],
+        'booking_id' => 0,
+        'student' => 'Booked student',
+        'booking_status' => ucfirst((string) $session['status']),
+        'payment_status' => '-',
+        'notes' => '',
     ];
 }
 foreach ($coachBookingItems as $item) {
@@ -144,9 +203,22 @@ foreach ($coachBookingItems as $item) {
         'span' => (string) max(1, ($endHour - $startHour) * 1.7),
         'quantity' => (int) ($item['quantity'] ?? 1),
         'student' => $student !== '' ? $student : 'Booked student',
+        'booking_id' => (int) ($item['booking_id'] ?? 0),
+        'booking_status' => ucfirst((string) ($item['booking_status'] ?? 'pending')),
+        'payment_status' => ucfirst((string) ($item['payment_status'] ?? 'pending')),
+        'notes' => (string) ($item['notes'] ?? ''),
     ];
 }
 usort($scheduleEntries, static fn(array $a, array $b): int => [$a['date'], $a['start_time']] <=> [$b['date'], $b['start_time']]);
+$requestedBookingId = (int) ($_GET['booking_id'] ?? 0);
+$selectedEntry = null;
+foreach ($scheduleEntries as $entry) {
+    if ($requestedBookingId > 0 && (int) ($entry['booking_id'] ?? 0) === $requestedBookingId) {
+        $selectedEntry = $entry;
+        break;
+    }
+}
+$selectedEntry ??= $scheduleEntries[0] ?? null;
 
 $sessions = array_map(static fn(array $entry): array => [
     $entry['name'],
@@ -158,6 +230,7 @@ $sessions = array_map(static fn(array $entry): array => [
     $entry['day'],
     $entry['start'],
     $entry['span'],
+    (int) ($entry['booking_id'] ?? 0),
 ], $scheduleEntries);
 
 $todayEntries = array_values(array_filter($scheduleEntries, static fn(array $entry): bool => $entry['date'] === $todayDate));
@@ -168,6 +241,7 @@ $todaySessions = array_map(static fn(array $entry): array => [
     $entry['count'],
     $entry['status'],
     $entry['tone'],
+    (int) ($entry['booking_id'] ?? 0),
 ], $todayEntries);
 $nextScheduleSession = $scheduleEntries[0] ?? null;
 $studentsToday = array_sum(array_map(static fn(array $entry): int => (int) $entry['quantity'], $todayEntries));
@@ -189,7 +263,7 @@ $studentsToday = array_sum(array_map(static fn(array $entry): int => (int) $entr
         <a class="coach-brand" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/dashboard.php')); ?>"><img src="<?php echo htmlspecialchars(pickled_asset_url('img/LM-DGreen.png')); ?>" alt="Pickled"><span>Coach</span></a>
         <nav class="coach-nav" aria-label="Coach navigation">
             <?php foreach ($navItems as [$label, $href, $icon, $active]): ?>
-                <a class="<?php echo $active ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($href); ?>"><?php echo schedule_icon($icons, $icon); ?><span><?php echo htmlspecialchars($label); ?></span><?php if ($label === 'Announcements'): ?><em>4</em><?php endif; ?></a>
+                <a class="<?php echo $active ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($href); ?>"><?php echo schedule_icon($icons, $icon); ?><span><?php echo htmlspecialchars($label); ?></span><?php if ($label === 'Announcements' && $coachUnreadCount > 0): ?><em><?php echo min($coachUnreadCount, 9); ?></em><?php endif; ?></a>
             <?php endforeach; ?>
         </nav>
     </aside>
@@ -199,7 +273,7 @@ $studentsToday = array_sum(array_map(static fn(array $entry): int => (int) $entr
             <div><h1>My Schedule</h1></div>
             <div class="coach-top-actions">
                 <span class="coach-date-pill"><?php echo schedule_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></span>
-                <a class="coach-notification" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/announcements.php')); ?>" aria-label="Announcements"><?php echo schedule_icon($icons, 'bell'); ?><em>4</em></a>
+                <a class="coach-notification" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/announcements.php')); ?>" aria-label="Announcements"><?php echo schedule_icon($icons, 'bell'); ?><?php if ($coachUnreadCount > 0): ?><em><?php echo min($coachUnreadCount, 9); ?></em><?php endif; ?></a>
                 <details class="coach-top-profile">
                     <summary><span class="coach-photo small"><img src="<?php echo htmlspecialchars(pickled_asset_url('img/court/academy.png')); ?>" alt="<?php echo htmlspecialchars($coachName); ?>"></span><span><strong>Coach</strong><small>Pickleball Coach</small></span><b>⌄</b></summary>
                     <form method="post" action="<?php echo htmlspecialchars(pickled_frontend_url('auth/logout.php')); ?>"><input type="hidden" name="csrf_token" value="<?php echo $logoutCsrf; ?>"><button type="submit">Logout</button></form>
@@ -207,32 +281,31 @@ $studentsToday = array_sum(array_map(static fn(array $entry): int => (int) $entr
             </div>
         </header>
 
+        <?php if ($successMsg): ?><div class="alert alert-success"><?php echo htmlspecialchars($successMsg); ?></div><?php endif; ?>
+        <?php if ($errorMsg): ?><div class="alert alert-error"><?php echo htmlspecialchars($errorMsg); ?></div><?php endif; ?>
+
         <section class="schedule-hero-row page-first-section">
             <div class="coach-kpi-grid schedule-kpis">
-                <article class="coach-kpi green"><?php echo schedule_icon($icons, 'calendar'); ?><div><span>Today's Sessions</span><strong><?php echo number_format(count($todaySessions)); ?></strong><small>From MySQL</small></div></article>
-                <article class="coach-kpi pink"><?php echo schedule_icon($icons, 'calendar'); ?><div><span>Upcoming This Week</span><strong><?php echo number_format(count($coachSessions)); ?></strong><small>Sessions</small></div></article>
-                <article class="coach-kpi orange"><?php echo schedule_icon($icons, 'students'); ?><div><span>Students Today</span><strong><?php echo number_format($studentsToday); ?></strong><small>Across sessions</small></div></article>
-                <article class="coach-kpi purple"><?php echo schedule_icon($icons, 'clock'); ?><div><span>Next Session</span><strong><?php echo htmlspecialchars($nextScheduleSession['time'] ?? 'None'); ?></strong><small><?php echo htmlspecialchars($nextScheduleSession['name'] ?? 'No upcoming session'); ?></small></div></article>
+                <article class="coach-kpi green"><div><span>Today's Sessions</span><strong><?php echo number_format(count($todaySessions)); ?></strong><small>From MySQL</small></div></article>
+                <article class="coach-kpi pink"><div><span>Upcoming This Week</span><strong><?php echo number_format(count($coachSessions)); ?></strong><small>Sessions</small></div></article>
+                <article class="coach-kpi orange"><div><span>Students Today</span><strong><?php echo number_format($studentsToday); ?></strong><small>Across sessions</small></div></article>
+                <article class="coach-kpi purple"><div><span>Next Session</span><strong><?php echo htmlspecialchars($nextScheduleSession['time'] ?? 'None'); ?></strong><small><?php echo htmlspecialchars($nextScheduleSession['name'] ?? 'No upcoming session'); ?></small></div></article>
             </div>
-            <label class="availability-toggle"><span>Available Today</span><input type="checkbox" checked><b></b></label>
         </section>
 
         <section class="schedule-workspace">
             <div class="schedule-main-column">
                 <section class="coach-card calendar-card">
                     <div class="schedule-toolbar">
-                        <div class="schedule-tabs"><a href="<?php echo htmlspecialchars(pickled_frontend_url(schedule_query_path(['week_start' => $today->modify('monday this week')->format('Y-m-d')]))); ?>">Current Week</a><button class="active" type="button" disabled>Week</button></div>
+                        <div class="schedule-tabs"><a href="<?php echo htmlspecialchars(pickled_frontend_url(schedule_query_path(['week_start' => $today->modify('monday this week')->format('Y-m-d')]))); ?>">Current Week</a><span class="active">Week</span></div>
                         <div class="schedule-range"><a href="<?php echo htmlspecialchars(pickled_frontend_url(schedule_query_path(['week_start' => $weekStart->modify('-7 days')->format('Y-m-d')]))); ?>">Previous Week</a><span><?php echo schedule_icon($icons, 'calendar'); ?> <?php echo htmlspecialchars($weekRangeLabel); ?></span><a href="<?php echo htmlspecialchars(pickled_frontend_url(schedule_query_path(['week_start' => $weekStart->modify('+7 days')->format('Y-m-d')]))); ?>">Next Week</a></div>
-                        <label class="schedule-search"><?php echo schedule_icon($icons, 'search'); ?><input type="search" placeholder="Search session..."></label>
-                        <select><option>All Courts</option><option>Court Green</option><option>Court Pink</option></select>
-                        <select><option>All Programs</option><option>Kids Class</option><option>Private Coaching</option><option>Social Play</option></select>
                     </div>
                     <div class="week-calendar-grid">
                         <div class="time-col"><?php foreach (['8 AM','9 AM','10 AM','11 AM','12 PM','1 PM','2 PM','3 PM','4 PM','5 PM','6 PM','7 PM'] as $time): ?><span><?php echo $time; ?></span><?php endforeach; ?></div>
                         <?php foreach ($weekDays as $dayMeta): ?>
                             <?php $dayKey = $dayMeta['key']; ?>
                             <div class="day-col <?php echo $dayMeta['today'] ? 'today' : ''; ?>"><strong><?php echo htmlspecialchars($dayMeta['label']); ?></strong>
-                                <?php foreach ($sessions as [$name, $time, $court, $count, $status, $tone, $day, $start, $span]): ?>
+                                <?php foreach ($sessions as [$name, $time, $court, $count, $status, $tone, $day, $start, $span, $bookingId]): ?>
                                     <?php if ($day === $dayKey): ?><article class="calendar-block <?php echo $tone; ?>" style="--start:<?php echo htmlspecialchars($start); ?>;--span:<?php echo htmlspecialchars($span); ?>"><b><?php echo htmlspecialchars($name); ?></b><span><?php echo htmlspecialchars($time); ?></span><small><?php echo htmlspecialchars($court); ?></small><small><?php echo htmlspecialchars($count); ?></small></article><?php endif; ?>
                                 <?php endforeach; ?>
                             </div>
@@ -244,8 +317,8 @@ $studentsToday = array_sum(array_map(static fn(array $entry): int => (int) $entr
                     <header><h2>Today's Sessions <span>(<?php echo htmlspecialchars($scheduleDateLabel); ?>)</span></h2></header>
                     <div class="schedule-table">
                         <div class="schedule-row head"><span>Time</span><span>Program</span><span>Court</span><span>Students</span><span>Status</span><span>Action</span></div>
-                        <?php foreach ($todaySessions as [$time, $program, $court, $count, $status, $tone]): ?>
-                            <div class="schedule-row <?php echo $program === 'Youth Development (Ages 11-17)' ? 'selected' : ''; ?>"><span><?php echo htmlspecialchars($time); ?></span><span><?php echo htmlspecialchars($program); ?></span><span><i class="<?php echo $tone; ?>"></i><?php echo htmlspecialchars($court); ?></span><span><?php echo htmlspecialchars($count); ?></span><span><em class="session-status <?php echo strtolower($status); ?>"><?php echo htmlspecialchars($status); ?></em></span><span><button type="button" disabled title="Session detail pages are not connected yet."><?php echo schedule_icon($icons, 'eye'); ?> View</button><button type="button" disabled title="Attendance saving is not connected yet."><?php echo schedule_icon($icons, 'check'); ?> Attendance</button></span></div>
+                        <?php foreach ($todaySessions as [$time, $program, $court, $count, $status, $tone, $bookingId]): ?>
+                            <div class="schedule-row"><span><?php echo htmlspecialchars($time); ?></span><span><?php echo htmlspecialchars($program); ?></span><span><i class="<?php echo $tone; ?>"></i><?php echo htmlspecialchars($court); ?></span><span><?php echo htmlspecialchars($count); ?></span><span><em class="session-status <?php echo strtolower($status); ?>"><?php echo htmlspecialchars($status); ?></em></span><span><?php if ($bookingId > 0): ?><a class="student-action-primary" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/schedule.php?booking_id=' . $bookingId)); ?>">View Booking</a><a href="<?php echo htmlspecialchars(pickled_frontend_url('coach/schedule.php?booking_id=' . $bookingId . '#notes')); ?>">Add Notes</a><?php else: ?><span>-</span><?php endif; ?></span></div>
                         <?php endforeach; ?>
                         <?php if (!$todaySessions): ?><div class="schedule-row"><span>No sessions today.</span><span></span><span></span><span></span><span></span><span></span></div><?php endif; ?>
                     </div>
@@ -253,18 +326,35 @@ $studentsToday = array_sum(array_map(static fn(array $entry): int => (int) $entr
             </div>
 
             <aside class="coach-card session-details-panel">
-                <header><h2>Session Details</h2><em class="session-status confirmed"><?php echo htmlspecialchars((string) ($nextScheduleSession['status'] ?? 'Open')); ?></em></header>
-                <div class="session-detail-title"><i><?php echo schedule_icon($icons, 'calendar'); ?></i><div><strong><?php echo htmlspecialchars($nextScheduleSession['name'] ?? 'No session selected'); ?></strong><span><?php echo htmlspecialchars($nextScheduleSession['category'] ?? 'Schedule details'); ?></span></div></div>
+                <header><h2>Session Details</h2><em class="session-status confirmed"><?php echo htmlspecialchars((string) ($selectedEntry['booking_status'] ?? $selectedEntry['status'] ?? 'Open')); ?></em></header>
+                <div class="session-detail-title"><div><strong><?php echo htmlspecialchars($selectedEntry['name'] ?? 'No session selected'); ?></strong><span><?php echo htmlspecialchars($selectedEntry['category'] ?? 'Schedule details'); ?></span></div></div>
                 <dl>
-                    <div><dt><?php echo schedule_icon($icons, 'clock'); ?> Time</dt><dd><?php echo htmlspecialchars($nextScheduleSession['time'] ?? 'Not scheduled'); ?></dd></div>
-                    <div><dt><?php echo schedule_icon($icons, 'calendar'); ?> Date</dt><dd><?php echo htmlspecialchars($nextScheduleSession['display_date'] ?? 'Not scheduled'); ?></dd></div>
-                    <div><dt><?php echo schedule_icon($icons, 'court'); ?> Court</dt><dd><?php echo htmlspecialchars($nextScheduleSession['court'] ?? 'No court'); ?></dd></div>
-                    <div><dt><?php echo schedule_icon($icons, 'students'); ?> Students</dt><dd><?php echo htmlspecialchars($nextScheduleSession['count'] ?? '0'); ?></dd></div>
-                    <div><dt><?php echo schedule_icon($icons, 'profile'); ?> Coach</dt><dd><?php echo htmlspecialchars($coachName); ?></dd></div>
+                    <div><dt>Program</dt><dd><?php echo htmlspecialchars($selectedEntry['name'] ?? 'No session selected'); ?></dd></div>
+                    <div><dt>Date</dt><dd><?php echo htmlspecialchars($selectedEntry['display_date'] ?? 'Not scheduled'); ?></dd></div>
+                    <div><dt>Time</dt><dd><?php echo htmlspecialchars($selectedEntry['time'] ?? 'Not scheduled'); ?></dd></div>
+                    <div><dt>Court</dt><dd><?php echo htmlspecialchars($selectedEntry['court'] ?? 'No court'); ?></dd></div>
+                    <div><dt>Student/player name</dt><dd><?php echo htmlspecialchars($selectedEntry['student'] ?? 'Booked student'); ?></dd></div>
+                    <div><dt>Booking status</dt><dd><?php echo htmlspecialchars($selectedEntry['booking_status'] ?? $selectedEntry['status'] ?? '-'); ?></dd></div>
+                    <div><dt>Payment status</dt><dd><?php echo htmlspecialchars($selectedEntry['payment_status'] ?? '-'); ?></dd></div>
                 </dl>
-                <section class="attendance-box"><h3>Attendance</h3><div><button class="active" type="button" disabled title="Attendance saving is not connected yet."><?php echo schedule_icon($icons, 'check'); ?> Present</button><button type="button" disabled title="Attendance saving is not connected yet."><?php echo schedule_icon($icons, 'x'); ?> Absent</button><button type="button" disabled title="Attendance saving is not connected yet."><?php echo schedule_icon($icons, 'clock'); ?> Late</button></div></section>
-                <section class="notes-box"><header><h3>Session Notes</h3></header><textarea rows="6" readonly>Focus on footwork and dinks today.
-Students showed good improvement on third shot drops.</textarea><button class="save-notes" type="button" disabled title="Session note saving is not connected yet.">Save Notes</button></section>
+                <section class="notes-box" id="notes">
+                    <header><h3>Notes</h3></header>
+                    <?php if (!empty($selectedEntry['booking_id'])): ?>
+                        <form method="post">
+                            <input type="hidden" name="csrf_token" value="<?php echo $logoutCsrf; ?>">
+                            <input type="hidden" name="action" value="save_notes">
+                            <input type="hidden" name="booking_id" value="<?php echo (int) $selectedEntry['booking_id']; ?>">
+                            <textarea name="notes" rows="6" maxlength="1000"><?php echo htmlspecialchars((string) ($selectedEntry['notes'] ?? '')); ?></textarea>
+                            <div class="student-list-actions">
+                                <a class="student-action-primary" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/schedule.php?booking_id=' . (int) $selectedEntry['booking_id'])); ?>">View Booking</a>
+                                <a href="#notes">Add Notes</a>
+                                <button class="save-notes" type="submit">Save Notes</button>
+                            </div>
+                        </form>
+                    <?php else: ?>
+                        <textarea rows="6" readonly>No booking notes available for this session.</textarea>
+                    <?php endif; ?>
+                </section>
             </aside>
         </section>
 

@@ -4,6 +4,7 @@ $activePage = 'admin-profile';
 $bodyClass = 'admin-dashboard-body';
 require_once __DIR__ . '/../includes/admin-header.php';
 require_once __DIR__ . '/../includes/admin-paths.php';
+require_once __DIR__ . '/../includes/avatar-helper.php';
 require_once __DIR__ . '/../database/Database.php';
 
 pickled_init_csrf();
@@ -16,6 +17,9 @@ $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
 $todayLabel = $today->format('M j, Y (D)');
 $successMsg = '';
 $errorMsg = '';
+$adminAvatar = pickled_avatar_default_path();
+$adminAvatarUrl = pickled_avatar_url($adminAvatar);
+$adminInitial = strtoupper(substr((string) ($admin['name'] ?? 'A'), 0, 1));
 
 function profile_asset(string $path): string {
     return htmlspecialchars(pickled_admin_asset_url($path), ENT_QUOTES, 'UTF-8');
@@ -25,33 +29,65 @@ function profile_icon(array $icons, string $name): string {
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['user']) . '</svg>';
 }
 
+if ($pdo && (int) ($admin['id'] ?? 0) > 0) {
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT COALESCE(up.avatar, 'avatars/default.png') AS avatar
+             FROM users u
+             LEFT JOIN user_profiles up ON up.user_id = u.id
+             WHERE u.id = :id AND u.role = 'admin'
+             LIMIT 1"
+        );
+        $stmt->execute(['id' => (int) $admin['id']]);
+        $adminAvatar = (string) ($stmt->fetchColumn() ?: pickled_avatar_default_path());
+        $adminAvatarUrl = pickled_avatar_url($adminAvatar);
+    } catch (Throwable $e) {
+        error_log('Admin avatar load failed: ' . $e->getMessage());
+    }
+}
+
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? '')) {
         $errorMsg = 'Invalid form submission.';
     } elseif (($_POST['action'] ?? '') === 'update_admin_account') {
         $name = trim((string) ($_POST['name'] ?? ''));
         $email = trim((string) ($_POST['email'] ?? ''));
+        $avatar = $adminAvatar;
 
         if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errorMsg = 'Please enter a valid name and email.';
         } else {
             try {
+                $newAvatar = pickled_store_avatar_upload($_FILES['avatar'] ?? [], (int) $admin['id'], 'admin');
+                if ($newAvatar !== null) {
+                    $avatar = $newAvatar;
+                }
+
                 if (!$pdo) {
                     $_SESSION['user']['name'] = $name;
                     $_SESSION['user']['email'] = $email;
                 } else {
+                    $pdo->beginTransaction();
                     $stmt = $pdo->prepare('UPDATE users SET name = ?, email = ? WHERE id = ? AND role = ?');
                     $stmt->execute([$name, $email, (int) $admin['id'], 'admin']);
+                    pickled_upsert_user_avatar($pdo, (int) $admin['id'], $avatar);
+                    $pdo->commit();
                 }
                 $_SESSION['user']['name'] = $name;
                 $_SESSION['user']['email'] = $email;
                 $adminName = $name;
                 $admin['name'] = $name;
                 $admin['email'] = $email;
+                $adminAvatar = $avatar;
+                $adminAvatarUrl = pickled_avatar_url($avatar);
+                $adminInitial = strtoupper(substr($name, 0, 1));
                 $successMsg = 'Admin profile updated.';
             } catch (Throwable $e) {
+                if (isset($pdo) && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
                 error_log('Admin profile update failed: ' . $e->getMessage());
-                $errorMsg = 'Unable to update account. Please check if the email is already used.';
+                $errorMsg = $e instanceof RuntimeException ? $e->getMessage() : 'Unable to update account. Please check if the email is already used.';
             }
         }
     }
@@ -111,9 +147,13 @@ $dashboardNav = [
         <section class="settings-layout admin-profile-layout">
             <article class="settings-card admin-account-card" id="profile">
                 <header><span><?php echo profile_icon($icons, 'user'); ?></span><div><h2>Profile</h2><p>Name and email used inside Pickled Admin.</p></div></header>
-                <form method="post" class="settings-form-grid">
+                <form method="post" class="settings-form-grid" enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
                     <input type="hidden" name="action" value="update_admin_account">
+                    <div class="settings-avatar-field">
+                        <span class="settings-avatar-preview" data-fallback="<?php echo htmlspecialchars($adminInitial); ?>"><img id="adminAvatarPreview" src="<?php echo htmlspecialchars($adminAvatarUrl); ?>" alt="<?php echo htmlspecialchars($admin['name'] ?? 'Admin'); ?>" onerror="this.remove();"></span>
+                        <label>Profile Photo<input id="adminAvatarInput" type="file" name="avatar" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><small>JPG, JPEG, PNG, or WEBP. Max 2MB.</small></label>
+                    </div>
                     <label>Name<input type="text" name="name" value="<?php echo htmlspecialchars($admin['name'] ?? 'Admin'); ?>" required></label>
                     <label>Email<input type="email" name="email" value="<?php echo htmlspecialchars($admin['email'] ?? 'admin@example.com'); ?>" required></label>
                     <div class="settings-actions"><button class="bookings-button primary" type="submit">Save Profile</button></div>
@@ -133,5 +173,20 @@ $dashboardNav = [
 </div>
 
 <script src="<?php echo pickled_admin_asset_url('js/admin.js'); ?>"></script>
+<script>
+    const adminAvatarInput = document.getElementById('adminAvatarInput');
+    const adminAvatarPreview = document.getElementById('adminAvatarPreview');
+    adminAvatarInput?.addEventListener('change', () => {
+        const file = adminAvatarInput.files?.[0];
+        if (!file || !adminAvatarPreview) return;
+        const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowed.includes(file.type) || file.size > 2 * 1024 * 1024) {
+            adminAvatarInput.value = '';
+            alert('Profile photo must be JPG, JPEG, PNG, or WEBP and 2MB or smaller.');
+            return;
+        }
+        adminAvatarPreview.src = URL.createObjectURL(file);
+    });
+</script>
 </body>
 </html>

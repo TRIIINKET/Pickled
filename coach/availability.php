@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
 require_once __DIR__ . '/../app/services/SchedulingService.php';
+require_once __DIR__ . '/../app/services/NotificationService.php';
 
 pickled_start_secure_session();
 pickled_init_csrf();
@@ -18,6 +19,8 @@ $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
 $todayLabel = $today->format('M j, Y (D)');
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
 $schedulingService = new SchedulingService();
+$notificationService = new NotificationService();
+$coachUnreadCount = $coachId > 0 ? $notificationService->unreadCount($coachId) : 0;
 $successMsg = '';
 $errorMsg = '';
 
@@ -93,7 +96,7 @@ $navItems = [
 $availabilityRows = $coachId ? $schedulingService->availabilityForCoach($coachId, true) : [];
 $weekStart = $today->modify('monday this week');
 $weekEnd = $weekStart->modify('+6 days');
-$times = ['7 AM', '8 AM', '9 AM', '10 AM', '11 AM', '12 PM', '1 PM', '2 PM', '3 PM', '4 PM', '5 PM', '6 PM', '7 PM', '8 PM'];
+$times = ['8 AM', '9 AM', '10 AM', '11 AM', '12 PM', '1 PM', '2 PM', '3 PM', '4 PM', '5 PM', '6 PM', '7 PM', '8 PM', '9 PM'];
 $days = [];
 $dayNumbers = [1, 2, 3, 4, 5, 6, 0];
 $dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -111,7 +114,7 @@ foreach ($availabilityRows as $row) {
     $startHour = (int) substr((string) $row['start_time'], 0, 2);
     $endHour = (int) substr((string) $row['end_time'], 0, 2);
     for ($hour = $startHour; $hour < $endHour; $hour++) {
-        $slotIndex = $hour - 7;
+        $slotIndex = $hour - 8;
         if (isset($slotMap[$key][$slotIndex])) {
             $slotMap[$key][$slotIndex] = $row['status'] === 'available' ? 'available' : 'unavailable';
         }
@@ -128,7 +131,7 @@ $slotLabels = [
 
 $rules = [
     ['Daily Start Time', '08:00 AM', 'gear'],
-    ['Daily End Time', '08:00 PM', 'clock'],
+    ['Daily End Time', '10:00 PM', 'clock'],
     ['Default Session Duration', '60 minutes', 'clock'],
     ['Break Between Sessions', '15 minutes', 'timer'],
     ['Max Sessions Per Day', '8 sessions', 'calendar'],
@@ -186,7 +189,7 @@ $dayLabels = [0 => 'Sunday', 1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 
         <a class="coach-brand" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/dashboard.php')); ?>"><img src="<?php echo htmlspecialchars(pickled_asset_url('img/LM-DGreen.png')); ?>" alt="Pickled"><span>Coach</span></a>
         <nav class="coach-nav" aria-label="Coach navigation">
             <?php foreach ($navItems as [$label, $href, $icon, $active]): ?>
-                <a class="<?php echo $active ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($href); ?>"><?php echo availability_icon($icons, $icon); ?><span><?php echo htmlspecialchars($label); ?></span><?php if ($label === 'Announcements'): ?><em>4</em><?php endif; ?></a>
+                <a class="<?php echo $active ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($href); ?>"><?php echo availability_icon($icons, $icon); ?><span><?php echo htmlspecialchars($label); ?></span><?php if ($label === 'Announcements' && $coachUnreadCount > 0): ?><em><?php echo min($coachUnreadCount, 9); ?></em><?php endif; ?></a>
             <?php endforeach; ?>
         </nav>
     </aside>
@@ -196,7 +199,7 @@ $dayLabels = [0 => 'Sunday', 1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 
             <div><h1>Availability</h1></div>
             <div class="coach-top-actions">
                 <span class="coach-date-pill"><?php echo availability_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></span>
-                <a class="coach-notification" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/announcements.php')); ?>" aria-label="Announcements"><?php echo availability_icon($icons, 'bell'); ?><em>4</em></a>
+                <a class="coach-notification" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/announcements.php')); ?>" aria-label="Announcements"><?php echo availability_icon($icons, 'bell'); ?><?php if ($coachUnreadCount > 0): ?><em><?php echo min($coachUnreadCount, 9); ?></em><?php endif; ?></a>
                 <details class="coach-top-profile">
                     <summary><span class="coach-photo small"><img src="<?php echo htmlspecialchars(pickled_asset_url('img/court/academy.png')); ?>" alt="<?php echo htmlspecialchars($coachName); ?>"></span><span><strong>Coach</strong><small>Pickleball Coach</small></span><b>⌄</b></summary>
                     <form method="post" action="<?php echo htmlspecialchars(pickled_frontend_url('auth/logout.php')); ?>"><input type="hidden" name="csrf_token" value="<?php echo $logoutCsrf; ?>"><button type="submit">Logout</button></form>
@@ -208,16 +211,16 @@ $dayLabels = [0 => 'Sunday', 1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 
         <?php if ($errorMsg): ?><div class="alert alert-error"><?php echo availability_h($errorMsg); ?></div><?php endif; ?>
 
         <section class="coach-kpi-grid availability-summary-grid page-first-section">
-            <article class="coach-kpi green"><?php echo availability_icon($icons, 'calendar'); ?><div><span>Available Days</span><strong><?php echo number_format($availableDays); ?></strong><small>This week</small></div></article>
-            <article class="coach-kpi pink"><?php echo availability_icon($icons, 'clock'); ?><div><span>Active Time Blocks</span><strong><?php echo number_format($availableSlots); ?></strong><small>Saved availability</small></div></article>
-            <article class="coach-kpi orange"><?php echo availability_icon($icons, 'students'); ?><div><span>Booked Sessions</span><strong><?php echo number_format($bookedSessions); ?></strong><small>Next 30 days</small></div></article>
-            <article class="coach-kpi purple"><?php echo availability_icon($icons, 'timer'); ?><div><span>Next Available Slot</span><strong><?php echo availability_h($nextAvailable); ?></strong><small>From saved blocks</small></div></article>
+            <article class="coach-kpi green"><div><span>Available Days</span><strong><?php echo number_format($availableDays); ?></strong><small>This week</small></div></article>
+            <article class="coach-kpi pink"><div><span>Active Time Blocks</span><strong><?php echo number_format($availableSlots); ?></strong><small>Saved availability</small></div></article>
+            <article class="coach-kpi orange"><div><span>Booked Sessions</span><strong><?php echo number_format($bookedSessions); ?></strong><small>Next 30 days</small></div></article>
+            <article class="coach-kpi purple"><div><span>Next Available Slot</span><strong><?php echo availability_h($nextAvailable); ?></strong><small>From saved blocks</small></div></article>
         </section>
 
         <section class="coach-card compact-availability-card">
             <header>
                 <div>
-                    <h2><?php echo availability_icon($icons, 'clock'); ?>Weekly Availability</h2>
+                    <h2>Weekly Availability</h2>
                     <p>Manage recurring availability blocks. Rows stay read-only until you edit them.</p>
                 </div>
                 <button class="coach-compact-primary" type="button" data-open-dialog="addAvailabilityDialog">+ Add Availability</button>
@@ -242,8 +245,8 @@ $dayLabels = [0 => 'Sunday', 1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 
                             <input type="hidden" name="csrf_token" value="<?php echo availability_h(pickled_csrf_token()); ?>">
                             <input type="hidden" name="availability_id" value="<?php echo (int) $row['id']; ?>">
                             <label><span>Day</span><select name="day_of_week"><?php foreach ($dayLabels as $number => $label): ?><option value="<?php echo $number; ?>" <?php echo (int) $row['day_of_week'] === $number ? 'selected' : ''; ?>><?php echo availability_h($label); ?></option><?php endforeach; ?></select></label>
-                            <label><span>Start</span><input type="time" name="start_time" value="<?php echo availability_h(substr((string) $row['start_time'], 0, 5)); ?>" required></label>
-                            <label><span>End</span><input type="time" name="end_time" value="<?php echo availability_h(substr((string) $row['end_time'], 0, 5)); ?>" required></label>
+                            <label><span>Start</span><input type="time" name="start_time" min="08:00" max="21:00" value="<?php echo availability_h(substr((string) $row['start_time'], 0, 5)); ?>" required></label>
+                            <label><span>End</span><input type="time" name="end_time" min="09:00" max="22:00" value="<?php echo availability_h(substr((string) $row['end_time'], 0, 5)); ?>" required></label>
                             <label><span>Status</span><select name="status"><option value="available" <?php echo $row['status'] === 'available' ? 'selected' : ''; ?>>Available</option><option value="unavailable" <?php echo $row['status'] === 'unavailable' ? 'selected' : ''; ?>>Unavailable</option><option value="leave" <?php echo $row['status'] === 'leave' ? 'selected' : ''; ?>>Leave</option></select></label>
                             <button type="submit" name="action" value="update_availability">Save</button>
                             <button type="button" data-edit-cancel>Cancel</button>
@@ -255,7 +258,7 @@ $dayLabels = [0 => 'Sunday', 1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 
         </section>
 
         <details class="coach-card collapsed-preview-card">
-            <summary><div><h2><?php echo availability_icon($icons, 'calendar'); ?>Weekly Schedule Preview</h2><p>View read-only calendar grid</p></div><span>Show Preview</span></summary>
+            <summary><div><h2>Weekly Schedule Preview</h2><p>View read-only calendar grid</p></div><span>Show Preview</span></summary>
             <div class="availability-grid-scroll">
                 <div class="availability-grid-table">
                     <div class="availability-head time-head">Time</div>
@@ -322,8 +325,8 @@ $dayLabels = [0 => 'Sunday', 1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 
                 <header><h2>Add Availability</h2><button type="button" data-close-dialog>Cancel</button></header>
                 <input type="hidden" name="csrf_token" value="<?php echo availability_h(pickled_csrf_token()); ?>">
                 <label><span>Day</span><select name="day_of_week"><?php foreach ($dayLabels as $number => $label): ?><option value="<?php echo $number; ?>"><?php echo availability_h($label); ?></option><?php endforeach; ?></select></label>
-                <label><span>Start Time</span><input type="time" name="start_time" value="09:00" required></label>
-                <label><span>End Time</span><input type="time" name="end_time" value="10:00" required></label>
+                <label><span>Start Time</span><input type="time" name="start_time" min="08:00" max="21:00" value="09:00" required></label>
+                <label><span>End Time</span><input type="time" name="end_time" min="09:00" max="22:00" value="10:00" required></label>
                 <label><span>Status</span><select name="status"><option value="available">Available</option><option value="unavailable">Unavailable</option><option value="leave">Leave</option></select></label>
                 <footer><button type="button" data-close-dialog>Cancel</button><button type="submit" name="action" value="create_availability">Save Availability</button></footer>
             </form>
@@ -333,10 +336,10 @@ $dayLabels = [0 => 'Sunday', 1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 
             <form method="post" class="coach-modal-form">
                 <header><h2>Add Time Off</h2><button type="button" data-close-dialog>Cancel</button></header>
                 <input type="hidden" name="csrf_token" value="<?php echo availability_h(pickled_csrf_token()); ?>">
-                <label><span>Start Date</span><input type="date" name="start_date" value="<?php echo availability_h($today->format('Y-m-d')); ?>" required></label>
-                <label><span>End Date</span><input type="date" name="end_date" value="<?php echo availability_h($today->format('Y-m-d')); ?>" required></label>
+                <label><span>Start Date</span><input type="date" name="start_date" min="<?php echo availability_h($today->format('Y-m-d')); ?>" value="<?php echo availability_h($today->format('Y-m-d')); ?>" required></label>
+                <label><span>End Date</span><input type="date" name="end_date" min="<?php echo availability_h($today->format('Y-m-d')); ?>" value="<?php echo availability_h($today->format('Y-m-d')); ?>" required></label>
                 <label><span>Reason</span><select name="reason"><?php foreach ($timeOffReasons as $reason): ?><option value="<?php echo availability_h($reason); ?>"><?php echo availability_h($reason); ?></option><?php endforeach; ?></select></label>
-                <label class="full"><span>Notes (optional)</span><textarea name="notes" rows="4" placeholder="Add useful context for the admin team."></textarea></label>
+                <label class="full"><span>Notes (optional)</span><textarea name="notes" rows="4" maxlength="1000" placeholder="Add useful context for the admin team."></textarea></label>
                 <footer><button type="button" data-close-dialog>Cancel</button><button type="submit" name="action" value="create_time_off">Submit Request</button></footer>
             </form>
         </dialog>
@@ -346,10 +349,10 @@ $dayLabels = [0 => 'Sunday', 1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 
                 <header><h2>Edit Time Off</h2><button type="button" data-close-dialog>Cancel</button></header>
                 <input type="hidden" name="csrf_token" value="<?php echo availability_h(pickled_csrf_token()); ?>">
                 <input type="hidden" name="time_off_id" id="editTimeOffId">
-                <label><span>Start Date</span><input type="date" name="start_date" id="editTimeOffStart" required></label>
-                <label><span>End Date</span><input type="date" name="end_date" id="editTimeOffEnd" required></label>
+                <label><span>Start Date</span><input type="date" name="start_date" min="<?php echo availability_h($today->format('Y-m-d')); ?>" id="editTimeOffStart" required></label>
+                <label><span>End Date</span><input type="date" name="end_date" min="<?php echo availability_h($today->format('Y-m-d')); ?>" id="editTimeOffEnd" required></label>
                 <label><span>Reason</span><select name="reason" id="editTimeOffReason"><?php foreach ($timeOffReasons as $reason): ?><option value="<?php echo availability_h($reason); ?>"><?php echo availability_h($reason); ?></option><?php endforeach; ?></select></label>
-                <label class="full"><span>Notes (optional)</span><textarea name="notes" id="editTimeOffNotes" rows="4"></textarea></label>
+                <label class="full"><span>Notes (optional)</span><textarea name="notes" id="editTimeOffNotes" rows="4" maxlength="1000"></textarea></label>
                 <footer><button type="button" data-close-dialog>Cancel</button><button type="submit" name="action" value="update_time_off">Save</button></footer>
             </form>
         </dialog>

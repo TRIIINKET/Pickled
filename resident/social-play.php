@@ -14,7 +14,7 @@ $cartErrorMessages = [
   'duplicate' => 'That session is already in your cart.',
   'limit' => 'Cart limit reached. Please complete checkout before adding more reservations.',
   'login' => 'Please log in before booking a session.',
-  'phone' => 'Please enter a valid 11-digit mobile number.',
+  'phone' => 'Please enter a valid Philippine mobile number.',
 ];
 $cartError = $cartErrorMessages[(string) ($_GET['cart_error'] ?? '')] ?? '';
 $currentUser = $_SESSION['user'] ?? [];
@@ -264,7 +264,7 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
         <div class="social-alert">This will add your selected social play session to cart. Payment happens during checkout.</div>
         <label>Name *<input type="text" required placeholder="Enter your name" id="socialName" name="customer_name" value="<?= htmlspecialchars($currentUserName) ?>" autocomplete="name" /></label>
         <label>Email *<input type="email" required placeholder="Enter your email" id="socialEmail" name="customer_email" value="<?= htmlspecialchars($currentUserEmail) ?>" autocomplete="email" <?= $currentUserEmail !== '' ? 'readonly' : '' ?> /></label>
-        <label>Phone Number *<input type="tel" required placeholder="09123456789" id="socialPhone" name="customer_phone" value="<?= htmlspecialchars($currentUserPhone) ?>" inputmode="numeric" maxlength="11" pattern="09[0-9]{9}" autocomplete="tel" data-social-phone /></label>
+        <label>Phone Number *<input type="tel" required placeholder="09123456789" id="socialPhone" name="customer_phone" value="<?= htmlspecialchars($currentUserPhone) ?>" inputmode="tel" maxlength="13" pattern="(09[0-9]{9}|\+639[0-9]{9}|639[0-9]{9})" autocomplete="tel" data-social-phone /></label>
         <fieldset>
           <legend>What is your experience level in pickleball? *</legend>
           <label><input type="radio" name="social_level" value="New or had trial class experience" required /> New or had trial class experience</label>
@@ -587,8 +587,8 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
 
   const socialPhoneInput = document.querySelector('[data-social-phone]');
   socialPhoneInput?.addEventListener('input', () => {
-    socialPhoneInput.value = socialPhoneInput.value.replace(/\D/g, '').slice(0, 11);
-    socialPhoneInput.setCustomValidity(/^09\d{9}$/.test(socialPhoneInput.value) ? '' : 'Please enter a valid 11-digit mobile number.');
+    socialPhoneInput.value = socialPhoneInput.value.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '').slice(0, 13);
+    socialPhoneInput.setCustomValidity(/^(09\d{9}|\+639\d{9}|639\d{9})$/.test(socialPhoneInput.value) ? '' : 'Please enter a valid Philippine mobile number.');
   });
   function closeModal(){
     modal.classList.remove('is-open');
@@ -670,8 +670,8 @@ $initialCalendarCells = (int) ceil(($initialMondayOffset + $initialDaysInMonth) 
     const detailsForm = event.currentTarget;
     const phone = detailsForm.querySelector('[data-social-phone]');
     if (phone) {
-      phone.value = phone.value.replace(/\D/g, '').slice(0, 11);
-      phone.setCustomValidity(/^09\d{9}$/.test(phone.value) ? '' : 'Please enter a valid 11-digit mobile number.');
+      phone.value = phone.value.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '').slice(0, 13);
+      phone.setCustomValidity(/^(09\d{9}|\+639\d{9}|639\d{9})$/.test(phone.value) ? '' : 'Please enter a valid Philippine mobile number.');
     }
     if (!detailsForm.reportValidity()) {
       return;

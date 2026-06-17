@@ -12,30 +12,57 @@ final class SchedulingRepository
 
     public function coaches(bool $activeOnly = true): array
     {
-        $sql = "SELECT u.id, u.name, u.email, cp.specialization, cp.bio, cp.experience, cp.status
+        $pdo = Database::connection();
+        $profileImageSelect = $this->columnExists('coach_profiles', 'profile_image') ? 'cp.profile_image' : 'NULL';
+        $coachGenderSelect = $this->columnExists('coach_profiles', 'gender') ? 'cp.gender' : ($this->columnExists('user_profiles', 'gender') ? 'up.gender' : 'NULL');
+        $sql = "SELECT u.id, u.name, u.email, cp.specialization, cp.bio, cp.experience, cp.status,
+                       COALESCE($profileImageSelect, up.avatar, '') AS avatar,
+                       COALESCE($coachGenderSelect, '') AS gender
                 FROM users u
                 LEFT JOIN coach_profiles cp ON cp.user_id = u.id
+                LEFT JOIN user_profiles up ON up.user_id = u.id
                 WHERE u.role = 'coach'";
         if ($activeOnly) {
             $sql .= " AND (cp.status IS NULL OR cp.status = 'active')";
         }
         $sql .= ' ORDER BY u.name ASC';
 
-        return Database::connection()->query($sql)->fetchAll() ?: [];
+        return $pdo->query($sql)->fetchAll() ?: [];
     }
 
     public function coachById(int $coachUserId): ?array
     {
+        $profileImageSelect = $this->columnExists('coach_profiles', 'profile_image') ? 'cp.profile_image' : 'NULL';
+        $coachGenderSelect = $this->columnExists('coach_profiles', 'gender') ? 'cp.gender' : ($this->columnExists('user_profiles', 'gender') ? 'up.gender' : 'NULL');
         $stmt = Database::connection()->prepare(
-            "SELECT u.id, u.name, u.email, cp.specialization, cp.bio, cp.experience, cp.status
+            "SELECT u.id, u.name, u.email, cp.specialization, cp.bio, cp.experience, cp.status,
+                    COALESCE($profileImageSelect, up.avatar, '') AS avatar,
+                    COALESCE($coachGenderSelect, '') AS gender
              FROM users u
              LEFT JOIN coach_profiles cp ON cp.user_id = u.id
+             LEFT JOIN user_profiles up ON up.user_id = u.id
              WHERE u.id = :id AND u.role = 'coach'
              LIMIT 1"
         );
         $stmt->execute(['id' => $coachUserId]);
         $coach = $stmt->fetch();
         return $coach ?: null;
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        $stmt = Database::connection()->prepare(
+            'SELECT COUNT(*)
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = :table_name
+               AND COLUMN_NAME = :column_name'
+        );
+        $stmt->execute([
+            'table_name' => $table,
+            'column_name' => $column,
+        ]);
+        return (int) $stmt->fetchColumn() > 0;
     }
 
     public function createSession(array $data): int
@@ -481,6 +508,9 @@ final class SchedulingRepository
     private function ensureCoachTimeOffSchema(): void
     {
         try {
+            // Auxiliary/support table, not a core ERD entity.
+            // Purpose: stores coach time-off requests so coach availability can exclude unavailable dates.
+            // This supports scheduling operations and coach availability workflows.
             Database::connection()->exec(
                 "CREATE TABLE IF NOT EXISTS coach_time_off_requests (
                     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

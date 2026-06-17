@@ -184,7 +184,8 @@ require_once __DIR__ . '/paths.php';
       <ul>
         <li>Book your court through our website. Payments are required before a booking is confirmed.</li>
         <li>Peak hours are weekdays after 6:00 PM, plus all day Saturday, Sunday, public holidays, and special occasions. Other times are off-peak.</li>
-        <li>If plans change, you may reschedule your booking using the reschedule link in your confirmation email. Please do so at least 48 hours before your original booking, and pick a new date within 14 days. Manual rescheduling requests cannot be accommodated.</li>
+        <li>Pending unpaid bookings may be cancelled anytime before payment expires. Confirmed bookings may be cancelled up to 24 hours before the scheduled time.</li>
+        <li>Cancellations after receipt upload or verified payment are subject to admin refund review. Approved refunds are processed manually through GCash.</li>
         <li>No-shows forfeit the booking fee, and repeat no-shows may result in booking restrictions.</li>
         <li>Late arrivals do not extend your reserved time. Your session ends at the originally scheduled finish time.</li>
       </ul>
@@ -269,19 +270,16 @@ require_once __DIR__ . '/paths.php';
     <button type="button" class="cancellation-modal__close" id="cancellationClose">&times;</button>
     <div class="cancellation-modal__body">
       <h1>Cancellation Policy</h1>
-      <p>All bookings are guaranteed only after full payment is received. Booking fees are non-refundable unless a valid severe weather event occurs while your slot is active.</p>
-      <p>Rescheduling due to typhoon signal no. 8 or Black Rainstorm Warning is at the sole discretion of Pickle &amp; Club. Please refer to our Severe Weather Policy for details.</p>
-      <h2>Key Cancellation Details</h2>
+      <h2>Cancellation &amp; Payment Policy</h2>
       <ul>
-        <li>Full payment must be completed before a booking is confirmed.</li>
-        <li>Bookings are non-refundable in normal circumstances.</li>
-        <li>If signal no. 8 or Black Rainstorm Warning is active during your slot, rescheduling may be allowed.</li>
-        <li>Rescheduling decisions are made by Pickle &amp; Club staff and may depend on availability.</li>
-        <li>For reschedule arrangements, please follow the instructions provided on our website and in your confirmation email.</li>
+        <li>Pending unpaid bookings may be cancelled anytime before payment expires.</li>
+        <li>Unpaid bookings automatically expire after 30 minutes.</li>
+        <li>Confirmed bookings may be cancelled up to 24 hours before the scheduled time.</li>
+        <li>Cancellations after receipt upload or verified payment are subject to admin refund review.</li>
+        <li>Refunds, if approved, are processed manually through GCash.</li>
+        <li>Bookings within 24 hours of the scheduled time can no longer be cancelled.</li>
+        <li>No-show bookings are forfeited.</li>
       </ul>
-      <h2>Weather-Related Rescheduling</h2>
-      <p>If the weather forces a cancellation, we will attempt to reschedule your booking based on available courts and future slot availability. The final decision remains with Pickle &amp; Club management.</p>
-      <p>Please note: if your booking slot is already underway when the severe weather warning starts, the policy will still apply only to instances where the warning is active during your reserved time.</p>
       <h2>Questions?</h2>
       <p>If you need help or want to confirm your booking terms, contact our support team or check the website for the latest cancellation guidance.</p>
     </div>

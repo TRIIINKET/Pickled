@@ -143,11 +143,15 @@ body.promo-hidden .nav {
 .nav-account__avatar {
   width: 38px;
   height: 38px;
+  overflow: hidden;
+  font-weight: 900;
 }
 
-.nav-account__avatar svg {
-  width: 23px;
-  height: 23px;
+.nav-account__avatar img,
+.nav-account__large-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .nav-account__name {

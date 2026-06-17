@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../repositories/FeedbackRepository.php';
+require_once __DIR__ . '/../../includes/validation.php';
 
 final class FeedbackService
 {
@@ -181,12 +182,12 @@ final class FeedbackService
 
     private function comment(string $comment): string
     {
-        $comment = trim($comment);
+        $comment = validateText($comment, true, 1000);
         if ($comment === '') {
             throw new RuntimeException('Feedback comment is required.');
         }
 
-        return substr($comment, 0, 2000);
+        return $comment;
     }
 
 }

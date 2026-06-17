@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/paths.php';
+require_once __DIR__ . '/../includes/avatar-helper.php';
+require_once __DIR__ . '/../database/Database.php';
 require_once __DIR__ . '/../app/services/FeedbackService.php';
 
 pickled_start_secure_session();
@@ -14,12 +16,177 @@ if (empty($_SESSION['user']) || ($_SESSION['user']['role'] ?? '') !== 'coach') {
 $coach = $_SESSION['user'];
 $coachId = (int) ($coach['id'] ?? 0);
 $coachName = $coach['name'] ?? 'Coach Mia Santos';
+$coachEmail = $coach['email'] ?? '';
+$coachProfile = [
+    'phone' => '',
+    'city' => '',
+    'province' => '',
+    'avatar' => pickled_avatar_default_path(),
+    'specialization' => '',
+    'experience' => '',
+    'bio' => '',
+    'status' => 'active',
+];
+$successMsg = '';
+$errorMsg = '';
+$fieldErrors = [];
 $feedbackService = new FeedbackService();
 $coachFeedbackStats = $feedbackService->statsForCoach($coachId);
 $recentCoachFeedback = $feedbackService->recentForCoach($coachId, 8);
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
 $todayLabel = $today->format('M j, Y (D)');
 $logoutCsrf = htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8');
+
+$pdo = Database::enabled() ? Database::connection() : null;
+$coachImageSelect = $pdo && pickled_avatar_profile_column_exists($pdo, 'coach_profiles', 'profile_image')
+    ? "COALESCE(NULLIF(cp.profile_image, ''), NULLIF(up.avatar, ''), 'avatars/default.png') AS avatar"
+    : "COALESCE(NULLIF(up.avatar, ''), 'avatars/default.png') AS avatar";
+
+if ($pdo && $coachId > 0) {
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT u.name, u.email,
+                    COALESCE(up.phone, '') AS phone,
+                    COALESCE(up.city, '') AS city,
+                    COALESCE(up.province, '') AS province,
+                    COALESCE(cp.specialization, '') AS specialization,
+                    COALESCE(cp.experience, '') AS experience,
+                    COALESCE(cp.bio, '') AS bio,
+                    COALESCE(cp.status, 'active') AS status,
+                    $coachImageSelect
+             FROM users u
+             LEFT JOIN user_profiles up ON up.user_id = u.id
+             LEFT JOIN coach_profiles cp ON cp.user_id = u.id
+             WHERE u.id = :id AND u.role = 'coach'
+             LIMIT 1"
+        );
+        $stmt->execute(['id' => $coachId]);
+        $row = $stmt->fetch();
+        if ($row) {
+            $coachName = (string) $row['name'];
+            $coachEmail = (string) $row['email'];
+            $coachProfile = [
+                'phone' => (string) $row['phone'],
+                'city' => (string) $row['city'],
+                'province' => (string) $row['province'],
+                'avatar' => (string) $row['avatar'],
+                'specialization' => (string) $row['specialization'],
+                'experience' => (string) $row['experience'],
+                'bio' => (string) $row['bio'],
+                'status' => (string) $row['status'],
+            ];
+            $_SESSION['user']['name'] = $coachName;
+            $_SESSION['user']['email'] = $coachEmail;
+        }
+    } catch (Throwable $e) {
+        error_log('Coach profile load failed: ' . $e->getMessage());
+    }
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'update_coach_profile') {
+    if (!pickled_validate_csrf_token($_POST['csrf_token'] ?? '')) {
+        $errorMsg = 'Invalid request. Please refresh and try again.';
+    } elseif (!$pdo || $coachId <= 0) {
+        $errorMsg = 'Please log in again before updating your profile.';
+    } else {
+        $name = trim((string) ($_POST['name'] ?? ''));
+        $phone = trim((string) ($_POST['phone'] ?? ''));
+        $city = trim((string) ($_POST['city'] ?? ''));
+        $province = trim((string) ($_POST['province'] ?? ''));
+        $specialization = trim((string) ($_POST['specialization'] ?? ''));
+        $experience = trim((string) ($_POST['experience'] ?? ''));
+        $bio = trim((string) ($_POST['bio'] ?? ''));
+        $avatar = trim((string) ($coachProfile['avatar'] ?? pickled_avatar_default_path())) ?: pickled_avatar_default_path();
+
+        try { $name = validateName($name); } catch (RuntimeException $e) { $fieldErrors['name'] = $e->getMessage(); }
+        try { $phone = $phone !== '' ? validatePhonePH($phone) : ''; } catch (RuntimeException $e) { $fieldErrors['phone'] = $e->getMessage(); }
+        try { $city = validateText($city, false, 120); } catch (RuntimeException $e) { $fieldErrors['city'] = $e->getMessage(); }
+        try { $province = validateText($province, false, 120); } catch (RuntimeException $e) { $fieldErrors['province'] = $e->getMessage(); }
+        try { $specialization = validateText($specialization, false, 160); } catch (RuntimeException $e) { $fieldErrors['specialization'] = $e->getMessage(); }
+        try { $experience = validateText($experience, false, 160); } catch (RuntimeException $e) { $fieldErrors['experience'] = $e->getMessage(); }
+        try { $bio = validateText($bio, false, 1000); } catch (RuntimeException $e) { $fieldErrors['bio'] = $e->getMessage(); }
+
+        try {
+            $newAvatar = pickled_store_avatar_upload($_FILES['avatar'] ?? [], $coachId, 'coach');
+            if ($newAvatar !== null) {
+                $avatar = $newAvatar;
+            }
+        } catch (Throwable $e) {
+            error_log('Coach avatar upload failed: ' . $e->getMessage());
+            $fieldErrors['avatar'] = $e instanceof RuntimeException ? $e->getMessage() : 'Profile photo upload failed. Please try again.';
+        }
+
+        if ($fieldErrors) {
+            $errorMsg = reset($fieldErrors) ?: 'Please check the highlighted fields.';
+        } else {
+            try {
+                $pdo->beginTransaction();
+                $stmt = $pdo->prepare('UPDATE users SET name = :name WHERE id = :id AND role = :role');
+                $stmt->execute(['name' => $name, 'id' => $coachId, 'role' => 'coach']);
+
+                $stmt = $pdo->prepare(
+                    'INSERT INTO user_profiles (user_id, phone, city, province, avatar)
+                     VALUES (:user_id, :phone, :city, :province, :avatar)
+                     ON DUPLICATE KEY UPDATE
+                        phone = VALUES(phone),
+                        city = VALUES(city),
+                        province = VALUES(province),
+                        avatar = VALUES(avatar)'
+                );
+                $profileSaved = $stmt->execute([
+                    'user_id' => $coachId,
+                    'phone' => $phone,
+                    'city' => $city,
+                    'province' => $province,
+                    'avatar' => $avatar,
+                ]);
+                error_log('Avatar database update result: coach user_profiles.avatar user_id=' . $coachId . '; avatar=' . $avatar . '; result=' . ($profileSaved ? 'success' : 'failed') . '; row_count=' . $stmt->rowCount());
+
+                $stmt = $pdo->prepare(
+                    'INSERT INTO coach_profiles (user_id, specialization, bio, experience, status)
+                     VALUES (:user_id, :specialization, :bio, :experience, :status)
+                     ON DUPLICATE KEY UPDATE
+                        specialization = VALUES(specialization),
+                        bio = VALUES(bio),
+                        experience = VALUES(experience),
+                        status = VALUES(status)'
+                );
+                $stmt->execute([
+                    'user_id' => $coachId,
+                    'specialization' => $specialization,
+                    'bio' => $bio,
+                    'experience' => $experience,
+                    'status' => $coachProfile['status'] ?: 'active',
+                ]);
+                pickled_update_coach_profile_image_if_available($pdo, $coachId, $avatar);
+
+                $pdo->commit();
+                $_SESSION['user']['name'] = $name;
+                $coachName = $name;
+                $coachProfile = [
+                    'phone' => $phone,
+                    'city' => $city,
+                    'province' => $province,
+                    'avatar' => $avatar,
+                    'specialization' => $specialization,
+                    'experience' => $experience,
+                    'bio' => $bio,
+                    'status' => $coachProfile['status'] ?: 'active',
+                ];
+                $successMsg = 'Coach profile updated.';
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                error_log('Coach profile update failed: ' . $e->getMessage());
+                $errorMsg = 'Unable to save coach profile changes right now.';
+            }
+        }
+    }
+}
+
+$coachAvatarUrl = pickled_avatar_url($coachProfile['avatar'] ?? pickled_avatar_default_path());
+$coachInitial = strtoupper(substr($coachName !== '' ? $coachName : $coachEmail, 0, 1));
 
 function profile_icon(array $icons, string $name): string {
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? $icons['profile']) . '</svg>';
@@ -56,7 +223,7 @@ $stats = [
     ['Rating', number_format((float) $coachFeedbackStats['average_rating'], 1)],
 ];
 
-$specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
+$specializations = array_values(array_filter(array_map('trim', explode(',', (string) ($coachProfile['specialization'] ?: 'Beginner Coaching, Youth Development, Social Play')))));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -87,21 +254,24 @@ $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
                 <button class="coach-date-pill" type="button"><?php echo profile_icon($icons, 'calendar'); ?><span><?php echo htmlspecialchars($todayLabel); ?></span></button>
                 <a class="coach-notification" href="<?php echo htmlspecialchars(pickled_frontend_url('coach/announcements.php')); ?>" aria-label="Announcements"><?php echo profile_icon($icons, 'bell'); ?><em>4</em></a>
                 <details class="coach-top-profile">
-                    <summary><span class="coach-photo small"><img src="<?php echo htmlspecialchars(pickled_asset_url('img/court/academy.png')); ?>" alt="<?php echo htmlspecialchars($coachName); ?>"></span><span><strong>Coach</strong><small>Pickleball Coach</small></span><b>⌄</b></summary>
+                    <summary><span class="coach-photo small" data-fallback="<?php echo htmlspecialchars($coachInitial); ?>"><img src="<?php echo htmlspecialchars($coachAvatarUrl); ?>" alt="<?php echo htmlspecialchars($coachName); ?>" onerror="this.remove();"></span><span><strong>Coach</strong><small>Pickleball Coach</small></span><b>⌄</b></summary>
                     <form method="post" action="<?php echo htmlspecialchars(pickled_frontend_url('auth/logout.php')); ?>"><input type="hidden" name="csrf_token" value="<?php echo $logoutCsrf; ?>"><button type="submit">Logout</button></form>
                 </details>
             </div>
         </header>
 
+        <?php if ($successMsg): ?><div class="alert alert-success"><?php echo htmlspecialchars($successMsg); ?></div><?php endif; ?>
+        <?php if ($errorMsg): ?><div class="alert alert-error"><?php echo htmlspecialchars($errorMsg); ?></div><?php endif; ?>
+
         <section class="page-intro page-first-section">
             <p>Manage your coaching account and personal details.</p>
-            <span><?php echo profile_icon($icons, 'check'); ?>Changes saved</span>
+            <span><?php echo profile_icon($icons, 'check'); ?>Profile settings</span>
         </section>
 
         <section class="profile-workspace">
             <aside class="profile-left">
                 <article class="coach-card profile-summary-card">
-                    <span class="coach-photo profile-large"><img src="<?php echo htmlspecialchars(pickled_asset_url('img/court/academy.png')); ?>" alt="<?php echo htmlspecialchars($coachName); ?>"></span>
+                    <span class="coach-photo profile-large" data-fallback="<?php echo htmlspecialchars($coachInitial); ?>"><img id="coachAvatarPreview" src="<?php echo htmlspecialchars($coachAvatarUrl); ?>" alt="<?php echo htmlspecialchars($coachName); ?>" onerror="this.remove();"></span>
                     <h2><?php echo htmlspecialchars($coachName); ?></h2>
                     <p>Pickleball Coach</p>
                     <small>Member Since May 2026</small>
@@ -109,20 +279,28 @@ $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
                     <div class="profile-stats">
                         <?php foreach ($stats as [$label, $value]): ?><article><strong><?php echo htmlspecialchars($value); ?></strong><span><?php echo htmlspecialchars($label); ?></span></article><?php endforeach; ?>
                     </div>
-                    <div class="profile-actions"><button><?php echo profile_icon($icons, 'camera'); ?>Change Photo</button><a href="#"><?php echo profile_icon($icons, 'eye'); ?>View Public Profile</a></div>
+                    <div class="profile-actions">
+                        <label class="coach-photo-upload"><?php echo profile_icon($icons, 'camera'); ?>Change Photo<input id="coachAvatarInput" form="coachProfileForm" type="file" name="avatar" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"></label>
+                        <?php if (isset($fieldErrors['avatar'])): ?><small class="form-error"><?php echo htmlspecialchars($fieldErrors['avatar']); ?></small><?php endif; ?>
+                    </div>
                 </article>
             </aside>
 
             <div class="profile-settings">
                 <section class="coach-card profile-form-card">
-                    <header><h2>Account Information</h2><span><?php echo profile_icon($icons, 'check'); ?>Changes saved</span></header>
-                    <form class="profile-form-grid">
-                        <label>First Name<input type="text" value="Mia"></label>
-                        <label>Last Name<input type="text" value="Santos"></label>
-                        <label>Email<input type="email" value="mia.coach@pickled.ph"></label>
-                        <label>Phone Number<input type="tel" value="0912 345 6789"></label>
-                        <label>City<input type="text" value="Makati"></label>
-                        <label>Province<input type="text" value="Metro Manila"></label>
+                    <header><h2>Account Information</h2><span><?php echo profile_icon($icons, 'check'); ?>Editable</span></header>
+                    <form id="coachProfileForm" class="profile-form-grid" method="post" enctype="multipart/form-data" novalidate>
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(pickled_csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="update_coach_profile">
+                        <label class="full">Full Name<input type="text" name="name" value="<?php echo htmlspecialchars($coachName); ?>" minlength="2" maxlength="80" pattern="[A-Za-z][A-Za-z .'\-]*" required><?php if (isset($fieldErrors['name'])): ?><em><?php echo htmlspecialchars($fieldErrors['name']); ?></em><?php endif; ?></label>
+                        <label>Email<input type="email" value="<?php echo htmlspecialchars($coachEmail); ?>" readonly aria-readonly="true"></label>
+                        <label>Phone Number<input type="tel" name="phone" value="<?php echo htmlspecialchars((string) $coachProfile['phone']); ?>" maxlength="13" pattern="(09[0-9]{9}|\+639[0-9]{9}|639[0-9]{9})" placeholder="09123456789"><?php if (isset($fieldErrors['phone'])): ?><em><?php echo htmlspecialchars($fieldErrors['phone']); ?></em><?php endif; ?></label>
+                        <label>City<input type="text" name="city" value="<?php echo htmlspecialchars((string) $coachProfile['city']); ?>" maxlength="120"><?php if (isset($fieldErrors['city'])): ?><em><?php echo htmlspecialchars($fieldErrors['city']); ?></em><?php endif; ?></label>
+                        <label>Province<input type="text" name="province" value="<?php echo htmlspecialchars((string) $coachProfile['province']); ?>" maxlength="120"><?php if (isset($fieldErrors['province'])): ?><em><?php echo htmlspecialchars($fieldErrors['province']); ?></em><?php endif; ?></label>
+                        <label>Experience<input type="text" name="experience" value="<?php echo htmlspecialchars((string) $coachProfile['experience']); ?>" maxlength="160"><?php if (isset($fieldErrors['experience'])): ?><em><?php echo htmlspecialchars($fieldErrors['experience']); ?></em><?php endif; ?></label>
+                        <label class="full">Specialization<input type="text" name="specialization" value="<?php echo htmlspecialchars((string) $coachProfile['specialization']); ?>" maxlength="160" placeholder="Beginner Coaching, Youth Development"><?php if (isset($fieldErrors['specialization'])): ?><em><?php echo htmlspecialchars($fieldErrors['specialization']); ?></em><?php endif; ?></label>
+                        <label class="full">Bio<textarea name="bio" maxlength="1000"><?php echo htmlspecialchars((string) $coachProfile['bio']); ?></textarea><?php if (isset($fieldErrors['bio'])): ?><em><?php echo htmlspecialchars($fieldErrors['bio']); ?></em><?php endif; ?></label>
+                        <div class="settings-actions full"><button class="bookings-button primary" type="submit">Save Profile</button></div>
                     </form>
                 </section>
 
@@ -131,11 +309,6 @@ $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
                     <div class="coach-check-list">
                         <?php foreach ($specializations as $item): ?><label><input type="checkbox" checked> <?php echo htmlspecialchars($item); ?></label><?php endforeach; ?>
                     </div>
-                    <form class="profile-form-grid">
-                        <label>Experience<input type="text" value="3 Years Coaching"></label>
-                        <label>Certifications<input type="text" value="PPR Certified Coach"></label>
-                        <label class="full">Bio<textarea>Patient and encouraging pickleball coach focused on beginner confidence, youth development, and practical game habits.</textarea></label>
-                    </form>
                 </section>
 
                 <section class="coach-card profile-form-card" id="feedback">
@@ -170,5 +343,20 @@ $specializations = ['Beginner Coaching', 'Youth Development', 'Social Play'];
         </section>
     </main>
 </div>
+<script>
+    const coachAvatarInput = document.getElementById('coachAvatarInput');
+    const coachAvatarPreview = document.getElementById('coachAvatarPreview');
+    coachAvatarInput?.addEventListener('change', () => {
+        const file = coachAvatarInput.files?.[0];
+        if (!file || !coachAvatarPreview) return;
+        const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowed.includes(file.type) || file.size > 2 * 1024 * 1024) {
+            coachAvatarInput.value = '';
+            alert('Profile photo must be JPG, JPEG, PNG, or WEBP and 2MB or smaller.');
+            return;
+        }
+        coachAvatarPreview.src = URL.createObjectURL(file);
+    });
+</script>
 </body>
 </html>

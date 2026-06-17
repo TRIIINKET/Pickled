@@ -9,7 +9,7 @@ return [
         'item_limit' => 3,
     ],
     'booking' => [
-        'pending_expiry_hours' => 24,
+        'pending_expiry_minutes' => 30,
     ],
     'database' => [
         'enabled' => true,
