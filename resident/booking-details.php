@@ -78,7 +78,7 @@ $payments = $booking ? $paymentService->paymentsForBooking((int) $booking['id'])
 $feedback = $booking ? $feedbackService->feedbackForBooking((int) $booking['id'], $userId) : null;
 $feedbackTargets = $booking ? $feedbackService->targetsForBooking((int) $booking['id'], $userId) : [];
 $latestPayment = $payments[0] ?? null;
-$extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260615a"/>';
+$extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260617a"/>';
 
 function booking_detail_status_key(string $status): string {
   $status = strtolower($status);
@@ -109,8 +109,7 @@ include __DIR__ . '/../includes/header.php';
 
 <main class="cart-page">
   <div class="cart-shell">
-    <div class="cart-top">
-      <h1>Booking Details</h1>
+    <div class="cart-top booking-detail-nav">
       <div class="cart-top-links">
         <a href="booking.php">Booking history</a>
         <a href="courts.php#court-detail">Continue shopping</a>
@@ -129,83 +128,112 @@ include __DIR__ . '/../includes/header.php';
     <?php else: ?>
       <?php $statusKey = booking_detail_status_key((string) $booking['status']); ?>
       <?php $feedbackEligible = $feedbackService->canLeaveFeedback((int) $booking['id'], $userId); ?>
-      <section class="confirmation booking-history">
-        <article class="booking-card" data-booking-status="<?= htmlspecialchars($statusKey) ?>">
-          <div class="booking-card__header">
-            <div><strong>Reference:</strong> <?= htmlspecialchars($booking['reference']) ?></div>
-            <div class="booking-card__status booking-card__status--<?= htmlspecialchars($statusKey) ?>"><?= htmlspecialchars(ucfirst($statusKey)) ?></div>
+      <?php $canUpload = !$latestPayment || (($latestPayment['status'] ?? '') === 'rejected'); ?>
+      <?php $showReceiptUpload = $canUpload && ($booking['payment_status'] ?? '') !== 'paid' && ($booking['status'] ?? '') !== 'cancelled'; ?>
+      <?php $showFeedbackSection = $statusKey === 'completed' && ($feedback || $feedbackEligible); ?>
+
+      <section class="booking-detail-page">
+        <header class="booking-detail-header">
+          <div>
+            <h1>Booking Details</h1>
+            <p>Reference: <strong><?= htmlspecialchars($booking['reference']) ?></strong></p>
+          </div>
+          <div class="booking-card__status booking-card__status--<?= htmlspecialchars($statusKey) ?>"><?= htmlspecialchars(ucfirst($statusKey)) ?></div>
+        </header>
+
+        <section class="booking-detail-section">
+          <div class="booking-detail-section__heading">
+            <h2>Booking Summary</h2>
+            <span><?= htmlspecialchars($booking['created_at'] ?? '') ?></span>
           </div>
 
-          <div class="booking-card__meta">
-            <span>Payment: <?= htmlspecialchars($booking['payment_method']) ?> - <?= htmlspecialchars($booking['payment_status']) ?></span>
-            <span>Subtotal: &#8369;<?= number_format((float) $booking['subtotal'], 2) ?></span>
-            <span>Total: &#8369;<?= number_format((float) $booking['total'], 2) ?></span>
-            <span>Booked on: <?= htmlspecialchars($booking['created_at'] ?? '') ?></span>
+          <div class="booking-detail-summary-grid">
+            <?php foreach ($items as $item): ?>
+              <article class="booking-detail-item">
+                <img src="<?= htmlspecialchars($item['image'] ?? '../assets/img/Hero.jpg') ?>" alt="<?= htmlspecialchars($item['name']) ?>" />
+                <div>
+                  <h3><?= htmlspecialchars($item['court']) ?> - <?= htmlspecialchars($item['name']) ?></h3>
+                  <dl>
+                    <div><dt>Date</dt><dd><?= htmlspecialchars($item['booking_date']) ?></dd></div>
+                    <div><dt>Time</dt><dd><?= htmlspecialchars($item['booking_time']) ?></dd></div>
+                    <div><dt>Players</dt><dd><?= htmlspecialchars((string) $item['quantity']) ?></dd></div>
+                    <div><dt>Amount</dt><dd>&#8369;<?= number_format((float) $item['unit_price'] * (int) $item['quantity'], 2) ?></dd></div>
+                  </dl>
+                </div>
+              </article>
+            <?php endforeach; ?>
           </div>
 
-          <section class="booking-items">
-            <div class="booking-item">
-              <div>
-                <strong>Payment Status</strong>
-                <p><?= htmlspecialchars(ucfirst((string) ($latestPayment['status'] ?? $booking['payment_status'] ?? 'pending'))) ?></p>
-                <?php if (!empty($latestPayment['reference_number'])): ?>
-                  <p>Reference No: <?= htmlspecialchars($latestPayment['reference_number']) ?></p>
-                <?php endif; ?>
-                <?php if (!empty($latestPayment['remarks'])): ?>
-                  <p>Admin remarks: <?= htmlspecialchars($latestPayment['remarks']) ?></p>
-                <?php endif; ?>
-              </div>
-            </div>
-          </section>
+          <div class="booking-detail-totals">
+            <span>Payment: <?= htmlspecialchars($booking['payment_method']) ?> · <?= htmlspecialchars(ucfirst((string) ($latestPayment['status'] ?? $booking['payment_status'] ?? 'pending'))) ?></span>
+            <strong>Total: &#8369;<?= number_format((float) $booking['total'], 2) ?></strong>
+          </div>
 
-          <?php $canUpload = !$latestPayment || (($latestPayment['status'] ?? '') === 'rejected'); ?>
-          <?php if ($canUpload && ($booking['payment_status'] ?? '') !== 'paid' && ($booking['status'] ?? '') !== 'cancelled'): ?>
-            <form class="checkout-card" method="post" enctype="multipart/form-data">
-              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
-              <input type="hidden" name="action" value="upload_payment" />
-              <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>" />
-              <h2>Upload Payment Receipt</h2>
-              <div class="gcash-instructions">
-                <h3>GCash Payment Details</h3>
-                <div class="gcash-detail">
-                  <span>GCash Number</span>
-                  <strong id="bookingGcashNumber">0917 123 4567</strong>
-                  <button type="button" data-copy-target="bookingGcashNumber">Copy</button>
-                </div>
-                <div class="gcash-detail">
-                  <span>Account Name</span>
-                  <strong>PICKLED SPORTS CENTER</strong>
-                </div>
-                <div class="gcash-detail">
-                  <span>Payment Note</span>
-                  <strong>Use reference <?= htmlspecialchars((string) $booking['reference']) ?>.</strong>
-                </div>
-                <ol>
-                  <li>Send payment through GCash.</li>
-                  <li>Use your booking reference as the payment note.</li>
-                  <li>Upload your receipt or screenshot.</li>
-                  <li>Wait for admin verification.</li>
-                </ol>
-              </div>
-              <label>
-                Reference Number
-                <input type="text" name="reference_number" required />
-              </label>
-              <label>
-                Receipt Image or PDF
-                <input type="file" name="proof_image" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf" required />
-              </label>
-              <button class="checkout-btn" type="submit">Submit receipt</button>
-            </form>
-          <?php elseif (($latestPayment['status'] ?? '') === 'pending'): ?>
-            <div class="cart-message cart-message--warning">Your uploaded receipt is waiting for admin review.</div>
+          <?php if (!empty($latestPayment['remarks'])): ?>
+            <p class="booking-detail-note">Admin remarks: <?= htmlspecialchars($latestPayment['remarks']) ?></p>
+          <?php elseif (!empty($booking['notes'])): ?>
+            <p class="booking-detail-note"><?= htmlspecialchars($booking['notes']) ?></p>
           <?php endif; ?>
+        </section>
 
-          <?php if ($payments): ?>
-            <div class="booking-items">
+        <section class="booking-detail-payment-grid">
+          <article class="booking-detail-section booking-detail-payment-card">
+            <div class="booking-detail-section__heading">
+              <h2>Payment Instructions</h2>
+            </div>
+            <div class="booking-detail-payment-list">
+              <div>
+                <span>GCash Number</span>
+                <strong id="bookingGcashNumber">0917 123 4567</strong>
+                <button type="button" data-copy-target="bookingGcashNumber">Copy</button>
+              </div>
+              <div><span>Account Name</span><strong>PICKLED SPORTS CENTER</strong></div>
+              <div><span>Reference</span><strong><?= htmlspecialchars((string) $booking['reference']) ?></strong></div>
+            </div>
+            <ol class="booking-detail-steps">
+              <li>Send payment through GCash.</li>
+              <li>Use your booking reference as the payment note.</li>
+              <li>Upload your receipt or screenshot.</li>
+              <li>Wait for admin verification.</li>
+            </ol>
+          </article>
+
+          <article class="booking-detail-section booking-detail-upload-card">
+            <div class="booking-detail-section__heading">
+              <h2>Upload Receipt</h2>
+            </div>
+            <?php if ($showReceiptUpload): ?>
+              <form class="booking-detail-upload-form" method="post" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
+                <input type="hidden" name="action" value="upload_payment" />
+                <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>" />
+                <label>
+                  Reference Number
+                  <input type="text" name="reference_number" required />
+                </label>
+                <label>
+                  Receipt Image or PDF
+                  <input type="file" name="proof_image" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf" required />
+                </label>
+                <button class="checkout-btn" type="submit">Submit Receipt</button>
+              </form>
+            <?php elseif (($latestPayment['status'] ?? '') === 'pending'): ?>
+              <div class="cart-message cart-message--warning booking-detail-inline-message">Your uploaded receipt is waiting for admin review.</div>
+            <?php else: ?>
+              <div class="cart-message booking-detail-inline-message">No receipt upload is needed for this booking.</div>
+            <?php endif; ?>
+          </article>
+        </section>
+
+        <?php if ($payments): ?>
+          <section class="booking-detail-section">
+            <div class="booking-detail-section__heading">
+              <h2>Receipt History</h2>
+            </div>
+            <div class="booking-detail-receipts">
               <?php foreach ($payments as $payment): ?>
-                <div class="booking-item">
-                  <?php $proofPath = (string) $payment['proof_image']; ?>
+                <?php $proofPath = (string) $payment['proof_image']; ?>
+                <article>
                   <?php if (payment_proof_is_image($proofPath)): ?>
                     <img src="<?= htmlspecialchars(payment_proof_url($proofPath)) ?>" alt="Payment receipt" />
                   <?php endif; ?>
@@ -213,35 +241,18 @@ include __DIR__ . '/../includes/header.php';
                     <strong><?= htmlspecialchars(ucfirst((string) $payment['status'])) ?> receipt</strong>
                     <p><a href="<?= htmlspecialchars(payment_proof_url($proofPath)) ?>" target="_blank" rel="noopener">View proof of payment</a></p>
                     <p>Reference No: <?= htmlspecialchars($payment['reference_number']) ?></p>
-                    <p>Amount: &#8369;<?= number_format((float) $payment['amount'], 2) ?> - <?= htmlspecialchars($payment['payment_method']) ?></p>
+                    <p>&#8369;<?= number_format((float) $payment['amount'], 2) ?> · <?= htmlspecialchars($payment['payment_method']) ?></p>
                     <p>Uploaded: <?= htmlspecialchars($payment['created_at']) ?></p>
                     <?php if (!empty($payment['remarks'])): ?><p>Remarks: <?= htmlspecialchars($payment['remarks']) ?></p><?php endif; ?>
                   </div>
-                </div>
+                </article>
               <?php endforeach; ?>
             </div>
-          <?php endif; ?>
+          </section>
+        <?php endif; ?>
 
-          <?php if (!empty($booking['notes'])): ?>
-            <p><?= htmlspecialchars($booking['notes']) ?></p>
-          <?php endif; ?>
-
-          <div class="booking-items">
-            <?php foreach ($items as $item): ?>
-              <div class="booking-item">
-                <img src="<?= htmlspecialchars($item['image'] ?? '../assets/img/Hero.jpg') ?>" alt="<?= htmlspecialchars($item['name']) ?>" />
-                <div>
-                  <strong><?= htmlspecialchars($item['court']) ?> - <?= htmlspecialchars($item['name']) ?></strong>
-                  <p><?= htmlspecialchars($item['category']) ?> - <?= htmlspecialchars($item['duration_label']) ?></p>
-                  <p><?= htmlspecialchars($item['booking_date']) ?> <?= htmlspecialchars($item['booking_time']) ?></p>
-                  <p>Qty: <?= htmlspecialchars((string) $item['quantity']) ?> - &#8369;<?= number_format((float) $item['unit_price'], 2) ?></p>
-                </div>
-              </div>
-            <?php endforeach; ?>
-          </div>
-
-          <?php if ($feedback || $feedbackEligible): ?>
-            <section class="checkout-card" id="booking-feedback">
+          <?php if ($showFeedbackSection): ?>
+            <section class="booking-detail-section" id="booking-feedback">
               <h2><?= $feedback ? 'Your Feedback' : 'Share Feedback' ?></h2>
               <?php if ($feedback): ?>
                 <p><strong>Current rating:</strong> <?= (int) $feedback['rating'] ?> / 5</p>
@@ -291,10 +302,7 @@ include __DIR__ . '/../includes/header.php';
                 </form>
               <?php endif; ?>
             </section>
-          <?php else: ?>
-            <div class="cart-message cart-message--warning">Feedback is not available for this booking.</div>
           <?php endif; ?>
-        </article>
       </section>
     <?php endif; ?>
   </div>
