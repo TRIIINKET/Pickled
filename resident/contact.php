@@ -60,7 +60,7 @@ include __DIR__ . '/../includes/header.php';
       <div class="contact-info-bar">
         <a href="mailto:pickled.shopph@gmail.com">pickled.shopph@gmail.com</a>
         <span>Makati, Metro Manila</span>
-        <span>Monday - Sunday, 10am - 10pm</span>
+                <span>Monday - Sunday, 8:00 AM – 10:00 PM</span>
         <a href="https://wa.me/639000000000">0900 000 0000 (WhatsApp)</a>
       </div>
 
@@ -93,7 +93,7 @@ include __DIR__ . '/../includes/header.php';
           <h2>Pickled</h2>
           <p>Makati, Metro Manila, Philippines</p>
         </div>
-        <p>Mon - Fri, 10am - 10pm<br>Saturday, 10am - 10pm<br>Sunday, 10am - 10pm</p>
+                    <p>Mon - Fri, 8:00 AM – 10:00 PM<br>Saturday, 8:00 AM – 10:00 PM<br>Sunday, 8:00 AM – 10:00 PM</p>
         <a href="https://maps.google.com/?q=Makati+Metro+Manila" target="_blank">Get directions</a>
       </div>
     </div>
