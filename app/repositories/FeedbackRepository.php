@@ -58,11 +58,19 @@ final class FeedbackRepository
             "SELECT 1
              FROM bookings b
              WHERE b.id = :booking_id
-               AND LOWER(b.status) NOT IN ('cancelled', 'rejected', 'expired', 'refunded')
+               AND LOWER(b.status) = 'completed'
                AND EXISTS (
                    SELECT 1
                    FROM booking_items bi
                    WHERE bi.booking_id = b.id
+               )
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM booking_items future_bi
+                   WHERE future_bi.booking_id = b.id
+                     AND (future_bi.booking_date IS NULL
+                          OR future_bi.end_time IS NULL
+                          OR TIMESTAMP(future_bi.booking_date, future_bi.end_time) > NOW())
                )
              LIMIT 1"
         );

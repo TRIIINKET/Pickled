@@ -22,7 +22,7 @@ final class PaymentService
         private readonly AdminLogService $adminLogs = new AdminLogService()
     ) {}
 
-    public function uploadReceipt(int $userId, int $bookingId, array $file, string $referenceNumber): array
+    public function uploadReceipt(int $userId, int $bookingId, array $file): array
     {
         (new BookingExpiryService())->processExpiredPendingBookings();
 
@@ -35,6 +35,9 @@ final class PaymentService
         }
 
         $latest = $this->payments->latestForBooking($bookingId);
+        if (!$latest) {
+            throw new RuntimeException('Payment record not found for this booking.');
+        }
         $latestHasProof = $latest ? $this->paymentHasReceipt($latest) : false;
         if (($latest['status'] ?? null) === 'pending' && $latestHasProof) {
             throw new RuntimeException('A payment receipt is already waiting for admin review.');
@@ -48,9 +51,9 @@ final class PaymentService
             throw new RuntimeException('Please choose a receipt file before submitting.');
         }
 
-        $referenceNumber = trim($referenceNumber);
+        $referenceNumber = trim((string) ($latest['reference_number'] ?? ''));
         if ($referenceNumber === '') {
-            throw new RuntimeException('Payment reference number is required.');
+            $referenceNumber = (string) ($booking['reference'] ?? ('BOOKING-' . $bookingId));
         }
 
         $proofPath = $this->storeProofImage($bookingId, $file);

@@ -3,6 +3,7 @@ require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/booking-system.php';
 require_once __DIR__ . '/../app/repositories/BookingRepository.php';
 require_once __DIR__ . '/../app/services/FeedbackService.php';
+require_once __DIR__ . '/../app/services/PaymentService.php';
 pickled_start_secure_session();
 
 if (!pickled_is_logged_in()) {
@@ -17,21 +18,17 @@ $userId = (int) ($_SESSION['user']['id'] ?? 0);
 pickled_process_pending_booking_expiry();
 $bookingRepo = new BookingRepository();
 $feedbackService = new FeedbackService();
+$paymentService = new PaymentService();
 $bookings = $userId > 0 ? $bookingRepo->findByUserId($userId) : [];
 $hasBookings = !empty($bookings);
 $extraHead = '<link rel="stylesheet" href="../assets/css/cart.css?v=20260615a"/>';
 
 function booking_history_feedback_is_eligible(array $booking, array $items): bool {
   $status = strtolower(trim((string) ($booking['status'] ?? '')));
-  if ($status === 'completed') {
-    return true;
-  }
-  if (in_array($status, ['cancelled', 'rejected', 'expired', 'refunded'], true)) {
+  if ($status !== 'completed') {
     return false;
   }
-
-  $paymentStatus = strtolower(trim((string) ($booking['payment_status'] ?? '')));
-  if (!in_array($paymentStatus, ['paid', 'verified', 'approved', 'completed'], true) || !$items) {
+  if (!$items) {
     return false;
   }
 
@@ -52,6 +49,29 @@ function booking_history_feedback_is_eligible(array $booking, array $items): boo
   }
 
   return true;
+}
+
+function booking_history_proof_path(?array $payment): string {
+  if (!$payment) {
+    return '';
+  }
+  return trim((string) ($payment['proof_of_payment'] ?? $payment['proof_image'] ?? ''));
+}
+
+function booking_history_payment_state(array $booking, ?array $latestPayment): array {
+  $status = strtolower(trim((string) ($latestPayment['status'] ?? $booking['payment_status'] ?? 'pending')));
+  $proofPath = booking_history_proof_path($latestPayment);
+  $hasProof = $proofPath !== '';
+  if (in_array($status, ['approved', 'verified', 'paid', 'completed'], true)) {
+    return ['key' => 'paid', 'label' => 'Paid', 'subtext' => 'Payment verified by admin', 'has_proof' => $hasProof];
+  }
+  if (in_array($status, ['rejected', 'refunded'], true)) {
+    return ['key' => 'rejected', 'label' => 'Payment Rejected', 'subtext' => 'Upload a new receipt for review', 'has_proof' => $hasProof];
+  }
+  if ($hasProof) {
+    return ['key' => 'uploaded', 'label' => 'Receipt Uploaded', 'subtext' => 'Waiting for admin verification', 'has_proof' => true];
+  }
+  return ['key' => 'awaiting', 'label' => 'Awaiting Receipt', 'subtext' => 'Upload your GCash receipt to continue review', 'has_proof' => false];
 }
 
 function booking_history_status_key(array $booking, array $items): string {
@@ -101,19 +121,25 @@ include __DIR__ . '/../includes/header.php';
             $paymentStatus = strtolower((string) $booking['payment_status']);
             $normStatus = booking_history_status_key($booking, $items);
             $bookingIdForFeedback = (int) $booking['id'];
+            $latestPayment = $paymentService->latestForBooking($bookingIdForFeedback);
+            $paymentState = booking_history_payment_state($booking, $latestPayment);
             $existingFeedback = $feedbackService->feedbackForBooking($bookingIdForFeedback, $userId);
             $canLeaveFeedback = $feedbackService->canLeaveFeedback($bookingIdForFeedback, $userId);
           ?>
-          <article class="booking-card" data-booking-status="<?= htmlspecialchars($normStatus) ?>" data-payment-status="<?= htmlspecialchars($paymentStatus) ?>">
+          <article class="booking-card" data-booking-status="<?= htmlspecialchars($normStatus) ?>" data-payment-status="<?= htmlspecialchars($paymentState['key']) ?>">
             <div class="booking-card__header">
               <div>
                 <strong>Reference:</strong> <?= htmlspecialchars($booking['reference']) ?>
               </div>
-              <div class="booking-card__status booking-card__status--<?= htmlspecialchars($normStatus) ?>"><?= htmlspecialchars(ucfirst($normStatus)) ?></div>
+              <div class="booking-card__status-group">
+                <div class="booking-card__status booking-card__status--<?= htmlspecialchars($normStatus) ?>">Booking: <?= htmlspecialchars(ucfirst($normStatus)) ?></div>
+                <div class="booking-card__status payment-state payment-state--<?= htmlspecialchars($paymentState['key']) ?>"><?= htmlspecialchars($paymentState['label']) ?></div>
+              </div>
             </div>
 
             <div class="booking-card__meta">
-              <span>Payment: <?= htmlspecialchars($booking['payment_method']) ?> · <?= htmlspecialchars($booking['payment_status']) ?></span>
+              <span>Payment method: <?= htmlspecialchars($booking['payment_method']) ?></span>
+              <span><?= htmlspecialchars($paymentState['subtext']) ?></span>
               <span>Total: ₱<?= number_format((float) $booking['total'], 2) ?></span>
               <span>Booked on: <?= htmlspecialchars($booking['created_at'] ?? '') ?></span>
             </div>
@@ -136,8 +162,13 @@ include __DIR__ . '/../includes/header.php';
 
             <div class="booking-card__actions">
               <a class="booking-action booking-action--secondary" href="booking-details.php?id=<?= $bookingIdForFeedback ?>">View details</a>
+              <?php if (in_array($paymentState['key'], ['awaiting', 'rejected'], true)): ?>
+                <a class="booking-action booking-action--upload" href="booking-details.php?id=<?= $bookingIdForFeedback ?>">Upload <?= $paymentState['key'] === 'rejected' ? 'New ' : '' ?>Receipt</a>
+              <?php elseif ($paymentState['key'] === 'uploaded'): ?>
+                <a class="booking-action booking-action--secondary" href="booking-details.php?id=<?= $bookingIdForFeedback ?>">View Receipt</a>
+              <?php endif; ?>
               <?php if ($existingFeedback): ?>
-                <a class="booking-action booking-action--feedback" href="booking-details.php?id=<?= $bookingIdForFeedback ?>#booking-feedback">View Feedback</a>
+                <span class="booking-action booking-action--disabled">Feedback Submitted</span>
               <?php elseif ($canLeaveFeedback): ?>
                 <a class="booking-action booking-action--feedback" href="booking-details.php?id=<?= $bookingIdForFeedback ?>#booking-feedback">Leave Feedback</a>
               <?php endif; ?>

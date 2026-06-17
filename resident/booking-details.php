@@ -33,9 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $receiptFile = $_FILES['receipt'] ?? $_FILES['proof_image'] ?? [];
       $paymentService->uploadReceipt(
         $userId,
-        (int) ($_POST['booking_id'] ?? 0),
-        $receiptFile,
-        (string) ($_POST['reference_number'] ?? '')
+        $bookingId,
+        $receiptFile
       );
       $message = 'Payment receipt uploaded. Please wait for admin review.';
     } catch (RuntimeException $e) {
@@ -131,12 +130,38 @@ function payment_proof_path(array $payment): string {
   return trim((string) ($payment['proof_of_payment'] ?? $payment['proof_image'] ?? ''));
 }
 
+function booking_detail_payment_state(array $booking, ?array $payment): array {
+  $status = strtolower(trim((string) ($payment['status'] ?? $booking['payment_status'] ?? 'pending')));
+  $hasProof = $payment ? payment_proof_path($payment) !== '' : false;
+  if (in_array($status, ['approved', 'verified', 'paid', 'completed'], true)) {
+    return ['key' => 'paid', 'label' => 'Paid', 'subtext' => 'Payment verified by admin'];
+  }
+  if (in_array($status, ['rejected', 'refunded'], true)) {
+    return ['key' => 'rejected', 'label' => 'Payment Rejected', 'subtext' => 'Upload a new receipt for review'];
+  }
+  if ($hasProof) {
+    return ['key' => 'uploaded', 'label' => 'Receipt Uploaded', 'subtext' => 'Waiting for admin verification'];
+  }
+  return ['key' => 'awaiting', 'label' => 'Awaiting Receipt', 'subtext' => 'Upload your GCash receipt to continue review'];
+}
+
 function feedback_target_label(array $target): string {
   $label = (string) ($target['court'] ?? 'Session') . ' - ' . (string) ($target['name'] ?? 'Booking');
   if (!empty($target['coach_name'])) {
     $label .= ' with ' . (string) $target['coach_name'];
   }
   return $label;
+}
+
+function feedback_is_coach_service(array $target): bool {
+  if (empty($target['coach_user_id'])) {
+    return false;
+  }
+  $label = strtolower((string) ($target['name'] ?? '') . ' ' . (string) ($target['category'] ?? ''));
+  if (str_contains($label, 'court rental') || str_contains($label, 'social play') || str_contains($label, 'match-play') || str_contains($label, 'tournament') || str_contains($label, 'private package')) {
+    return false;
+  }
+  return str_contains($label, 'training') || str_contains($label, 'lesson') || str_contains($label, 'private coaching');
 }
 
 include __DIR__ . '/../includes/header.php';
@@ -167,8 +192,11 @@ include __DIR__ . '/../includes/header.php';
       <?php $uploadedPayments = array_values(array_filter($payments, 'payment_has_receipt')); ?>
       <?php $uploadedPaymentIds = array_map(static fn(array $payment): int => (int) $payment['id'], $uploadedPayments); ?>
       <?php $latestHasProof = $latestPayment && in_array((int) $latestPayment['id'], $uploadedPaymentIds, true); ?>
-      <?php $canUpload = !$latestPayment || ($latestPaymentStatus === 'rejected') || ($latestPaymentStatus === 'pending' && !$latestHasProof); ?>
+      <?php $canUpload = $latestPayment && (($latestPaymentStatus === 'rejected') || ($latestPaymentStatus === 'pending' && !$latestHasProof)); ?>
       <?php $showReceiptUpload = $canUpload && ($booking['payment_status'] ?? '') !== 'paid' && ($booking['status'] ?? '') !== 'cancelled'; ?>
+      <?php $detailPaymentState = booking_detail_payment_state($booking, $latestPayment); ?>
+      <?php $coachFeedbackTargets = array_values(array_filter($feedbackTargets, 'feedback_is_coach_service')); ?>
+      <?php $hasCoachFeedback = !empty($coachFeedbackTargets); ?>
       <?php $showFeedbackSection = $statusKey === 'completed' && ($feedback || $feedbackEligible); ?>
 
       <section class="booking-detail-page">
@@ -204,7 +232,8 @@ include __DIR__ . '/../includes/header.php';
           </div>
 
           <div class="booking-detail-totals">
-            <span>Payment: <?= htmlspecialchars($booking['payment_method']) ?> · <?= htmlspecialchars(ucfirst((string) ($latestPayment['status'] ?? $booking['payment_status'] ?? 'pending'))) ?></span>
+            <span>Payment: <?= htmlspecialchars($booking['payment_method']) ?> · <?= htmlspecialchars($detailPaymentState['label']) ?></span>
+            <span><?= htmlspecialchars($detailPaymentState['subtext']) ?></span>
             <strong>Total: &#8369;<?= number_format((float) $booking['total'], 2) ?></strong>
           </div>
 
@@ -246,11 +275,6 @@ include __DIR__ . '/../includes/header.php';
               <form class="booking-detail-upload-form" method="post" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
                 <input type="hidden" name="action" value="upload_payment" />
-                <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>" />
-                <label>
-                  Reference Number
-                  <input type="text" name="reference_number" required />
-                </label>
                 <label>
                   Receipt Image or PDF
                   <input type="file" name="receipt" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf" required />
@@ -301,21 +325,20 @@ include __DIR__ . '/../includes/header.php';
                   <p>Coach: <?= htmlspecialchars((string) $feedback['coach_name']) ?></p>
                 <?php endif; ?>
               <?php else: ?>
-                <p>Tell us about your booking experience or anything you want the team to know.</p>
+                <p><?= $hasCoachFeedback ? 'Rate your coach and service experience.' : 'Rate the court, facilities, and overall experience.' ?></p>
               <?php endif; ?>
 
-              <?php if ($feedbackEligible): ?>
+              <?php if ($feedbackEligible && !$feedback): ?>
                 <form method="post">
                   <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(pickled_csrf_token()) ?>" />
-                  <input type="hidden" name="action" value="<?= $feedback ? 'update_feedback' : 'submit_feedback' ?>" />
+                  <input type="hidden" name="action" value="submit_feedback" />
                   <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>" />
 
-                  <?php if ($feedbackTargets): ?>
+                  <?php if ($hasCoachFeedback): ?>
                     <label>
-                      Session or coach
+                      Coach service
                       <select name="booking_item_id">
-                        <option value="">Overall booking</option>
-                        <?php foreach ($feedbackTargets as $target): ?>
+                        <?php foreach ($coachFeedbackTargets as $target): ?>
                           <option value="<?= (int) $target['booking_item_id'] ?>" <?= $feedback && (int) ($feedback['booking_item_id'] ?? 0) === (int) $target['booking_item_id'] ? 'selected' : '' ?>>
                             <?= htmlspecialchars(feedback_target_label($target)) ?>
                           </option>
@@ -325,7 +348,7 @@ include __DIR__ . '/../includes/header.php';
                   <?php endif; ?>
 
                   <label>
-                    Rating
+                    <?= $hasCoachFeedback ? 'Coach rating / Service rating' : 'Court/facility rating / Overall experience rating' ?>
                     <select name="rating" required>
                       <?php for ($rating = 5; $rating >= 1; $rating--): ?>
                         <option value="<?= $rating ?>" <?= $feedback && (int) $feedback['rating'] === $rating ? 'selected' : '' ?>><?= $rating ?> / 5</option>
@@ -338,8 +361,10 @@ include __DIR__ . '/../includes/header.php';
                     <textarea name="comment" required><?= htmlspecialchars((string) ($feedback['comment'] ?? '')) ?></textarea>
                   </label>
 
-                  <button class="checkout-btn" type="submit"><?= $feedback ? 'Update feedback' : 'Submit feedback' ?></button>
+                  <button class="checkout-btn" type="submit">Submit feedback</button>
                 </form>
+              <?php elseif ($feedback): ?>
+                <span class="booking-action booking-action--disabled">Feedback Submitted</span>
               <?php endif; ?>
             </section>
           <?php endif; ?>

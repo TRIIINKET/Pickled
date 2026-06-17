@@ -138,12 +138,12 @@ final class FeedbackService
 
             return [
                 'booking_item_id' => (int) $target['booking_item_id'],
-                'coach_user_id' => !empty($target['coach_user_id']) ? (int) $target['coach_user_id'] : null,
+                'coach_user_id' => $this->isCoachFeedbackTarget($target) ? (int) $target['coach_user_id'] : null,
             ];
         }
 
         foreach ($this->feedback->targetsForBooking($bookingId) as $target) {
-            if (!empty($target['coach_user_id'])) {
+            if ($this->isCoachFeedbackTarget($target)) {
                 return [
                     'booking_item_id' => (int) $target['booking_item_id'],
                     'coach_user_id' => (int) $target['coach_user_id'],
@@ -155,6 +155,19 @@ final class FeedbackService
             'booking_item_id' => null,
             'coach_user_id' => null,
         ];
+    }
+
+    private function isCoachFeedbackTarget(array $target): bool
+    {
+        if (empty($target['coach_user_id'])) {
+            return false;
+        }
+        $label = strtolower((string) ($target['name'] ?? '') . ' ' . (string) ($target['category'] ?? ''));
+        if (str_contains($label, 'court rental') || str_contains($label, 'social play') || str_contains($label, 'match-play') || str_contains($label, 'tournament') || str_contains($label, 'private package')) {
+            return false;
+        }
+
+        return str_contains($label, 'training') || str_contains($label, 'lesson') || str_contains($label, 'private coaching');
     }
 
     private function rating(int $rating): int
